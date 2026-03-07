@@ -1,0 +1,395 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+  BUN_VERSION: "1.3.9"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      client: ${{ steps.filter.outputs.client }}
+      api-service: ${{ steps.filter.outputs.api-service }}
+      packagesAll: ${{ steps.filter.outputs.packagesAll }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            client:
+              - 'apps/client/**'
+              - 'apps/api-service/**'
+              - 'packages/result/**'
+              - 'packages/typescript-config/**'
+              - 'packages/tailwind-config/**'
+            api-service:
+              - 'apps/api-service/**'
+              - 'packages/database/**'
+              - 'packages/result/**'
+            packagesAll:
+              - 'packages/**'
+            deps:
+              - '**/package.json'
+              - 'bun.lock'
+
+  ci:
+    name: CI Checks
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 20
+    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Restore Turbo cache
+        id: turbo-cache-ci
+        uses: actions/cache/restore@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-${{ github.ref }}-
+            ${{ runner.os }}-turbo-refs/heads/main-
+            ${{ runner.os }}-turbo-
+
+      - name: Run CI Quality Checks
+        env:
+          CI: true
+        run: |
+          set -euo pipefail
+          FILTERS=""
+          if [[ "${{ needs.changes.outputs.client }}" == "true" ]]; then
+            FILTERS="$FILTERS --filter=client"
+          fi
+          if [[ "${{ needs.changes.outputs.api-service }}" == "true" ]]; then
+            FILTERS="$FILTERS --filter=api-service"
+          fi
+
+          if [[ -z "$FILTERS" ]]; then
+            echo "No specific app changes; running lint/typecheck across repo"
+            bunx turbo run lint typecheck --concurrency=4 --cache-dir=.turbo
+          else
+            echo "Running lint/typecheck for changed packages: $FILTERS"
+            bunx turbo run lint typecheck --concurrency=4 --cache-dir=.turbo $FILTERS
+          fi
+
+          # api-service のユニットテストのみ（DB不要）
+          if [[ "${{ needs.changes.outputs.api-service }}" == "true" ]]; then
+            echo "Running api-service unit tests with coverage"
+            bunx turbo run test:unit --concurrency=2 --cache-dir=.turbo --filter=api-service -- --coverage
+          else
+            echo "Skip unit tests (api-service unchanged)"
+          fi
+
+      - name: Architecture & FSD Checks
+        run: |
+          echo "Running Architecture & FSD Checks..."
+          SKIP_KNIP=1 bash scripts/check/architecture-check.sh
+
+      - name: Unused Code Check (Knip)
+        if: github.event_name == 'pull_request'
+        id: knip
+        run: |
+          set -euo pipefail
+          NO_COLOR=1 bunx knip > knip-raw.txt 2>&1 || true
+          UNUSED_FILES=$(grep -E "^Unused files \([0-9]+\)" knip-raw.txt | sed -E 's/.*\(([0-9]+)\).*/\1/' || echo "0")
+          UNUSED_DEPS=$(grep -E "^Unused (dependencies|devDependencies) \([0-9]+\)" knip-raw.txt | sed -E 's/.*\(([0-9]+)\).*/\1/' | paste -sd+ | bc 2>/dev/null || echo "0")
+          UNUSED_EXPORTS=$(grep -E "^Unused exports \([0-9]+\)" knip-raw.txt | sed -E 's/.*\(([0-9]+)\).*/\1/' || echo "0")
+          UNUSED_FILES=${UNUSED_FILES:-0}
+          UNUSED_DEPS=${UNUSED_DEPS:-0}
+          UNUSED_EXPORTS=${UNUSED_EXPORTS:-0}
+          {
+            echo "## Unused Code Check Results";
+            echo;
+            echo "### Summary";
+            echo;
+            echo "| Item | Count |";
+            echo "|------|-------|";
+            echo "| Unused files | $UNUSED_FILES |";
+            echo "| Unused dependencies | $UNUSED_DEPS |";
+            echo "| Unused exports | $UNUSED_EXPORTS |";
+            echo;
+            if [ "$UNUSED_FILES" != "0" ] || [ "$UNUSED_DEPS" != "0" ] || [ "$UNUSED_EXPORTS" != "0" ]; then
+              echo "### Warning: Unused code detected";
+              echo;
+              echo "<details>";
+              echo "<summary>Knip output</summary>";
+              echo;
+              echo '```';
+              head -n 1000 knip-raw.txt || true;
+              echo '```';
+              echo "</details>";
+            else
+              echo "### OK: No unused code detected";
+            fi
+          } > knip-report.md
+
+      - name: Post Knip result as PR comment
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('knip-report.md', 'utf8');
+            const marker = '## Unused Code Check Results';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const botComment = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(marker));
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Upload unit test coverage (api-service)
+        if: needs.changes.outputs.api-service == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-api-service
+          path: apps/api-service/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Build changed packages for PR
+        if: github.event_name == 'pull_request'
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+        run: |
+          set -euo pipefail
+          FILTERS=""
+          if [[ "${{ needs.changes.outputs.client }}" == "true" ]]; then
+            FILTERS="$FILTERS --filter=client"
+          fi
+          if [[ "${{ needs.changes.outputs.api-service }}" == "true" ]]; then
+            FILTERS="$FILTERS --filter=api-service"
+          fi
+          if [[ -z "$FILTERS" ]]; then
+            echo "No changes detected, skip build"
+          else
+            echo "Building changed packages: $FILTERS"
+            bunx turbo run build --concurrency=4 --cache-dir=.turbo $FILTERS
+          fi
+
+      - name: Save Turbo cache after build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}
+
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true'
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_db
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Restore Playwright browser cache
+        id: playwright-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-chromium-
+
+      - uses: ./.github/actions/setup-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-playwright: 'true'
+          playwright-cache-hit: ${{ steps.playwright-cache.outputs.cache-hit }}
+
+      - name: Save Playwright browser cache
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-${{ hashFiles('**/bun.lock') }}
+
+      - name: Restore Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: apps/client/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('apps/client/**/*.ts', 'apps/client/**/*.tsx', 'apps/client/**/*.css') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-
+            ${{ runner.os }}-nextjs-
+
+      - name: Build Next.js for E2E
+        working-directory: apps/client
+        env:
+          API_BASE_URL: http://localhost:8080
+        run: bunx turbo run build --filter=client --cache-dir=.turbo
+
+      - name: Save Next.js build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/client/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('apps/client/**/*.ts', 'apps/client/**/*.tsx', 'apps/client/**/*.css') }}
+
+      - name: Copy static assets into standalone output
+        run: |
+          cp -r apps/client/.next/static apps/client/.next/standalone/apps/client/.next/static
+          cp -r apps/client/public apps/client/.next/standalone/apps/client/public
+
+      - name: Run database migrations
+        working-directory: packages/database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
+        run: bunx prisma migrate deploy
+
+      - name: Run E2E tests
+        working-directory: apps/client
+        env:
+          CI: true
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/client/playwright-report
+          retention-days: 14
+
+  api-service-integration-tests:
+    name: API Service Integration Tests
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api-service == 'true'
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 15432:5432
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Prepare database schema
+        run: |
+          cd packages/database
+          DATABASE_URL="postgresql://postgres:postgres@localhost:15432/test_db" bun run db:deploy
+
+      - name: Run api-service integration tests (with coverage)
+        working-directory: apps/api-service
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:15432/test_db
+          CI: true
+        run: bun run coverage:integration
+
+      - name: Upload integration test coverage (api-service)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration-api-service
+          path: apps/api-service/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # docs/.md のみの変更でもステータスを報告するためのジョブ
+  # GitHub Rulesetで "CI Pipeline" が必須チェックになっているため
+  ci-status:
+    name: CI Pipeline
+    runs-on: ubuntu-latest
+    needs: [changes, ci, api-service-integration-tests, e2e-tests]
+    if: always()
+    steps:
+      - name: Check CI status
+        run: |
+          echo "CI result: ${{ needs.ci.result }}"
+          echo "Integration tests result: ${{ needs.api-service-integration-tests.result }}"
+          echo "E2E tests result: ${{ needs.e2e-tests.result }}"
+
+          # failure があれば失敗
+          if [[ "${{ needs.ci.result }}" == "failure" ]]; then
+            echo "CI checks failed"
+            exit 1
+          fi
+          if [[ "${{ needs.api-service-integration-tests.result }}" == "failure" ]]; then
+            echo "Integration tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.e2e-tests.result }}" == "failure" ]]; then
+            echo "E2E tests failed"
+            exit 1
+          fi
+
+          echo "All required checks passed or were skipped"

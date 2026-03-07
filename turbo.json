@@ -1,0 +1,72 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "^prisma:generate"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": ["DATABASE_URL"]
+    },
+
+    "typecheck": {
+      "dependsOn": ["^build", "^typecheck"]
+    },
+    "api-service#build:types": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "client#typecheck": {
+      "dependsOn": ["^build", "^typecheck", "api-service#build:types"]
+    },
+    "dev": {
+      "dependsOn": ["^prisma:generate"],
+      "cache": false,
+      "persistent": true,
+      "env": ["DATABASE_URL", "LOG_LEVEL"]
+    },
+    "lint": {},
+    "lint:fix": { "cache": false },
+    "test": {
+      "cache": false,
+      "dependsOn": ["^test"],
+      "env": ["DATABASE_URL"]
+    },
+    "test:unit": {
+      "cache": false,
+      "dependsOn": ["^test:unit"]
+    },
+    "test:integration": {
+      "cache": false,
+      "dependsOn": ["^test:integration"],
+      "env": ["DATABASE_URL"]
+    },
+    "test:contract": {
+      "cache": false,
+      "dependsOn": ["^test:contract"]
+    },
+    "coverage:unit": {
+      "cache": false,
+      "dependsOn": ["^coverage:unit"]
+    },
+    "coverage:integration": {
+      "cache": false,
+      "dependsOn": ["^coverage:integration"],
+      "env": ["DATABASE_URL"]
+    },
+    "dep:cycles": {},
+    "dep:orphans": {},
+    "dep:graph": {},
+    "prisma:generate": {
+      "cache": false
+    },
+    "prisma:migrate": {
+      "cache": false,
+      "persistent": true
+    },
+    "prisma:deploy": {
+      "cache": false
+    },
+    "//#legacy-aliases": {}
+  }
+}

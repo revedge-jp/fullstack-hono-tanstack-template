@@ -1,0 +1,94 @@
+---
+description: api-service での機能追加手順と実装ガイド
+globs: "apps/api-service/src/**/*"
+---
+
+# 機能追加の手順
+
+新しい機能を追加する際は、クリーンアーキテクチャの層構造に従って、下位層から順に実装する。
+
+## 実装順序
+
+1. **Domain層**: ドメインモデルとリポジトリインターフェース（**DTOは定義しない**）
+2. **Infrastructure層**: マッパーとリポジトリ実装
+3. **Application層**: **DTO定義**、バリデーション、ステップ、ユースケース、サービス
+4. **Contracts**: HTTP API定義（`packages/contracts/src/http/`）
+5. **Presentation層**: HTTPエンドポイント（`features/{feature-name}/presentation/`）
+6. **Container登録**: `src/container.ts`に追加
+7. **ルート登録**: `src/app.ts` に presentation ルーターをマウント
+
+## ディレクトリ構造
+
+```
+src/features/{feature-name}/
+  ├── domain/
+  │   └── {feature-name}.repository.ts  # モデル・I/F・純粋バリデーション
+  ├── infrastructure/
+  │   ├── mappers.ts                    # DB ↔ Domain マッパー
+  │   └── {feature-name}.repository.prisma.ts
+  ├── application/
+  │   ├── {action}/
+  │   │   ├── steps.ts
+  │   │   ├── validators.ts             # DTO定義・Zod検証
+  │   │   └── usecase.ts
+  │   ├── index.ts
+  │   ├── ports.ts（必要に応じて）
+  │   └── service.ts
+  └── presentation/
+      ├── index.ts
+      └── router.ts                    # HTTPエンドポイント・バリデーション
+```
+
+## Domain層の実装
+
+- **純粋性の維持**: 外部ライブラリ（Zod、Prisma、HTTP等）やApplication層のDTOに依存しない。
+- **ドメインモデル**: 型定義とリポジトリインターフェースを定義。
+- **バリデーション**: ドメイン不変条件のバリデーション関数は、プリミティブな値を受け取る純粋関数として実装。
+
+## Infrastructure層の実装
+
+- **マッパー**: DB ↔ Domain のマッパーを必ず作成（`mappers.ts`）。
+- **リポジトリ実装**: マッパーを使用してドメインモデルに変換。
+- **エラーハンドリング**: Prismaエラーは適切に`Result`型に変換。
+
+## Application層の実装
+
+- **DTO定義**: ユースケースの入出力型（`XxxInput`）をここで定義。
+- **バリデーション**: 
+  1. Zod等で形式チェック（HTTP層/Contractsで実施済みだが、念のため型ガードとして機能）。
+  2. DTOを分解し、Domain層の純粋なバリデーション関数（`validateXxx`）を呼び出す。
+- **ステップ**: `steps.ts`にステップ関数を実装（`Result`型で返す）。
+- **ユースケース**: `usecase.ts`に`flow`でチェインするユースケースを実装。
+
+## Presentation層の実装
+
+- **責務**: HTTP I/Oとバリデーションのみ。
+- **レスポンス変換**: `toHttp`で`Result`型をHTTPレスポンスに変換。
+- **検証**: Contractsのスキーマでレスポンスを検証。
+
+## チェックリスト
+
+実装完了後、以下を確認:
+
+- [ ] 環境変数が必要な場合: [env-management.mdc](env-management.mdc) のチェックリストに従い、`.env.example`・config・turbo.json・CI・Terraform・ドキュメントを更新したか
+
+- [ ] Domain層に外部ライブラリやDTOへの依存がないか
+- [ ] DTOはApplication層で定義されているか
+- [ ] Infrastructure層でマッパーを使用しているか
+- [ ] Application層で`Result`型を使用しているか
+- [ ] エラー型はファイル先頭に定義されているか
+- [ ] Presentation層で`toHttp`を使用しているか
+- [ ] Containerに登録されているか
+- [ ] app.ts にルーターをマウントしているか
+- [ ] ContractsにHTTPスキーマが定義されているか
+- [ ] `bun run arch:check`が通るか
+- [ ] `bun run typecheck`が通るか
+
+## 外部SDKが必要な場合
+
+1. **Ports定義**: `features/{feature-name}/application/ports.ts`にインターフェースを定義
+2. **Integration実装**: `src/integrations/xxx.ts`に外部SDKのラッパーを実装（**必ずここ**）
+3. **Infrastructure実装**: `features/{feature-name}/infrastructure/xxx.ts`でPortsを実装し、Integrationを使用
+4. **Container登録**: `src/container.ts`で依存関係を組み立て
+
+詳細な実装例は`docs/dev/adding-features.md`を参照。

@@ -1,0 +1,71 @@
+{
+  "name": "kikagaku-saas-template",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "dotenv -e .env -- turbo run dev --log-order=stream --output-logs=full --concurrency=4",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "typecheck": "turbo run typecheck",
+    "test:unit": "turbo run test:unit --continue",
+    "test": "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"$TEST_DATABASE_URL\" bunx prisma migrate deploy && cd ../../ && DATABASE_URL=\"$TEST_DATABASE_URL\" turbo run test --continue'",
+    "test:watch": "turbo run test -- --watch",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down -v",
+    "db:up:test": "docker compose up -d postgres-test",
+    "db:down:test": "docker compose rm -sf postgres-test",
+    "db:up:all": "docker compose up -d postgres postgres-test --wait",
+    "db:studio": "dotenv -e .env -- sh -c 'cd packages/database && bunx prisma studio'",
+    "db:generate": "dotenv -e .env -- sh -c 'cd packages/database && bunx prisma generate'",
+    "db:migrate": "dotenv -e .env -- sh -c 'cd packages/database && bunx prisma migrate dev'",
+    "db:seed": "dotenv -e .env -- sh -c 'cd packages/database && bunx prisma db seed'",
+    "db:reset": "dotenv -e .env -- sh -c 'cd packages/database && bunx prisma migrate reset --force && DATABASE_URL=\"$TEST_DATABASE_URL\" bunx prisma migrate reset --force'",
+    "test:integration": "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"$TEST_DATABASE_URL\" bunx prisma migrate deploy && cd ../../apps/api-service && DATABASE_URL=\"$TEST_DATABASE_URL\" bun test src/__tests__/integration'",
+    "test:contract": "turbo run test:contract --continue",
+    "test:e2e": "bash scripts/test/test-e2e.sh",
+    "coverage:unit": "turbo run coverage:unit --continue",
+    "coverage:integration": "turbo run coverage:integration --continue",
+    "sync-main": "bash scripts/sync-main.sh",
+    "knip": "knip",
+    "knip:fix": "knip --fix --allow-remove-files",
+    "dep:cycles": "turbo run dep:cycles",
+    "dep:orphans": "turbo run dep:orphans",
+    "dep:graph": "turbo run dep:graph",
+    "arch:fsd": "steiger apps/client",
+    "arch:knip": "knip",
+    "arch:deps": "turbo run dep:cycles && turbo run dep:orphans",
+    "arch:dc": "depcruise -c dependency-cruiser.config.cjs .",
+    "arch:guards": "bash scripts/check/arch-guards.sh",
+    "arch:check": "bash scripts/check/architecture-check.sh",
+    "check:kebab": "node scripts/check/check-kebab-case.mjs",
+    "check-all": "bash scripts/check/check-all.sh",
+    "worktree": "bash scripts/worktree.sh",
+    "start-from-main": "bash scripts/start-from-main.sh",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.4",
+    "@evilmartians/lefthook": "^1.11.5",
+    "@feature-sliced/steiger-plugin": "^0.5.7",
+    "dependency-cruiser": "^17.3.8",
+    "dotenv-cli": "^11.0.0",
+    "knip": "^5.84.1",
+    "madge": "^8.0.0",
+    "steiger": "^0.5.11",
+    "turbo": "^2.8.10",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "hono": "^4.12.2",
+    "minimatch": ">=10.2.3",
+    "fast-xml-parser": ">=5.3.8"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "bun@1.3.9",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

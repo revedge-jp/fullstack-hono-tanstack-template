@@ -1,0 +1,28 @@
+name: Codex AI Review
+
+# Trigger: PR opened/synchronized targeting main or develop
+# Prerequisites: CODEX_REVIEW_API_KEY secret must be configured in repository settings.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  codex-review:
+    name: Codex Code Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: openai/codex-action@94bb7a052e529936e5260a35838e61b190855739 # v1
+        with:
+          api_key: ${{ secrets.CODEX_REVIEW_API_KEY }}
+          sandbox: read-only

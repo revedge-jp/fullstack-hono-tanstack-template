@@ -1,0 +1,44 @@
+---
+description: Railway/Result-Oriented Programming と ステップ設計のガイド
+globs: "apps/api-service/src/**"
+alwaysApply: true
+---
+
+# 基本原則
+- ユースケースは`Result`で成功/失敗を表現し、チェインでOkのみ次へ進ませる。
+- 例外は境界（HTTP変換など）でのみ処理。内部は値ベース（Result）で扱う。
+
+# ステップ関数
+- ファイル先頭に`XxxStepInput`/`XxxStepOutput`の型エイリアスを置く（非export）。
+- 依存は`makeXxxStep`の引数で注入。
+- 返り値は`Result<Success, ErrorUnion>`で統一。
+
+# DTOとバリデーションの配置
+- **DTO定義**: ユースケースの入力型（`XxxInput`）はApplication層（`validators.ts`等）で定義し、exportする。
+- **バリデーション**: 
+  - Application層のバリデータ（`validateXxx`）はDTOを受け取る。
+  - Domain層のバリデータ（`validateXxxInvariants`）を呼び出す際は、**DTOを分解してプリミティブな値を渡す**（Domain層をDTOから独立させるため）。
+
+```typescript
+// Application層: validators.ts
+export type CreateUserInput = { name: string; email: string };
+
+export function validateCreateUser(input: CreateUserInput): Result<CreateUserInput, "Invalid"> {
+  // DTOを分解してDomain層へ渡す
+  const domainResult = validateUserInvariants(input.name, input.email);
+  if (domainResult.type === "err") return err("Invalid");
+  return ok(input);
+}
+```
+
+# usecase.ts の型配置ポリシー（統一）
+- ユースケースのエラー型や入出力の型エイリアスは、原則「ファイル先頭」に非exportで定義する。
+- 同じ型を関数シグネチャや`flow`のジェネリクスで繰り返し使う場合は、トップレベル型エイリアスを参照する。
+- 例外は最小限：関数内のみで完結する一時的な型に限り関数内定義を許容（可読性を損ねない場合）。
+- 命名はユースケース意図＋`Error`で統一（例: `CreateUserError`/`CreatePostError`/`ListUsersError`/`ListPostsError`/`GetUserError`/`UpdateError`/`EnqueueError`/`GetStatusError`/`ProcessError`）。
+
+# 分割基準
+- ステップ数2〜3かつ密結合なら1ファイル。4以上/責務が明確に異なるなら分割。
+
+# 命名
+- ステップファクトリ: `makeXxxStep`、入出力: `XxxStepInput`/`XxxStepOutput`。

@@ -1,0 +1,29 @@
+name: Claude Implementation
+
+# Trigger: comment "@claude" on an issue (MEMBER or OWNER only)
+# Prerequisites: ANTHROPIC_API_KEY secret must be configured in repository settings.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  claude-implement:
+    name: Claude Implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      contains(github.event.comment.body, '@claude') &&
+      (github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'OWNER')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@26ec041249acb0a944c0a47b6c0c13f05dbc5b44 # v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}

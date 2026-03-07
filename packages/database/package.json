@@ -1,0 +1,34 @@
+{
+  "name": "@repo/db",
+  "version": "0.0.0",
+  "private": true,
+  "prisma": {
+    "seed": "bun run prisma/seed.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write --unsafe && prisma format",
+    "typecheck": "tsc --noEmit",
+    "types": "tsc -p tsconfig.json --emitDeclarationOnly true",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "db:generate": "bun run prisma:generate",
+    "db:migrate": "bun run prisma:migrate",
+    "db:deploy": "bun run prisma:deploy",
+    "db:studio": "bun run prisma:studio"
+  },
+  "devDependencies": {
+    "prisma": "^7.3.0"
+  },
+  "dependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@prisma/client": "^7.3.0",
+    "@prisma/adapter-pg": "^7.3.0",
+    "dotenv": "^17.2.4"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

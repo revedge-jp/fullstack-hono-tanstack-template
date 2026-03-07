@@ -1,0 +1,34 @@
+---
+description: アーキチェックの実行方法と主な検査内容
+globs: "**/*"
+---
+
+# アーキチェックの実行
+
+## コマンド
+- `bun run arch:check` もしくは `bun run check-all`
+  - lint / typecheck / tests / FSD / dependency-cruiser / guards / knip を実行
+
+## 主な検査
+- dependency-cruiser
+  - application → infrastructure/integrations 禁止
+  - routes / presentation → domain/infrastructure 禁止
+  - domain → (application/infrastructure/presentation/routes/integrations) 禁止
+  - infrastructure → (application/presentation/routes) 禁止
+  - application → DB 直参照禁止（@repo/db/@prisma/client/prisma）
+  - features（presentation を除く）→ Web FW 直参照禁止（hono/src/factory）
+  - integrations 以外から @google-cloud/* 直参照禁止
+- arch-guards.sh（構文/配置）
+  - application 層で @app/integrations / 旧 @app/integration の import 禁止
+  - application 層で fetch/axios 直叩き禁止
+  - application 層で @google-cloud/* 直参照禁止
+  - **外部SDK（@google-cloud/*、google-auth-library等）は integrations 層以外からの直接import禁止**
+  - features 配下で process.env 直参照禁止
+  - api-service で throw 禁止（middlewares/テストを除く）
+  - class/interface の利用禁止（.d.ts 除く）
+  - routes 直下の index.ts 以外の直置きファイルを警告（presentation は feature 内）
+  - **Domain層でのDTO（Application層の型）依存を警告（将来的に禁止）**
+
+## 運用方針
+- 違反は原則 error。誤検出の恐れがあるものは warn から導入し、安定後に error 化
+- 例外は個別に dependency-cruiser の allowlist ではなく、依存方向の見直しで解消するのが基本

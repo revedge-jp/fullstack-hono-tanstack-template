@@ -1,0 +1,418 @@
+name: _deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Deployment environment (stg or prod)"
+        required: true
+        type: string
+      commit_sha:
+        description: "Commit SHA to deploy"
+        required: true
+        type: string
+      region:
+        description: "GCP region"
+        required: false
+        type: string
+        default: "asia-northeast1"
+      prefix:
+        description: "Resource name prefix"
+        required: false
+        type: string
+        default: "ax"
+      GCP_PROJECT_ID:
+        description: "GCP project ID"
+        required: true
+        type: string
+      WIF_PROVIDER:
+        description: "Workload Identity Federation provider"
+        required: true
+        type: string
+      WIF_SA:
+        description: "Deployer service account email"
+        required: true
+        type: string
+      TFSTATE_BUCKET:
+        description: "Terraform state GCS bucket name"
+        required: true
+        type: string
+      load_balancer_domain:
+        description: "Custom domain for load balancer"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      DB_PASSWORD:
+        required: false
+
+env:
+  REGION: ${{ inputs.region }}
+  PROJECT_ID: ${{ inputs.GCP_PROJECT_ID }}
+  PREFIX: ${{ inputs.prefix }}
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.WIF_PROVIDER }}
+          service_account: ${{ inputs.WIF_SA }}
+          export_environment_variables: true
+          create_credentials_file: true
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build & Push (server/client)
+        run: |
+          set -euo pipefail
+          echo "=== Build & Push ==="
+          echo "PROJECT_ID: ${PROJECT_ID}"
+          echo "REGION: ${REGION}"
+          echo ""
+          bash infra/terraform/scripts/build-push.sh || {
+            echo "Error: Build & Push failed"
+            exit 1
+          }
+        env:
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          REGION: ${{ env.REGION }}
+          PREFIX: ${{ env.PREFIX }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.WIF_PROVIDER }}
+          service_account: ${{ inputs.WIF_SA }}
+          export_environment_variables: true
+          create_credentials_file: true
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Restore Terraform providers cache
+        id: tf-cache-apply
+        uses: actions/cache/restore@v4
+        with:
+          path: infra/terraform/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/*.tf', 'infra/terraform/**/*.tfvars') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Who am I (gcloud)
+        run: |
+          gcloud auth list
+          gcloud config list project
+
+      - name: Check TF state bucket exists
+        run: |
+          set -euo pipefail
+          BUCKET_RAW='${{ inputs.TFSTATE_BUCKET }}'
+          if [ -z "${BUCKET_RAW}" ]; then
+            echo "Error: TFSTATE_BUCKET secret is required"
+            exit 1
+          fi
+          BUCKET_NAME=${BUCKET_RAW#gs://}
+          BUCKET_NAME=${BUCKET_NAME#file://}
+          if ! echo "$BUCKET_NAME" | grep -qE '^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$'; then
+            echo "Error: Invalid TFSTATE_BUCKET format: ${BUCKET_RAW}"
+            exit 1
+          fi
+          echo "  Bucket name: ${BUCKET_NAME}"
+          if ! gsutil ls -b gs://${BUCKET_NAME} >/dev/null 2>&1; then
+            echo "Error: Terraform state bucket does not exist or is not accessible: gs://${BUCKET_NAME}"
+            exit 1
+          fi
+          echo "  Bucket exists and is accessible"
+
+      - name: Enable core Google APIs (idempotent)
+        run: |
+          gcloud services enable \
+            serviceusage.googleapis.com \
+            cloudresourcemanager.googleapis.com \
+            --project "${{ env.PROJECT_ID }}"
+          gcloud services list --enabled --project "${{ env.PROJECT_ID }}" --filter="name:serviceusage.googleapis.com OR name:cloudresourcemanager.googleapis.com" --format="value(name)" | head -2 | wc -l | xargs -I {} test {} -eq 2 || sleep 3
+
+      - name: Check and cleanup stale Terraform lock
+        run: |
+          set -euo pipefail
+          BUCKET_RAW='${{ inputs.TFSTATE_BUCKET }}'
+          BUCKET_NAME=${BUCKET_RAW#gs://}
+          BUCKET_NAME=${BUCKET_NAME#file://}
+          LOCK_FILE="gs://${BUCKET_NAME}/${{ inputs.environment }}/terraform.tfstate/default.tflock"
+          echo "Checking for stale Terraform lock..."
+          if gsutil -q stat "${LOCK_FILE}" 2>/dev/null; then
+            CREATION_TIME=$(gsutil stat "${LOCK_FILE}" 2>/dev/null | grep "Creation time" | head -1 | sed 's/.*Creation time:[[:space:]]*//')
+            LOCK_AGE_SECONDS=$(date -d "${CREATION_TIME}" +%s 2>/dev/null || echo "0")
+            NOW_SECONDS=$(date +%s)
+            if [ "${LOCK_AGE_SECONDS}" != "0" ]; then
+              AGE_MINUTES=$(( (NOW_SECONDS - LOCK_AGE_SECONDS) / 60 ))
+              echo "  Lock file exists (age: ${AGE_MINUTES} minutes)"
+              if [ ${AGE_MINUTES} -gt 60 ]; then
+                echo "  Lock is stale (>60 minutes old), removing..."
+                gsutil rm -f "${LOCK_FILE}" || true
+              fi
+            else
+              echo "  Could not determine lock age, skipping cleanup"
+            fi
+          else
+            echo "  No lock file found"
+          fi
+
+      - name: Validate required environment variables
+        run: |
+          set -euo pipefail
+          if [ -z "${{ env.PREFIX }}" ]; then
+            echo "CRITICAL ERROR: PREFIX is not set"
+            exit 1
+          fi
+          echo "  PREFIX: ${{ env.PREFIX }}"
+          echo "  PROJECT_ID: ${{ env.PROJECT_ID }}"
+          echo "  REGION: ${{ env.REGION }}"
+
+      - name: Get DB password
+        id: get-db-password
+        uses: ./.github/actions/get-db-password
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          prefix: ${{ env.PREFIX }}
+          fallback_password: ${{ secrets.DB_PASSWORD }}
+
+      - name: Terraform Apply
+        working-directory: infra/terraform
+        env:
+          TF_VAR_project_id: ${{ env.PROJECT_ID }}
+          TF_VAR_region: ${{ env.REGION }}
+          TF_VAR_prefix: ${{ env.PREFIX }}
+          TF_VAR_db_password: ${{ steps.get-db-password.outputs.DB_PASSWORD }}
+          TF_VAR_deployer_service_account: ${{ inputs.WIF_SA }}
+          TF_VAR_enable_ssl: ${{ inputs.load_balancer_domain != '' }}
+          TF_VAR_load_balancer_domain: ${{ inputs.load_balancer_domain }}
+          GOOGLE_PROJECT: ${{ env.PROJECT_ID }}
+          BUCKET_NAME: ${{ inputs.TFSTATE_BUCKET }}
+          BACKEND_PREFIX: ${{ inputs.environment }}/terraform.tfstate
+        run: bash scripts/terraform-apply.sh
+
+      - name: Save Terraform providers cache
+        if: steps.tf-cache-apply.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: infra/terraform/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/*.tf', 'infra/terraform/**/*.tfvars') }}
+
+      - name: Sync Cloud SQL password from Secret Manager
+        working-directory: infra/terraform
+        env:
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          PREFIX: ${{ env.PREFIX }}
+          INSTANCE: ${{ env.PREFIX }}-db
+          USER: appuser
+          DB_PASSWORD: ${{ steps.get-db-password.outputs.DB_PASSWORD }}
+        run: |
+          set -eo pipefail
+          if [ -z "${DB_PASSWORD}" ]; then
+            echo "Warning: DB_PASSWORD is not set, skipping password sync."
+            exit 0
+          fi
+          export PASSWORD="${DB_PASSWORD}"
+          bash scripts/secret-sync-db-url.sh || {
+            echo "Error: Failed to sync database-url and Cloud SQL password"
+            exit 1
+          }
+          echo "Cloud SQL password synchronized successfully"
+
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [build-push, apply]
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.WIF_PROVIDER }}
+          service_account: ${{ inputs.WIF_SA }}
+          export_environment_variables: true
+          create_credentials_file: true
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Restore Terraform providers cache
+        id: tf-cache-deploy
+        uses: actions/cache/restore@v4
+        with:
+          path: infra/terraform/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/*.tf', 'infra/terraform/**/*.tfvars') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terraform Init
+        working-directory: infra/terraform
+        run: |
+          set -euo pipefail
+          BUCKET_RAW='${{ inputs.TFSTATE_BUCKET }}'
+          if [ -z "${BUCKET_RAW}" ]; then
+            echo "Error: TFSTATE_BUCKET secret is required"
+            exit 1
+          fi
+          BUCKET_NAME=${BUCKET_RAW#gs://}
+          BUCKET_NAME=${BUCKET_NAME#file://}
+          terraform init -upgrade -reconfigure \
+            -backend-config="bucket=${BUCKET_NAME}" \
+            -backend-config="prefix=${{ inputs.environment }}/terraform.tfstate" || {
+            echo "Error: Terraform init failed"
+            exit 1
+          }
+          echo "  Terraform initialized"
+
+      - name: Run DB Migration Job
+        working-directory: infra/terraform
+        env:
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          REGION: ${{ env.REGION }}
+          PREFIX: ${{ env.PREFIX }}
+          TF_DIR: .
+        run: |
+          if ! command -v jq &> /dev/null; then
+            echo "Warning: jq is not installed, installing..."
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          bash scripts/run-migration.sh
+
+      - name: Get DB password
+        id: get-db-password
+        uses: ./.github/actions/get-db-password
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          prefix: ${{ env.PREFIX }}
+          fallback_password: ${{ secrets.DB_PASSWORD }}
+
+      - name: Deploy new revisions (no traffic change)
+        working-directory: infra/terraform
+        env:
+          TF_VAR_project_id: ${{ env.PROJECT_ID }}
+          TF_VAR_region: ${{ env.REGION }}
+          TF_VAR_prefix: ${{ env.PREFIX }}
+          TF_VAR_db_password: ${{ steps.get-db-password.outputs.DB_PASSWORD }}
+          TF_VAR_deployer_service_account: ${{ inputs.WIF_SA }}
+          TF_VAR_enable_ssl: ${{ inputs.load_balancer_domain != '' }}
+          TF_VAR_load_balancer_domain: ${{ inputs.load_balancer_domain }}
+          GOOGLE_PROJECT: ${{ env.PROJECT_ID }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          echo "=== Deploy New Revisions ==="
+          echo "COMMIT_SHA: ${COMMIT_SHA}"
+          echo ""
+
+          echo "Running Terraform apply (create new revisions)..."
+          SERVER_ENV="BUILD_SHA=\"${COMMIT_SHA}\""
+          terraform apply -auto-approve -input=false -lock-timeout=10m \
+            -var="server_env={${SERVER_ENV}}" \
+            -var="client_env={BUILD_SHA=\"${COMMIT_SHA}\"}" || {
+            echo "Error: Terraform apply failed during rollout"
+            exit 1
+          }
+          echo "  New revisions created"
+          echo ""
+          echo "New revisions deployed successfully (traffic not yet switched)"
+
+      - name: Wait for revisions to be ready and switch traffic
+        env:
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          REGION: ${{ env.REGION }}
+          PREFIX: ${{ env.PREFIX }}
+        run: |
+          set -euo pipefail
+          echo "=== Wait for Revisions Ready & Switch Traffic ==="
+          echo ""
+
+          SERVER_SERVICE="${PREFIX}-server"
+          CLIENT_SERVICE="${PREFIX}-client"
+
+          declare -A READY_REVISIONS
+
+          for SERVICE in "${SERVER_SERVICE}" "${CLIENT_SERVICE}"; do
+            echo "Waiting for ${SERVICE} revision to be ready..."
+
+            set +e
+            REVISION_OUTPUT=$(SERVICE="${SERVICE}" \
+              REGION="${REGION}" \
+              PROJECT_ID="${PROJECT_ID}" \
+              TIMEOUT=600 \
+              bash infra/terraform/scripts/wait-revision-ready.sh 2>&1)
+            WAIT_EXIT_CODE=$?
+            set -e
+
+            if [ ${WAIT_EXIT_CODE} -ne 0 ]; then
+              echo "Error: ${SERVICE} revision failed to become ready"
+              echo "${REVISION_OUTPUT}"
+              exit 1
+            fi
+
+            REVISION=$(echo "${REVISION_OUTPUT}" | tail -1)
+            READY_REVISIONS[${SERVICE}]=${REVISION}
+
+            echo "  ${SERVICE} revision is ready: ${REVISION}"
+            echo ""
+          done
+
+          echo "All revisions are ready"
+          echo ""
+
+          echo "Switching traffic to new revisions..."
+          for SERVICE in "${SERVER_SERVICE}" "${CLIENT_SERVICE}"; do
+            REVISION="${READY_REVISIONS[${SERVICE}]}"
+            echo "  Switching traffic for ${SERVICE} to ${REVISION}..."
+
+            gcloud run services update-traffic "${SERVICE}" \
+              --to-revisions="${REVISION}=100" \
+              --region="${REGION}" \
+              --project="${PROJECT_ID}" || {
+              echo "    Error: Failed to switch traffic for ${SERVICE}"
+              exit 1
+            }
+
+            echo "    Traffic switched to ${REVISION}"
+          done
+
+          echo ""
+          echo "Traffic switched successfully to all new revisions"
+
+      - name: Save Terraform providers cache
+        if: steps.tf-cache-deploy.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: infra/terraform/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**/*.tf', 'infra/terraform/**/*.tfvars') }}

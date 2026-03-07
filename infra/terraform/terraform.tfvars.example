@@ -1,0 +1,63 @@
+# このファイルは setup.sh によって環境ごとに自動生成されます。
+# setup.sh を環境（stg / prd）ごとに1回ずつ実行してください。
+#   ./scripts/setup.sh   # → stg 環境用
+#   ./scripts/setup.sh   # → prd 環境用（別の GCP プロジェクト）
+
+project_id = "your-gcp-project-id"
+region     = "asia-northeast1"
+location   = "asia-northeast1"
+
+# Resource Name Prefix
+# All resources starting with "ax-" will use this prefix by default
+# e.g. prefix="myprj" -> myprj-vpc, myprj-server, etc.
+prefix = "ax"
+
+# Individual resource names (optional overrides)
+# If not set, they will be generated using the prefix
+# run_service_name_server = "ax-server"
+# run_service_name_client = "ax-client"
+
+# Environment variables for server (optional overrides)
+server_env = {}
+
+# Environment variables for client (optional overrides)
+client_env = {}
+
+# Cloud SQL
+db_user          = "appuser"
+db_password      = "<CHANGE_ME_STRONG_PASSWORD>"
+db_database_name = "app"
+
+# Cloud SQL - インスタンス設定（環境に応じて調整）
+# ステージング環境向けのデフォルト設定:
+db_tier                           = "db-f1-micro"
+db_availability_type              = "ZONAL"
+db_disk_type                      = "PD_HDD"
+db_disk_size                      = 10
+db_backup_enabled                 = false
+db_point_in_time_recovery_enabled = false
+
+# 本番環境向けの推奨設定（コメントアウトを解除して使用）:
+# db_tier                           = "db-n1-standard-1"    # より多くのCPU/メモリ
+# db_availability_type              = "REGIONAL"            # 高可用性（自動フェイルオーバー）
+# db_disk_type                      = "PD_SSD"              # 高速ディスク
+# db_disk_size                      = 20                    # ディスク容量（GB）
+# db_backup_enabled                 = true                  # 自動バックアップ有効
+# db_backup_start_time              = "03:00"               # バックアップ開始時刻（UTC）
+# db_point_in_time_recovery_enabled = true                  # ポイントインタイムリカバリ
+
+# Load Balancer Domain (optional)
+# HTTPSを有効化する場合は以下を設定
+# enable_ssl = true
+# load_balancer_domain = "yourdomain.com"
+# 詳細は docs/domain-setup.md を参照してください
+
+# Identity Platform（Google認証）- オプション
+# GCP Console > APIs & Services > Credentials で OAuth 2.0 Client ID を作成
+# google_oauth_client_id     = "xxxxxxxxxxxx.apps.googleusercontent.com"
+# google_oauth_client_secret = "GOCSPX-xxxxxx"
+
+# アプリケーション環境設定
+# Cloud Run の APP_ENV 環境変数として設定されます
+# setup.sh が環境に応じて自動設定します（stg → staging, prd → production）
+app_env = "staging"

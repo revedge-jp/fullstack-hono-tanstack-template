@@ -1,0 +1,50 @@
+---
+description: api-service のクリーンアーキテクチャ方針と依存ルール
+globs: "apps/api-service/src/**/*"
+---
+
+# クリーンアーキテクチャ（api-service）
+
+## 層の責務
+- **routes**（残存）および **features/*/presentation**: HTTP I/O とバリデーションのみ。service を呼び出す。
+- **features/application**: ユースケース/ステップ。**入出力（DTO）の定義**。外部I/Fはポート（type/interface）のみ依存。
+- **features/domain**: ドメインモデル/抽象リポジトリ。**純粋性を維持（外部ライブラリ・DTO非依存）**。
+- **features/infrastructure**: リポジトリ実装/外部サービスアダプタ。
+- **integrations**: **外部SDKの薄いラッパ（GCP等）。外部SDK（@google-cloud/*、google-auth-library等）は必ずここに配置**。
+
+## 外部SDKの使用ルール
+- **外部SDKは必ず`src/integrations/`配下に配置する**。
+- `@google-cloud/*`、`google-auth-library`、その他の外部サービスSDKは直接使用せず、`integrations`層にラッパー関数として実装。
+- `middlewares`、`routes`、`features`（presentation 含む）層から外部SDKを直接importしない。
+- `integrations`層は外部SDKの薄いラッパーとして、アプリケーション固有の型やエラーハンドリングを提供する。
+- `integrations`層は設定値を直接環境変数から取得せず、呼び出し元からパラメータとして受け取る（テスタビリティと設定の一元管理のため）。
+
+## 依存の向き（強制）
+- (routes | features/*/presentation) → application → (domain | ports) → infrastructure → integrations
+- 逆方向は禁止（dependency-cruiser で検査）。
+
+## Domain層の純粋性ルール
+- **DTO非依存**: Domain層はApplication層で定義されたDTO（`CreateUserInput`等）に依存してはならない。プリミティブな値やドメインオブジェクトを受け取る。
+- **外部ライブラリ非依存**: フレームワーク、HTTPライブラリ、バリデーションライブラリ（Zod等）に依存してはならない。
+- **例外**: `@repo/contracts` (Shared Kernel) への依存は型定義・イベント定義として許可される。
+
+## 禁止事項（自動チェックで検出）
+- application → infrastructure/integrations の直参照
+- application 層で fetch/axios/@google-cloud/* の直使用
+- domain 層でフレームワーク/SDK/HTTP/バリデーション/DTO直参照
+- features 配下で process.env 直参照（config 経由）
+- integrations 層で process.env 直参照（パラメータ経由で受け取る）
+- features（presentation を除く）から Web FW（hono/src/factory）直参照
+- **middlewares/routes/features（presentation 含む）層から外部SDKの直接import（integrations 経由を強制）**
+
+## 実装パターン
+- ポート定義: `features/**/application/ports.ts`
+- アダプタ実装: `features/**/infrastructure/*.ts`
+- 外部SDKラッパ: `src/integrations/*.ts`（外部SDKは必ずここに配置）
+- DI: `src/container.ts`
+
+## 機能追加の手順
+新しい機能を追加する際の詳細な手順は、`.cursor/rules/feature-addition.mdc`を参照。実装例は`docs/dev/adding-features.md`を参照。
+
+## チェック実行
+- `bun run arch:check` または `bun run check-all`
