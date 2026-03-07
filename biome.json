@@ -99,6 +99,12 @@
   },
   "overrides": [
     {
+      "includes": ["**/*.gen.ts", "**/*.gen.tsx"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false },
+      "assist": { "enabled": false }
+    },
+    {
       "includes": [
         "apps/client/components/ui/**",
         "**/ui-shadcn/**",

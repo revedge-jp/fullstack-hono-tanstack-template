@@ -42,9 +42,9 @@ CLASS_VIOL=$(find apps packages \
   -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
   xargs -0 grep -nE '^\s*(export\s+)?class\b' || true)
 INTF_VIOL=$(find apps packages \
-  \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
+  \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
   -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
-  xargs -0 grep -nE '^\s*(export\s+)?interface\b' | grep -vE '^[^:]*\.d\.ts:' || true)
+  xargs -0 grep -nE '^\s*(export\s+)?interface\b' | grep -vE '^[^:]*\.(d|gen)\.ts:' || true)
 if [ -n "$CLASS_VIOL" ]; then
   echo "違反: class の使用が禁止されています"
   echo "$CLASS_VIOL" | while IFS= read -r line; do

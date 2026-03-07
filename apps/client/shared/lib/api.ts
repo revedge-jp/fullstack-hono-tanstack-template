@@ -8,7 +8,7 @@ const baseUrl = loadConfig().apiBaseUrl;
 async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const token = await getIdToken();
   if (!token) {
-    return fetch(input, init);
+    return fetch(input, { ...init, cache: "no-store" });
   }
   const headers = new Headers(
     init?.headers ?? (input instanceof Request ? input.headers : undefined),

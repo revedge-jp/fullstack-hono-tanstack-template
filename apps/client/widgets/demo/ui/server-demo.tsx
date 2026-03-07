@@ -4,11 +4,11 @@ import { CreateUserForm, UsersList } from "@/features/users";
 import { cn } from "@/shared/lib/utils";
 import { UsersListSkeleton } from "./users-list-skeleton";
 
-type ServerDemoProps = {
+type DemoProps = {
   className?: string;
 };
 
-export async function ServerDemo({ className }: ServerDemoProps) {
+export function Demo({ className }: DemoProps) {
   return (
     <Card className={cn("w-full", className)}>
       <CardHeader>
@@ -17,7 +17,7 @@ export async function ServerDemo({ className }: ServerDemoProps) {
       <CardContent className="space-y-8">
         <section className="space-y-2">
           <h3 className="font-medium text-sm text-zinc-700 dark:text-zinc-300">
-            Create user (Server Action)
+            Create user (Server Function)
           </h3>
           <CreateUserForm />
         </section>

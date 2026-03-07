@@ -10,6 +10,7 @@ const searchRoots = targets.length > 0 ? targets : DEFAULT_TARGETS;
 const ignoredDirs = new Set([
   ".git",
   ".next",
+  ".output",
   ".turbo",
   ".cursor",
   "generated",
@@ -26,7 +27,9 @@ const ignoredDirs = new Set([
 
 const kebabCasePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const allowedBaseNames = new Set(["README", "Dockerfile", "Makefile"]);
-const allowedSuffixes = [".test", ".spec"];
+const allowedSuffixes = [".test", ".spec", ".gen"];
+// TanStack Router convention: __root.tsx is required by the framework
+const allowedPrefixes = ["__"];
 
 const violations = [];
 
@@ -56,6 +59,11 @@ const walk = async (dirPath) => {
       continue;
     }
 
+    // Skip auto-generated files
+    if (entry.name.endsWith(".gen.ts") || entry.name.endsWith(".gen.tsx")) {
+      continue;
+    }
+
     const baseName = path.basename(entry.name, path.extname(entry.name));
     if (allowedBaseNames.has(baseName)) {
       continue;
@@ -64,6 +72,9 @@ const walk = async (dirPath) => {
     const matchedSuffix = allowedSuffixes.find((suffix) => baseName.endsWith(suffix));
     const normalizedBaseName = matchedSuffix ? baseName.slice(0, -matchedSuffix.length) : baseName;
 
+    if (allowedPrefixes.some((prefix) => normalizedBaseName.startsWith(prefix))) {
+      continue;
+    }
     if (!isKebabCase(normalizedBaseName)) {
       violations.push(path.relative(ROOT_DIR, fullPath));
     }

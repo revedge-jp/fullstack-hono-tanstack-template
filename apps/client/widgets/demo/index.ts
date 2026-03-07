@@ -1,1 +1,1 @@
-export { ServerDemo } from "./ui/server-demo";
+export { Demo } from "./ui/server-demo";

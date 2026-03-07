@@ -21,7 +21,9 @@
   },
   "ignoreDependencies": [
     "@tailwindcss/postcss",
+    "@tailwindcss/vite",
     "tailwindcss",
+    "vite-tsconfig-paths",
     "@repo/tailwind-config",
     "tw-animate-css",
     "@feature-sliced/steiger-plugin",

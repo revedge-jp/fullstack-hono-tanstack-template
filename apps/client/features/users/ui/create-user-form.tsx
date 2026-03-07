@@ -1,17 +1,34 @@
-"use client";
-
-import { useActionState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { type CreateUserActionState, createUserAction } from "@/features/users/actions/create";
+import { createUserFn } from "@/features/users/actions/create";
 
 export function CreateUserForm() {
-  const [state, formAction, isPending] = useActionState<CreateUserActionState, FormData>(
-    createUserAction,
-    { ok: true },
-  );
+  const queryClient = useQueryClient();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const mutation = useMutation({
+    mutationFn: (data: { email: string; name?: string }) => createUserFn({ data }),
+    onSuccess: (result) => {
+      if (result.ok) {
+        queryClient.invalidateQueries({ queryKey: ["users"] });
+        formRef.current?.reset();
+      }
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const name = formData.get("name") as string;
+    mutation.mutate({ email, name: name || undefined });
+  }
+
+  const error = mutation.data?.ok === false ? mutation.data.message : null;
 
   return (
-    <form action={formAction} className="flex max-w-md flex-col gap-3">
+    <form ref={formRef} onSubmit={handleSubmit} className="flex max-w-md flex-col gap-3">
       <input
         name="email"
         type="email"
@@ -25,14 +42,14 @@ export function CreateUserForm() {
         placeholder="optional name"
         className="w-full rounded-md border px-3 py-2 text-sm dark:border-input dark:bg-input/30"
       />
-      {!state.ok ? (
+      {error ? (
         <div className="text-red-600 text-sm" role="alert">
-          {state.message}
+          {error}
         </div>
       ) : null}
       <div>
-        <Button type="submit" disabled={isPending}>
-          {isPending ? "Creating..." : "Create"}
+        <Button type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? "Creating..." : "Create"}
         </Button>
       </div>
     </form>

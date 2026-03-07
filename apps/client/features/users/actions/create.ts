@@ -1,34 +1,23 @@
-"use server";
-
-import { updateTag } from "next/cache";
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { type ApiClient, apiClient } from "@/shared/lib/api";
 
-const CACHE_TAG = "users:list";
-
 export type CreateUserActionState = { ok: true } | { ok: false; message: string };
 
-const CreateUserFormSchema = z.object({
+const CreateUserSchema = z.object({
   email: z.email(),
   name: z.string().optional(),
 });
 
+type CreateUserInput = z.infer<typeof CreateUserSchema>;
+
 export async function processCreateUser(
-  formData: FormData,
+  input: CreateUserInput,
   client: ApiClient = apiClient,
 ): Promise<CreateUserActionState> {
-  const formObject = Object.fromEntries(formData.entries());
-  const validation = CreateUserFormSchema.safeParse(formObject);
-  if (!validation.success) {
-    return { ok: false, message: validation.error.issues.at(0)?.message ?? "Invalid input" };
-  }
-
   const body = {
-    email: validation.data.email.trim(),
-    name:
-      validation.data.name && validation.data.name.trim().length > 0
-        ? validation.data.name.trim()
-        : null,
+    email: input.email.trim(),
+    name: input.name && input.name.trim().length > 0 ? input.name.trim() : null,
   };
 
   try {
@@ -46,13 +35,9 @@ export async function processCreateUser(
     return { ok: false, message: "Failed to create" };
   }
 
-  updateTag(CACHE_TAG);
   return { ok: true };
 }
 
-export async function createUserAction(
-  _prev: CreateUserActionState,
-  formData: FormData,
-): Promise<CreateUserActionState> {
-  return processCreateUser(formData);
-}
+export const createUserFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => CreateUserSchema.parse(data))
+  .handler(({ data }) => processCreateUser(data));
