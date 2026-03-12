@@ -12,7 +12,6 @@ function createRouter() {
       context: { queryClient },
       defaultPreload: "intent",
       scrollRestoration: true,
-      defaultNotFoundComponent: () => <p>Not Found</p>,
     }),
     queryClient,
   );

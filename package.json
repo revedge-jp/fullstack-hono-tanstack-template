@@ -45,11 +45,11 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.4",
-    "@evilmartians/lefthook": "^1.11.5",
     "@feature-sliced/steiger-plugin": "^0.5.7",
     "dependency-cruiser": "^17.3.8",
     "dotenv-cli": "^11.0.0",
     "knip": "^5.84.1",
+    "lefthook": "^2.1.4",
     "madge": "^8.0.0",
     "steiger": "^0.5.11",
     "turbo": "^2.8.10",
