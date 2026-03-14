@@ -1,5 +1,5 @@
 {
-  "name": "meetform",
+  "name": "{{APP_NAME}}",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat_v2"],
   "observability": {
@@ -11,29 +11,31 @@
   },
   "env": {
     "staging": {
-      "name": "meetform-staging",
+      "name": "{{APP_NAME}}-staging",
       "vars": {
         "NODE_ENV": "production",
-        "CORS_ORIGIN": "https://meetform-staging.shinji-takahashi-8ef.workers.dev",
-        "BETTER_AUTH_URL": "https://meetform-staging.shinji-takahashi-8ef.workers.dev"
+        // TODO: staging の Workers URL に更新する
+        "CORS_ORIGIN": "https://{{APP_NAME}}-staging.example.workers.dev",
+        "BETTER_AUTH_URL": "https://{{APP_NAME}}-staging.example.workers.dev"
       },
+      // TODO: `wrangler hyperdrive create {{APP_NAME}}-staging --connection-string "..."` で取得
       "hyperdrive": [
         {
           "binding": "HYPERDRIVE",
-          "id": "c8eae95b26324a7fb8eaae0eb3deb777"
+          "id": "TODO"
         }
       ]
     },
     "production": {
-      "name": "meetform",
+      "name": "{{APP_NAME}}",
       "vars": {
         "NODE_ENV": "production",
         // TODO: 本番ドメインが決まったら更新する
-        "CORS_ORIGIN": "https://meetform.example.com",
-        "BETTER_AUTH_URL": "https://meetform.example.com"
+        "CORS_ORIGIN": "https://{{APP_NAME}}.example.com",
+        "BETTER_AUTH_URL": "https://{{APP_NAME}}.example.com"
       },
       // TODO: 本番 Hyperdrive binding を作成して id を設定する
-      // `wrangler hyperdrive create meetform-production --connection-string "..."` で取得
+      // `wrangler hyperdrive create {{APP_NAME}}-production --connection-string "..."` で取得
       "hyperdrive": [
         {
           "binding": "HYPERDRIVE",

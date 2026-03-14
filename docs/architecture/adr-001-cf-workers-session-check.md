@@ -7,7 +7,7 @@
 
 ## 背景
 
-meetform は TanStack Start (SSR) + Cloudflare Workers + Cloudflare Static Assets で動作する。
+このアプリは TanStack Start (SSR) + Cloudflare Workers + Cloudflare Static Assets で動作する。
 
 認証ガード (`/_authenticated` レイアウトルート) の `loader` は `getSessionServerFn()` というサーバー関数を呼び出し、セッションが有効かどうかを確認する。
 

@@ -4,7 +4,7 @@
 
 ```
 Browser
-  └─ Cloudflare Workers (meetform-staging / meetform-prod)
+  └─ Cloudflare Workers ({{APP_NAME}}-staging / {{APP_NAME}}-prod)
        ├─ /api/*     → Hono (api-service)
        │                └─ Hyperdrive → Supabase (PostgreSQL)
        └─ /*         → TanStack Start SSR
@@ -50,8 +50,8 @@ Browser
 ### 3. Google OAuth の設定
 
 Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client:
-- Authorized JavaScript origins: `https://meetform-staging.[account].workers.dev`
-- Authorized redirect URIs: `https://meetform-staging.[account].workers.dev/api/auth/callback/google`
+- Authorized JavaScript origins: `https://{{APP_NAME}}-staging.[account].workers.dev`
+- Authorized redirect URIs: `https://{{APP_NAME}}-staging.[account].workers.dev/api/auth/callback/google`
 
 ### 4. Cloudflare Workers Secrets の設定
 
@@ -69,7 +69,7 @@ bunx wrangler secret put DATABASE_URL --env staging        # Hyperdrive binding 
 
 ```jsonc
 {
-  "name": "meetform",
+  "name": "{{APP_NAME}}",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat_v2"],
   "main": "dist/server/server.js",
@@ -78,11 +78,11 @@ bunx wrangler secret put DATABASE_URL --env staging        # Hyperdrive binding 
   },
   "env": {
     "staging": {
-      "name": "meetform-staging",
+      "name": "{{APP_NAME}}-staging",
       "vars": {
         "NODE_ENV": "production",
-        "CORS_ORIGIN": "https://meetform-staging.[account].workers.dev",
-        "BETTER_AUTH_URL": "https://meetform-staging.[account].workers.dev"
+        "CORS_ORIGIN": "https://{{APP_NAME}}-staging.[account].workers.dev",
+        "BETTER_AUTH_URL": "https://{{APP_NAME}}-staging.[account].workers.dev"
       },
       "hyperdrive": [
         {
@@ -108,7 +108,7 @@ cd apps/client
 bunx wrangler deploy --env staging
 
 # 3. 動作確認
-# ブラウザで https://meetform-staging.[account].workers.dev にアクセス
+# ブラウザで https://{{APP_NAME}}-staging.[account].workers.dev にアクセス
 ```
 
 ---

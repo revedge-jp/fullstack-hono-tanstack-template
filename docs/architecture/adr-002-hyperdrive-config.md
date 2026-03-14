@@ -7,7 +7,7 @@
 
 ## 背景
 
-meetform は Supabase (PostgreSQL) を DB として使用し、Cloudflare Hyperdrive 経由で接続する。
+このアプリは Supabase (PostgreSQL) を DB として使用し、Cloudflare Hyperdrive 経由で接続する。
 
 ---
 
