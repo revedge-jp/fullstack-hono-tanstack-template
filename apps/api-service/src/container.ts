@@ -1,11 +1,12 @@
-import { prisma as prismaClient } from "@repo/db";
+import { makeGetSession } from "@app/features/auth/application/get-session/usecase";
+import { makeVerifySession } from "@app/features/auth/infrastructure/session";
+import { createAuth } from "@app/integrations/auth";
+import { createDb } from "@repo/db";
 import { createLogger } from "@repo/logging";
 import type { AppConfig } from "./config";
-import { createUsersService } from "./features/users/application/service";
-import { createUsersRepository } from "./features/users/infrastructure/users.repository.prisma";
 
 export function createContainer(config: AppConfig) {
-  const prisma = prismaClient;
+  const { db, end } = createDb(config.databaseUrl);
 
   const logger = createLogger({
     service: "api-service",
@@ -13,8 +14,9 @@ export function createContainer(config: AppConfig) {
     level: config.logLevel,
   });
 
-  const usersRepository = createUsersRepository({ prisma });
-  const users = createUsersService({ usersRepository });
+  const auth = createAuth(config.auth, config.nodeEnv, db);
+  const verifySession = makeVerifySession(auth, logger);
+  const getSession = makeGetSession({ verifySession });
 
-  return { prisma, logger, users };
+  return { db, end, logger, auth, getSession };
 }

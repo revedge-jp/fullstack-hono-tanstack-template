@@ -39,7 +39,7 @@ module.exports = {
       name: "server-domain-no-db",
       severity: "error",
       from: { path: "^apps/api-service/src/features/.+/domain/" },
-      to: { path: "^(?:@repo/db|@prisma/client|prisma(?:/|$))" },
+      to: { path: "^(?:@repo/db|drizzle-orm(?:/|$))" },
     },
     // server: features -> routes の逆参照禁止
     {
@@ -93,7 +93,7 @@ module.exports = {
       severity: "error",
       from: { path: "^apps/api-service/src/features/[^/]+/domain/" },
       to: {
-        path: "^(?:@?hono(?:/|$)|zod|axios|node-fetch|@google-cloud/)",
+        path: "^(?:@?hono(?:/|$)|zod|axios|node-fetch)",
       },
     },
     // server: infrastructure から application/presentation/routes への逆依存禁止
@@ -110,7 +110,7 @@ module.exports = {
       name: "server-application-no-db",
       severity: "error",
       from: { path: "^apps/api-service/src/features/[^/]+/application/" },
-      to: { path: "^(?:@repo/db|@prisma/client|prisma(?:/|$))" },
+      to: { path: "^(?:@repo/db|drizzle-orm(?:/|$))" },
     },
     // server: application 層のクロス feature 参照を警告
     {
@@ -118,13 +118,6 @@ module.exports = {
       severity: "warn",
       from: { path: "^apps/api-service/src/features/([^/]+)/application/" },
       to: { path: "^apps/api-service/src/features/(?!\\1)/" },
-    },
-    // server: integrations 以外から @google-cloud/** の直参照禁止
-    {
-      name: "server-google-cloud-only-integrations",
-      severity: "error",
-      from: { path: "^apps/api-service/src/(?!integrations/).*" },
-      to: { path: "^@google-cloud/" },
     },
     // server: middlewares から integrations への直接参照禁止（ports.ts 経由を強制）
     {

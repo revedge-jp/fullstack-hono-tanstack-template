@@ -1,0 +1,45 @@
+{
+  "name": "meetform",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat_v2"],
+  "observability": {
+    "enabled": true
+  },
+  "main": "app/server.ts",
+  "assets": {
+    "directory": "dist/client"
+  },
+  "env": {
+    "staging": {
+      "name": "meetform-staging",
+      "vars": {
+        "NODE_ENV": "production",
+        "CORS_ORIGIN": "https://meetform-staging.shinji-takahashi-8ef.workers.dev",
+        "BETTER_AUTH_URL": "https://meetform-staging.shinji-takahashi-8ef.workers.dev"
+      },
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE",
+          "id": "c8eae95b26324a7fb8eaae0eb3deb777"
+        }
+      ]
+    },
+    "production": {
+      "name": "meetform",
+      "vars": {
+        "NODE_ENV": "production",
+        // TODO: 本番ドメインが決まったら更新する
+        "CORS_ORIGIN": "https://meetform.example.com",
+        "BETTER_AUTH_URL": "https://meetform.example.com"
+      },
+      // TODO: 本番 Hyperdrive binding を作成して id を設定する
+      // `wrangler hyperdrive create meetform-production --connection-string "..."` で取得
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE",
+          "id": "TODO"
+        }
+      ]
+    }
+  }
+}

@@ -13,6 +13,7 @@ node_modules
 .env.production.local
 .env.deploy
 **/env.deploy
+**/.dev.vars
 
 # Testing
 coverage
@@ -24,6 +25,9 @@ playwright-report/
 
 # Vercel
 .vercel
+
+# Wrangler local state
+**/.wrangler/
 
 # Build Outputs
 .next/

@@ -8,8 +8,8 @@ export default function globalSetup() {
     console.log("[global-setup] CI detected — skipping migrate (already done in workflow).");
     return;
   }
-  console.log("[global-setup] Running prisma migrate deploy...");
-  execSync("bunx prisma migrate deploy", {
+  console.log("[global-setup] Running drizzle-kit migrate...");
+  execSync("bunx drizzle-kit migrate", {
     cwd: "../../packages/database",
     stdio: "inherit",
     env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },

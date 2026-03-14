@@ -3,7 +3,7 @@
   "ui": "tui",
   "tasks": {
     "build": {
-      "dependsOn": ["^build", "^prisma:generate"],
+      "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".output/**", "dist/**"],
       "env": ["DATABASE_URL"]
@@ -20,7 +20,6 @@
       "dependsOn": ["^build", "^typecheck", "api-service#build:types"]
     },
     "dev": {
-      "dependsOn": ["^prisma:generate"],
       "cache": false,
       "persistent": true,
       "env": ["DATABASE_URL", "LOG_LEVEL"]
@@ -57,16 +56,6 @@
     "dep:cycles": {},
     "dep:orphans": {},
     "dep:graph": {},
-    "prisma:generate": {
-      "cache": false
-    },
-    "prisma:migrate": {
-      "cache": false,
-      "persistent": true
-    },
-    "prisma:deploy": {
-      "cache": false
-    },
     "//#legacy-aliases": {}
   }
 }

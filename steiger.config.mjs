@@ -9,4 +9,11 @@ export default defineConfig([
       "fsd/insignificant-slice": "off",
     },
   },
+  {
+    // TanStack Start の API プロキシルート（フレームワーク規定のパス）
+    files: ["apps/client/app/routes/api/**"],
+    rules: {
+      "fsd/no-reserved-folder-names": "off",
+    },
+  },
 ]);

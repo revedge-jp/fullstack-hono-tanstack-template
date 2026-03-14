@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Monorepo**: Turborepo + Bun (required, no npm/yarn/pnpm)
 - **Backend** (`apps/api-service`): Hono on Bun
-- **Frontend** (`apps/client`): Next.js 16 + React 19 + Tailwind v4
-- **Database** (`packages/database`): Prisma 7 + PostgreSQL (via `@repo/db`)
+- **Frontend** (`apps/client`): TanStack Start + React 19 + Tailwind v4
+- **Database** (`packages/database`): Drizzle ORM + PostgreSQL (via `@repo/db`)
+- **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/auth.ts`
 - **Testing**: `bun test` (native, no vitest/jest)
 - **Linter/Formatter**: Biome
 
@@ -32,16 +33,15 @@ bun run test:contract               # API contract tests
 bun run test:watch                  # Watch mode (api-service only)
 
 # Run a single test file
-cd apps/api-service && bun test src/features/users/application/create/usecase.test.ts
-cd apps/client && bun test features/users/actions/create.test.ts
+cd apps/api-service && bun test src/features/auth/application/get-session/usecase.test.ts
 ```
 
 ### Database
 ```bash
 bun run db:up         # Start dev DB (Docker)
-bun run db:migrate    # Prisma migrate dev
-bun run db:seed       # Seed data
-bun run db:studio     # Prisma Studio
+bun run db:generate   # drizzle-kit generate (create migration files)
+bun run db:migrate    # drizzle-kit migrate (apply migrations)
+bun run db:studio     # Drizzle Studio
 ```
 
 ### Architecture Checks
@@ -58,7 +58,7 @@ Clean Architecture with ROP (Result-Oriented Programming). Dependency direction 
 ```
 presentation → application → domain ← infrastructure
                                      ↑
-                              integrations (external APIs, Cloud Tasks, etc.)
+                              integrations (external APIs, etc.)
 ```
 
 ### Feature structure
@@ -69,7 +69,7 @@ src/features/{feature}/
 │   └── {feature}.repository.ts   # Repository interface
 ├── infrastructure/
 │   ├── mappers.ts                 # DB ↔ Domain conversion
-│   └── {feature}.repository.prisma.ts
+│   └── {feature}.repository.drizzle.ts
 ├── application/
 │   ├── {action}/
 │   │   ├── validators.ts          # DTO definition (XxxInput) + Zod validation
@@ -84,24 +84,24 @@ src/features/{feature}/
 ### Use case pattern (ROP)
 ```typescript
 // usecase.ts
-type CreateUserError = "Conflict" | "Invalid" | "Unexpected";  // defined at top, non-exported
+type CreateXxxError = "Conflict" | "Invalid" | "Unexpected";  // defined at top, non-exported
 
-export function makeCreateUser(deps: { usersRepository: UsersRepository }) {
-  const createUserStep = makeCreateUserStep(deps);
-  return async function createUser(input: CreateUserInput): Promise<Result<..., CreateUserError>> {
-    return flow<CreateUserInput>(input)
-      .andThen(validateCreateUser)
-      .asyncAndThen(createUserStep)
-      .map(toCreateUserResponse)
+export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
+  const createXxxStep = makeCreateXxxStep(deps);
+  return async function createXxx(input: CreateXxxInput): Promise<Result<..., CreateXxxError>> {
+    return flow<CreateXxxInput>(input)
+      .andThen(validateCreateXxx)
+      .asyncAndThen(createXxxStep)
+      .map(toCreateXxxResponse)
       .value();
   };
 }
 ```
 
 ### Key rules
-- **Domain is pure**: no Zod, no Prisma, no HTTP, no DTOs from Application layer
+- **Domain is pure**: no Zod, no Drizzle, no HTTP, no DTOs from Application layer
 - **DTOs** (`XxxInput`) defined in Application layer (`validators.ts`), not Domain
-- **`process.env` forbidden** in features; use `src/config.ts` → DI via container
+- **`process.env` forbidden** in features and integrations; use `src/config.ts` → DI via container
 - **DI**: `src/container.ts` assembles all deps; `src/app.ts` mounts routers
 - **Error types** defined at top of `usecase.ts`, non-exported
 
@@ -109,58 +109,97 @@ export function makeCreateUser(deps: { usersRepository: UsersRepository }) {
 
 ```
 features/{feature}/
-├── actions/    # Next.js Server Actions (mutations, call apiClient, revalidate tags)
-├── queries/    # Data fetching (Next.js cache with tags)
-└── ui/         # React components (RSC and client components)
+├── actions/    # Mutations: createServerFn (POST/PUT/DELETE), invalidate queries
+├── queries/    # Reads: queryOptions (TanStack Query) + createServerFn for SSR reads
+└── ui/         # React components
 ```
 
-Type-safe API calls via Hono RPC:
+### Data fetching: SSR vs client-side
+
+基本方針: **データはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。クライアントサイドフェッチはユーザー操作に応じて動的に変わるデータに限定する。
+
+**SSR（推奨）**: `loader` でサーバーサイド取得 → `Route.useLoaderData()` で参照
+
 ```typescript
+// queries/get-xxx.ts — createServerFn でSSRでもCookieを転送できる
+export const getXxxServerFn = createServerFn().handler(async () => {
+  const request = getRequest();
+  const cookie = request.headers.get("cookie") ?? "";
+  const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, { init: { headers: { cookie } } });
+  if (!res.ok) return null;
+  return res.json();
+});
+
+// app/routes/xxx.tsx
+export const Route = createFileRoute("/xxx")({
+  loader: async () => {
+    const data = await getXxxServerFn();
+    return { data };
+  },
+  component: XxxPage,
+});
+
+function XxxPage() {
+  const { data } = Route.useLoaderData(); // SSRで取得済み、ローディング不要
+}
+```
+
+**クライアントサイド**: ユーザー操作で動的に変わるデータに `useQuery`
+
+```typescript
+// queries/xxx.ts
+export function xxxQueryOptions() {
+  return queryOptions({
+    queryKey: ["xxx"],
+    retry: false,
+    queryFn: async () => {
+      const res = await apiClient.api.xxx.$get();
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+}
+```
+
+### Auth pattern
+
+- **認証ガード**: `_authenticated.tsx` (レイアウトルート) の `loader` で `getSessionServerFn` を呼び、未認証なら `/signin` にリダイレクト
+- **ユーザー情報**: 親ルートの `loader` が `user` を返し、子ルートは `getRouteApi("/_authenticated").useLoaderData()` で参照
+- **サインイン**: `authClient.signIn.social({ provider: "google" })` — クライアントサイドのみ
+- **サインアウト**: `authClient.signOut()` 後に `queryClient.removeQueries({ queryKey: ["auth"] })`
+
+### Hono RPC
+
+```typescript
+// ブラウザ（クライアントサイド）: 相対URL
 import type { AppType } from "api-service";
-const client = hc<AppType>(baseUrl);
-// Usage: client.api.users.$get(), client.api.users.$post()
-```
+const apiClient = hc<AppType>("/");
 
-### Server Action pattern (`processXxx` / `xxxAction`)
-```typescript
-// actions/create.ts
-export async function processCreateUser(formData: FormData, client: ApiClient = apiClient) {
-  // pure function: testable by injecting a mock client
-}
-
-export async function createUserAction(formData: FormData) {
-  "use server";
-  return processCreateUser(formData);
-}
+// サーバーサイド（createServerFn内）: 絶対URL + Cookie転送
+const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, {
+  init: { headers: { cookie } },
+});
 ```
-- `processXxx` — pure function, DI-friendly, called in tests
-- `xxxAction` — thin wrapper with `"use server"`, called from UI
-- UI components import `xxxAction`, never `processXxx` directly
 
 ## Shared Packages
 
 | Package | Purpose |
 |---|---|
 | `@repo/result` | ROP: `Ok`, `Err`, `Result`, `ok()`, `err()`, `flow()`, `all()`, `tryCatch()` |
-| `@repo/db` | Prisma client instance |
+| `@repo/db` | Drizzle client instance + schema |
 | `@repo/logging` | Pino-based logger |
 
 ## Testing Conventions
 
 ### Test helpers
 - `createFakeApp(overrides?)` — in-memory Hono app, no DB required
-- `createInMemoryUsersRepository()` — in-memory repo for unit tests
-- Both exported from `api-service/test-helpers`
+- Exported from `api-service/test-helpers`
 
 ### Test patterns
 ```typescript
 // api-service: inject fake app into hono client
 const app = createFakeApp();
 const client = hc<AppType>("http://localhost", { fetch: app.request.bind(app) });
-
-// client actions: prevent real API calls
-mock.module("next/cache", () => ({ updateTag: mock() }));
-mock.module("@/shared/lib/api", () => ({ apiClient: null }));
 
 // Result type guard
 if (result.type === "ok") { /* result.value */ }
@@ -178,13 +217,12 @@ if (result.type === "err") { /* result.value */ }
 - `validators.test.ts` — if `validators.ts` has non-trivial logic
 - `domain/models.test.ts` — if domain has behavior (value objects)
 - Append to `__tests__/scenario/{feature}.scenario.test.ts` — multi-step flows
-- Append to `test-helpers/users.inmemory.repository.test.ts` — new repo methods
 
 **client — always:**
 - `actions/{action}.test.ts` (co-located)
 - `queries/{query}.test.ts` (co-located)
 
-**client — skip:** UI component tests (RSC rendering tests have high cost/low value)
+**client — skip:** UI component tests (server component rendering tests have high cost/low value)
 
 ## TypeScript Style
 
@@ -197,7 +235,7 @@ if (result.type === "err") { /* result.value */ }
 ## Adding a New Feature (implementation order)
 
 1. Domain layer: models + repository interface (no external deps)
-2. Infrastructure layer: Prisma repo + mappers
+2. Infrastructure layer: Drizzle repo + mappers
 3. Application layer: DTOs in `validators.ts`, steps, usecase, service
 4. Presentation layer: Hono router
 5. Register in `src/container.ts` and mount in `src/app.ts`

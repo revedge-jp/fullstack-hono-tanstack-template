@@ -4,34 +4,38 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "dotenv -e ../../.env -- sh -c 'exec vite --port ${CLIENT_PORT:-3000}'",
+    "dev": "ln -sf ../../.env .dev.vars && sh -c 'vite --port ${CLIENT_PORT:-3000}'",
     "build": "vite build",
     "start": "node .output/server/index.mjs",
+    "preview": "wrangler dev",
+    "deploy:staging": "vite build && node scripts/prepare-deploy.mjs staging && wrangler deploy --config dist/server/wrangler.json",
+    "deploy:production": "vite build && node scripts/prepare-deploy.mjs production && wrangler deploy --config dist/server/wrangler.json",
     "lint": "biome check .",
     "lint:fix": "biome check . --write --unsafe",
-    "test": "bun test features shared",
-    "test:unit": "bun test features shared",
+    "test": "sh -c 'files=$(find app features shared -name \"*.test.ts\" 2>/dev/null | head -1); [ -z \"$files\" ] || bun test app features shared'",
+    "test:unit": "sh -c 'files=$(find app features shared -name \"*.test.ts\" 2>/dev/null | head -1); [ -z \"$files\" ] || bun test app features shared'",
     "typecheck": "tsc --noEmit",
     "dep:cycles": "madge app --ts-config tsconfig.json --extensions ts,tsx --circular --exclude 'node_modules|.output|dist|routeTree\\.gen'",
     "dep:orphans": "madge app/router.tsx --ts-config tsconfig.json --extensions ts,tsx --orphans --exclude 'node_modules|.output|dist'",
     "dep:graph": "madge app --ts-config tsconfig.json --extensions ts,tsx --image ../../docs/client-deps.svg --exclude 'node_modules|.output|dist'"
   },
   "dependencies": {
-    "@radix-ui/react-slot": "^1.2.4",
     "@tanstack/react-query": "^5.74.4",
     "@tanstack/react-router": "^1.114.23",
     "@tanstack/react-router-with-query": "^1.114.23",
     "@tanstack/react-start": "^1.114.23",
+    "better-auth": "^1.5.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "^4.12.2",
+    "radix-ui": "^1.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "tailwind-merge": "^3.4.0",
-    "vite": "8",
-    "zod": "^4.1.12"
+    "vite": "8"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.28.0",
     "@playwright/test": "1.58.2",
     "@repo/tailwind-config": "workspace:*",
     "@tailwindcss/vite": "^4.1.17",
@@ -46,6 +50,7 @@
     "pg": "^8.18.0",
     "tailwindcss": "^4.1.17",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.72.0"
   }
 }

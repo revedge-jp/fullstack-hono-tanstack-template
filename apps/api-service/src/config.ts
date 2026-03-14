@@ -7,8 +7,12 @@ const ConfigSchema = z.object({
   CORS_ORIGIN: z.string().optional(),
   API_PORT: z.coerce.number().optional(),
   PORT: z.coerce.number().optional(),
-  GOOGLE_CLOUD_PROJECT: z.string().default("kikagaku"),
-  PREFIX: z.string().default("local"),
+  DATABASE_URL: z.string().min(1),
+  BETTER_AUTH_SECRET: z.string().min(1),
+  BETTER_AUTH_URL: z.string().optional(),
+  BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().min(1),
+  GOOGLE_CLIENT_SECRET: z.string().min(1),
 });
 
 export type AppConfig = {
@@ -17,22 +21,30 @@ export type AppConfig = {
   logLevel?: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent";
   corsOrigin: string;
   port: number;
-  googleCloudProject: string;
-  prefix: string;
+  databaseUrl: string;
+  auth: {
+    secret: string;
+    baseURL?: string;
+    trustedOrigins: string[];
+    googleClientId: string;
+    googleClientSecret: string;
+  };
 };
 
-export function loadConfig(): AppConfig {
-  const parsed = ConfigSchema.safeParse(process.env);
+export function loadConfig(env?: Record<string, string | undefined>): AppConfig {
+  const source = env ? { ...process.env, ...env } : process.env;
+  const parsed = ConfigSchema.safeParse(source);
   if (!parsed.success) {
-    process.exit(1);
+    throw new Error(
+      `Invalid environment variables: ${JSON.stringify(z.treeifyError(parsed.error).properties)}`,
+    );
   }
   const base = parsed.data;
 
   const corsOrigin =
     base.CORS_ORIGIN ?? (base.NODE_ENV === "production" ? undefined : "http://localhost:3000");
   if (corsOrigin === undefined) {
-    console.error("CORS_ORIGIN is required in production");
-    process.exit(1);
+    throw new Error("CORS_ORIGIN is required in production");
   }
 
   return {
@@ -41,7 +53,16 @@ export function loadConfig(): AppConfig {
     logLevel: base.LOG_LEVEL,
     corsOrigin,
     port: base.API_PORT ?? base.PORT ?? 8080,
-    googleCloudProject: base.GOOGLE_CLOUD_PROJECT,
-    prefix: base.PREFIX,
+    databaseUrl: base.DATABASE_URL,
+    auth: {
+      secret: base.BETTER_AUTH_SECRET,
+      baseURL: base.BETTER_AUTH_URL,
+      trustedOrigins:
+        base.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")
+          .map((s) => s.trim())
+          .filter(Boolean) ?? [],
+      googleClientId: base.GOOGLE_CLIENT_ID,
+      googleClientSecret: base.GOOGLE_CLIENT_SECRET,
+    },
   };
 }

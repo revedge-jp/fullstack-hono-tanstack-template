@@ -1,0 +1,18 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/_authenticated/about")({
+  component: AboutPage,
+});
+
+function AboutPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
+      <main className="flex flex-col items-center gap-4">
+        <h1 className="font-bold text-2xl">about</h1>
+        <Link to="/" className="text-sm text-zinc-500 underline">
+          ← home
+        </Link>
+      </main>
+    </div>
+  );
+}

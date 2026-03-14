@@ -1,59 +1,27 @@
 import { createApp as createHonoApp } from "@app/factory";
-import { createUsersRouter } from "@features/users/presentation";
+import { createAuthRouter } from "@app/features/auth/presentation/router";
 import { stringifyErrorSafe } from "@repo/logging";
 import { cors } from "hono/cors";
-import { etag } from "hono/etag";
 import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
-import { pinoLogger } from "hono-pino";
 import { loadConfig } from "./config";
 import { createContainer } from "./container";
-import { setCacheHeaders } from "./middlewares/cache";
 import { createHealthRouter } from "./routes/health";
 
-export function createApp() {
+export function createApp(env?: Record<string, string | undefined>) {
   const app = createHonoApp();
-  const config = loadConfig();
+  const config = loadConfig(env);
   const container = createContainer(config);
-
   app.use(
     "*",
     requestId({
       headerName: "x-request-id",
     }),
   );
-  app.route("/api/health", createHealthRouter({ prisma: container.prisma }));
-  app.use(
-    "*",
-    pinoLogger({
-      pino: container.logger,
-      http: {
-        referRequestIdKey: "requestId",
-        onReqBindings: (c) => ({
-          req: { url: c.req.path, method: c.req.method },
-        }),
-        onResBindings: (c) => ({
-          res: { status: c.res.status },
-        }),
-      },
-    }),
-  );
-  app.use("*", async (c, next) => {
-    const traceHeader = c.req.header("x-cloud-trace-context");
-    if (traceHeader) {
-      const [traceId] = traceHeader.split("/");
-      c.var.logger.assign({
-        "logging.googleapis.com/trace": `projects/${config.googleCloudProject}/traces/${traceId}`,
-      });
-    }
-    await next();
-  });
-  if (config.logPretty === "true") {
-    app.use("*", logger());
-  }
+  app.use("*", logger());
   app.use("*", timing());
   app.use("*", secureHeaders());
   app.use(
@@ -62,7 +30,7 @@ export function createApp() {
       origin: config.corsOrigin,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-request-id"],
-      exposeHeaders: ["ETag", "x-request-id"],
+      exposeHeaders: ["x-request-id"],
       maxAge: 600,
       credentials: true,
     }),
@@ -70,34 +38,25 @@ export function createApp() {
   if (config.nodeEnv !== "production") {
     app.use("*", prettyJSON());
   }
-  app.use("*", etag());
-  app.use("*", setCacheHeaders("private, max-age=60"));
-
-  const apiRoutes = createHonoApp().route("/users", createUsersRouter(container));
+  app.on(["GET", "POST", "PUT", "PATCH", "DELETE"], "/api/auth/**", (c) =>
+    container.auth.handler(c.req.raw),
+  );
 
   const routes = app
-    .route("/api", apiRoutes)
+    .route("/api/health", createHealthRouter({ db: container.db }))
+    .route("/api", createAuthRouter({ getSession: container.getSession }))
     .get("/", (c) => c.json({ ok: true, message: "Hello Server!" }))
     .notFound((c) => c.json({ ok: false, error: "Not Found" }, 404))
     .onError((err, c) => {
       const rid = c.get("requestId");
       const message = stringifyErrorSafe(err);
 
-      const log = c.var?.logger;
-      if (log) {
-        log.error(
-          {
-            err,
-            requestId: rid,
-            method: c.req.method,
-            path: new URL(c.req.url).pathname,
-          },
-          "Unhandled error: %s",
-          message,
-        );
-      } else {
-        console.error("Unhandled error (logger unavailable):", message);
-      }
+      console.error("[unhandled]", {
+        requestId: rid,
+        method: c.req.method,
+        path: new URL(c.req.url).pathname,
+        err,
+      });
 
       if (config.nodeEnv !== "production") {
         const stack = err instanceof Error ? err.stack : undefined;
@@ -115,7 +74,8 @@ export function createApp() {
       return c.json({ ok: false, error: "Internal Server Error", requestId: rid }, 500);
     });
 
-  return routes;
+  return { app: routes, auth: container.auth, end: container.end };
 }
 
-export type AppType = ReturnType<typeof createApp>;
+// AppType is the Hono routes type used for RPC client generation.
+export type AppType = ReturnType<typeof createApp>["app"];

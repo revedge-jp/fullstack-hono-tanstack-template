@@ -6,7 +6,7 @@ set -euo pipefail
 #  - CI=true or CI_MODE=1 : 簡素(機械可読寄り)出力
 #  - NO_COLOR: 色無し
 #  - TURBO_FILTER : turbo の filter（例: '...[origin/main]'）
-#  - SKIP_LINT, SKIP_TYPECHECK, SKIP_TEST, SKIP_ARCH, SKIP_FILENAME, SKIP_PROCESS_ENV, SKIP_DEPRECATED : 各ステップをスキップ
+#  - SKIP_LINT, SKIP_TYPECHECK, SKIP_BUILD, SKIP_TEST, SKIP_ARCH, SKIP_FILENAME, SKIP_PROCESS_ENV, SKIP_DEPRECATED : 各ステップをスキップ
 #  - SKIP_FSD, SKIP_DEPS, SKIP_DC, SKIP_GUARDS, SKIP_KNIP : アーキテクチャ個別スキップ（SKIP_ARCH=1 のときは無視）
 
 if [ "${CI:-}" = "true" ] || [ "${CI_MODE:-0}" = "1" ]; then PRETTY=0; else PRETTY=1; fi
@@ -74,7 +74,7 @@ fi
 
 # Tests（常時フル実行。DB migrate deploy を含む）
 if [ "${SKIP_TEST:-}" != "1" ]; then
-  run_step_bg "Tests" bash -lc "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx prisma migrate deploy && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
+  run_step_bg "Tests" bash -lc "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx drizzle-kit migrate && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
 fi
 
 # Filename check

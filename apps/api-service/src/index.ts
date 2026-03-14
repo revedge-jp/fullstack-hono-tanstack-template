@@ -9,7 +9,7 @@ type BunGlobal = {
 declare const Bun: BunGlobal;
 
 const { port, nodeEnv } = loadConfig();
-const app = createApp();
+const { app } = createApp();
 
 const server = Bun.serve({ fetch: app.fetch, port });
 console.log(`Server is running on http://localhost:${server.port} (env: ${nodeEnv})`);

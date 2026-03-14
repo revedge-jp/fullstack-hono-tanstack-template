@@ -1,7 +1,6 @@
 import { createFactory } from "hono/factory";
-import type { Env as HonoPinoEnv } from "hono-pino";
 
-type AppEnv = HonoPinoEnv & {
+type AppEnv = {
   Variables: {
     requestId: string;
   };
@@ -10,4 +9,3 @@ type AppEnv = HonoPinoEnv & {
 const factory = createFactory<AppEnv>();
 
 export const createApp: typeof factory.createApp = factory.createApp;
-export const createMiddleware: typeof factory.createMiddleware = factory.createMiddleware;

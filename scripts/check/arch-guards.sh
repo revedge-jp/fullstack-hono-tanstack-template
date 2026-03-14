@@ -61,6 +61,19 @@ if [ -n "$INTF_VIOL" ]; then
 fi
 echo "OK"
 
+echo "[guard] application 層から infrastructure 直参照禁止（import type を含む）"
+INFRA_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/application/*' ! -name '*.test.ts' -print0 | \
+  xargs -0 grep -nE "from ['\"](\.\./)+infrastructure/" -- || true)
+if [ -z "$INFRA_VIOL" ]; then
+  echo "OK"
+else
+  echo "違反: application 層から infrastructure を直接参照できません（import type も含む）"
+  echo "$INFRA_VIOL" | while IFS= read -r line; do
+    echo "  • $line"
+  done
+  exit 1
+fi
+
 echo "[guard] application 層で integrations 直参照禁止 (@app/integrations) と旧 alias (@app/integration)"
 INTEG_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/application/*' -print0 | \
   xargs -0 grep -nE "from ['\"]@app/(integrations|integration)/" -- || true)

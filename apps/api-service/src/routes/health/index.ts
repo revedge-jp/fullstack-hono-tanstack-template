@@ -1,11 +1,11 @@
 import { createApp } from "@app/factory";
-import type { PrismaClient } from "@repo/db";
+import { type Database, sql } from "@repo/db";
 
-export function createHealthRouter(deps: { prisma: PrismaClient }) {
+export function createHealthRouter(deps: { db: Database }) {
   return createApp()
     .get("/", async (c) => {
       try {
-        await deps.prisma.$queryRaw`SELECT 1`;
+        await deps.db.execute(sql`SELECT 1`);
         return c.json({ status: "ok" });
       } catch {
         return c.json({ status: "unavailable" }, 503);

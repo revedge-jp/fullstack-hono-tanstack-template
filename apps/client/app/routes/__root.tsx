@@ -10,12 +10,32 @@ type RouterContext = {
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
+    scripts: [
+      // SSR インラインハイドレーションスクリプトで使用される esbuild ランタイムヘルパー。
+      // TanStack Start がインラインスクリプトを注入する前にグローバルで定義する必要がある。
+      {
+        children:
+          "var __name=(t,v)=>(Object.defineProperty(t,'name',{value:v,configurable:true}),t);",
+      },
+    ],
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "kikagaku-saas-template" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=LINESeedJP_OTF:wght@100;400;700&display=swap",
+      },
+      { rel: "stylesheet", href: appCss },
+    ],
   }),
   component: RootComponent,
   errorComponent: ErrorComponent,
@@ -37,7 +57,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body className="antialiased">
+      <body className="antialiased" suppressHydrationWarning>
         {children}
         <TanStackRouterDevtools position="bottom-right" />
         <Scripts />
@@ -49,7 +69,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 function NotFoundComponent() {
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold">404</h1>
+      <h1 className="font-bold text-2xl">404</h1>
       <p>ページが見つかりませんでした。</p>
     </div>
   );
@@ -58,7 +78,7 @@ function NotFoundComponent() {
 function ErrorComponent({ error }: { error: Error }) {
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold text-red-600">エラー</h1>
+      <h1 className="font-bold text-2xl text-red-600">エラー</h1>
       <p>{error.message}</p>
     </div>
   );

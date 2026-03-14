@@ -21,15 +21,16 @@ const ignoredDirs = new Set([
   "coverage",
   "temp",
   "ui-shadcn",
+  "drizzle",
   "migrations",
   "prisma",
 ]);
 
 const kebabCasePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const allowedBaseNames = new Set(["README", "Dockerfile", "Makefile"]);
+const allowedBaseNames = new Set(["README", "Dockerfile", "Makefile", "$"]); // $ は TanStack Start の catch-all route
 const allowedSuffixes = [".test", ".spec", ".gen"];
-// TanStack Router convention: __root.tsx is required by the framework
-const allowedPrefixes = ["__"];
+// TanStack Router convention: __root.tsx and _layout.tsx are required by the framework
+const allowedPrefixes = ["__", "_"];
 
 const violations = [];
 

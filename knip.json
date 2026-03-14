@@ -2,18 +2,17 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
     "apps/api-service": {
-      "entry": ["src/index.ts", "src/app.ts", "src/test-helpers/create-fake-app.ts"],
+      "entry": ["src/index.ts", "src/features/**/*.ts", "src/__tests__/**/*.ts"],
       "project": ["src/**/*.ts"]
     },
     "apps/client": {
-      "entry": ["app/**/*.{ts,tsx}", "features/**/*.{ts,tsx}", "shared/**/*.{ts,tsx}"],
+      "entry": ["app/**/*.{ts,tsx}", "features/**/*.test.{ts,tsx}"],
       "project": ["**/*.{ts,tsx}"]
     }
   },
-  "ignore": ["apps/api-service/src/__tests__/**", "apps/api-service/src/**/*.test.ts"],
   "ignoreFiles": ["steiger.config.mjs"],
   "ignoreIssues": {
-    "apps/client/components/ui/**": ["exports", "types"],
+    "apps/client/components/ui/**": ["exports", "types", "files"],
 
     "packages/typescript-config/*.json": ["unresolved"],
     "apps/api-service/src/app.ts": ["types"],
@@ -21,14 +20,10 @@
   },
   "ignoreDependencies": [
     "@tailwindcss/postcss",
-    "@tailwindcss/vite",
     "tailwindcss",
-    "vite-tsconfig-paths",
     "@repo/tailwind-config",
     "tw-animate-css",
     "@feature-sliced/steiger-plugin",
-    "@prisma/client",
     "pino-pretty"
-  ],
-  "ignoreBinaries": ["gsutil", "playwright"]
+  ]
 }
