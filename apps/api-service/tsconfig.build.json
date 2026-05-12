@@ -6,9 +6,9 @@
     "declaration": true,
     "declarationMap": true,
     "paths": {
-      "@app/*": ["src/*"],
-      "@features/*": ["src/features/*"],
-      "@shared/*": ["src/shared/*"]
+      "@app/*": ["./src/*"],
+      "@features/*": ["./src/features/*"],
+      "@shared/*": ["./src/shared/*"]
     }
   },
   "include": ["src/**/*.ts"],

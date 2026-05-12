@@ -33,12 +33,12 @@
     "@repo/db": "workspace:*",
     "@repo/logging": "workspace:*",
     "@repo/result": "workspace:*",
-    "better-auth": "^1.5.5",
-    "hono": "^4.12.2",
-    "zod": "^4.1.12"
+    "better-auth": "^1.6.10",
+    "hono": "^4.12.18",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "5.9.3"
+    "@types/bun": "^1.3.13",
+    "typescript": "6.0.3"
   }
 }
