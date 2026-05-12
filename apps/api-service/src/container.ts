@@ -5,7 +5,15 @@ import { createDb } from "@repo/db";
 import { createLogger } from "@repo/logging";
 import type { AppConfig } from "./config";
 
-export function createContainer(config: AppConfig) {
+export type Container = {
+  db: ReturnType<typeof createDb>["db"];
+  end: () => Promise<void>;
+  logger: ReturnType<typeof createLogger>;
+  auth: ReturnType<typeof createAuth>;
+  getSession: ReturnType<typeof makeGetSession>;
+};
+
+export function createContainer(config: AppConfig): Container {
   const { db, end } = createDb(config.databaseUrl);
 
   const logger = createLogger({

@@ -207,6 +207,12 @@ jobs:
           if [[ -z "$FILTERS" ]]; then
             echo "No changes detected, skip build"
           else
+            # テンプレート未置換の {{APP_NAME}} を CI ビルド検証用のダミー値に置換
+            # (wrangler は name に英数+ハイフンしか許可しないため)
+            if grep -q '{{APP_NAME}}' apps/client/wrangler.jsonc; then
+              echo "Replacing {{APP_NAME}} placeholder with CI dummy value"
+              sed -i 's/{{APP_NAME}}/template-app/g' apps/client/wrangler.jsonc
+            fi
             echo "Building changed packages: $FILTERS"
             bunx turbo run build --concurrency=4 --cache-dir=.turbo $FILTERS
           fi

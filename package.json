@@ -42,16 +42,16 @@
     "prepare": "lefthook install"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.4",
+    "@biomejs/biome": "^2.4.15",
     "@feature-sliced/steiger-plugin": "^0.5.7",
-    "dependency-cruiser": "^17.3.8",
+    "dependency-cruiser": "^17.4.0",
     "dotenv-cli": "^11.0.0",
-    "knip": "^5.84.1",
-    "lefthook": "^2.1.4",
+    "knip": "^6.13.0",
+    "lefthook": "^2.1.6",
     "madge": "^8.0.0",
     "steiger": "^0.5.11",
-    "turbo": "^2.8.10",
-    "typescript": "5.9.3"
+    "turbo": "^2.9.12",
+    "typescript": "6.0.3"
   },
   "overrides": {
     "hono": "^4.12.2",
