@@ -244,3 +244,13 @@ if [ -n "$USECASE_FILES" ]; then
   fi
 fi
 echo "OK"
+
+echo "[guard] ports.ts は feature の application/ 直下にのみ配置可（feature 間連携の抽象ポート定義）"
+BAD_PORTS=$(find apps/api-service/src/features -name 'ports.ts' 2>/dev/null | grep -vE '^apps/api-service/src/features/[^/]+/application/ports\.ts$' || true)
+if [ -z "$BAD_PORTS" ]; then
+  echo "OK"
+else
+  echo "違反: ports.ts は features/<feature>/application/ports.ts にのみ配置してください"
+  echo "$BAD_PORTS" | while IFS= read -r line; do echo "  • $line"; done
+  exit 1
+fi

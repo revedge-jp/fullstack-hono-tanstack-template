@@ -1,4 +1,4 @@
-import type { Auth } from "@app/integrations/auth";
+import type { Auth } from "@app/integrations/external/auth";
 import { err, ok, ResultAsync } from "neverthrow";
 import { reconstituteAuthUser } from "../domain/models";
 

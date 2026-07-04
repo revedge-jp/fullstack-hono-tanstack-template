@@ -1,6 +1,11 @@
+import { createActivityService } from "@app/features/activity/application/service";
+import { createActivityRepository } from "@app/features/activity/infrastructure/activity.repository.drizzle";
 import { makeGetSession } from "@app/features/auth/application/get-session/usecase";
 import { makeVerifySession } from "@app/features/auth/infrastructure/session";
-import { createAuth } from "@app/integrations/auth";
+import { createTasksService } from "@app/features/tasks/application/service";
+import { createTasksRepository } from "@app/features/tasks/infrastructure/tasks.repository.drizzle";
+import { createActivityRecorder } from "@app/integrations/composition/activity-recorder";
+import { createAuth } from "@app/integrations/external/auth";
 import { createDb } from "@repo/db";
 import { createLogger } from "@repo/logging";
 import type { AppConfig } from "./config";
@@ -11,6 +16,8 @@ export type Container = {
   logger: ReturnType<typeof createLogger>;
   auth: ReturnType<typeof createAuth>;
   getSession: ReturnType<typeof makeGetSession>;
+  tasks: ReturnType<typeof createTasksService>;
+  activity: ReturnType<typeof createActivityService>;
 };
 
 export function createContainer(config: AppConfig): Container {
@@ -26,5 +33,13 @@ export function createContainer(config: AppConfig): Container {
   const verifySession = makeVerifySession(auth, logger);
   const getSession = makeGetSession({ verifySession });
 
-  return { db, end, logger, auth, getSession };
+  // activity は tasks より先に組み立てる — tasks は ActivityRecorder(ports.ts)経由でのみ依存する
+  const activityRepository = createActivityRepository({ db });
+  const activity = createActivityService({ activityRepository });
+  const activityRecorder = createActivityRecorder({ activity });
+
+  const tasksRepository = createTasksRepository({ db });
+  const tasks = createTasksService({ tasksRepository, activityRecorder });
+
+  return { db, end, logger, auth, getSession, tasks, activity };
 }

@@ -1,6 +1,7 @@
 import { createStartHandler, defaultRenderHandler } from "@tanstack/react-start/server";
 import { runWithSessionChecker } from "@/shared/lib/app-context";
 import { initHonoApp } from "@/shared/lib/hono-app";
+import { runWithServerContainer } from "@/shared/lib/server-container";
 
 const handler = createStartHandler(defaultRenderHandler);
 
@@ -42,7 +43,7 @@ export default {
     // ctx.waitUntil(cleanup()) はレスポンス送信後に DB 接続を解放し、
     // CF Workers のイベントループを完了させるために必要。
     // Vite 開発モードでは ctx が undefined のため、fire-and-forget にフォールバックする。
-    const { app: honoApp, end, auth } = initHonoApp(env ?? {});
+    const { app: honoApp, end, auth, container } = initHonoApp(env ?? {});
     const cleanup = () => end().catch(() => undefined);
     const waitUntil = (p: Promise<unknown>) => ctx?.waitUntil(p) ?? void p;
 
@@ -68,8 +69,11 @@ export default {
         return { id: session.user.id, email: session.user.email, name: session.user.name };
       };
 
-      const response = await runWithSessionChecker(checkSession, () =>
-        Promise.resolve(handler(request)),
+      // container 自体も ALS にスレッドする。tasks 等、auth 以外の feature が SSR の
+      // loader/createServerFn から api-service の service を HTTP ループバックなしに
+      // 呼び出せるようにするため（同じ CF Workers 制約への一般化した対処。上記コメント参照）。
+      const response = await runWithServerContainer(container, () =>
+        runWithSessionChecker(checkSession, () => Promise.resolve(handler(request))),
       );
       waitUntil(cleanup());
       return response;

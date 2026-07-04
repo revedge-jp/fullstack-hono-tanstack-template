@@ -21,14 +21,19 @@ export function createDb(connectionString: string) {
 export type Database = ReturnType<typeof createDb>["db"];
 
 export type {
+  DbActivity,
   DbAuthAccount,
   DbAuthSession,
   DbAuthUser,
   DbAuthVerification,
+  DbTask,
 } from "./schema";
 export {
+  activities,
   authAccounts,
   authSessions,
   authUsers,
   authVerifications,
+  TASK_STATUS_VALUES,
+  tasks,
 } from "./schema";
