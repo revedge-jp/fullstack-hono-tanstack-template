@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { GoogleSignInButton, getSessionServerFn } from "@/features/auth";
+import { DevSignInButton, GoogleSignInButton, getSessionServerFn } from "@/features/auth";
 
 export const Route = createFileRoute("/signin")({
   beforeLoad: async () => {
@@ -17,6 +17,7 @@ function SignInPage() {
       <main className="flex flex-col items-center gap-6">
         <h1 className="font-bold text-2xl">{"{{APP_NAME}}"}</h1>
         <GoogleSignInButton />
+        {import.meta.env.DEV && <DevSignInButton />}
       </main>
     </div>
   );
