@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthUser } from "@app/features/auth/domain/models";
 import { createAuthRouter } from "@app/features/auth/presentation/router";
-import { err, ok } from "@repo/result";
 import { Hono } from "hono";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 
 const mockUser: AuthUser = {
   id: "user-1" as AuthUser["id"],
@@ -11,18 +11,14 @@ const mockUser: AuthUser = {
 };
 
 function createTestApp(
-  getSession: (
-    req: Request,
-  ) => Promise<
-    ReturnType<typeof ok<AuthUser>> | ReturnType<typeof err<"Unauthorized" | "Unexpected">>
-  >,
+  getSession: (req: Request) => ResultAsync<AuthUser, "Unauthorized" | "Unexpected">,
 ) {
   return new Hono().route("/api", createAuthRouter({ getSession }));
 }
 
 describe("GET /api/me — contract", () => {
   test("認証済み: 200 + { ok: true, data: AuthUser }", async () => {
-    const app = createTestApp(async () => ok(mockUser));
+    const app = createTestApp(() => okAsync(mockUser));
     const res = await app.request("/api/me");
 
     expect(res.status).toBe(200);
@@ -34,7 +30,7 @@ describe("GET /api/me — contract", () => {
   });
 
   test("未認証: 401 + { ok: false, error: 'Unauthorized' }", async () => {
-    const app = createTestApp(async () => err("Unauthorized" as const));
+    const app = createTestApp(() => errAsync("Unauthorized" as const));
     const res = await app.request("/api/me");
 
     expect(res.status).toBe(401);
@@ -43,7 +39,7 @@ describe("GET /api/me — contract", () => {
   });
 
   test("予期しないエラー: 500 + { ok: false, error: 'Unexpected' }", async () => {
-    const app = createTestApp(async () => err("Unexpected" as const));
+    const app = createTestApp(() => errAsync("Unexpected" as const));
     const res = await app.request("/api/me");
 
     expect(res.status).toBe(500);

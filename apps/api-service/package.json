@@ -32,9 +32,9 @@
   "dependencies": {
     "@repo/db": "workspace:*",
     "@repo/logging": "workspace:*",
-    "@repo/result": "workspace:*",
     "better-auth": "^1.6.10",
     "hono": "^4.12.18",
+    "neverthrow": "^8.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

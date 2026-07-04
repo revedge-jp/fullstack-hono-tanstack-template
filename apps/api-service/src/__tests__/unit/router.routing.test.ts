@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthUser } from "@app/features/auth/domain/models";
 import { createAuthRouter } from "@app/features/auth/presentation/router";
-import { ok } from "@repo/result";
 import { Hono } from "hono";
+import { okAsync } from "neverthrow";
 
 const mockUser: AuthUser = {
   id: "user-1" as AuthUser["id"],
@@ -10,7 +10,7 @@ const mockUser: AuthUser = {
   name: "Test User",
 };
 
-const noop = async () => ok(mockUser);
+const noop = () => okAsync(mockUser);
 
 function createTestApp() {
   return new Hono().route("/api", createAuthRouter({ getSession: noop }));

@@ -84,19 +84,23 @@ src/features/{feature}/
 ### Use case pattern (ROP)
 ```typescript
 // usecase.ts
+import { okAsync, type ResultAsync } from "neverthrow";
+
 type CreateXxxError = "Conflict" | "Invalid" | "Unexpected";  // defined at top, non-exported
 
 export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
   const createXxxStep = makeCreateXxxStep(deps);
-  return async function createXxx(input: CreateXxxInput): Promise<Result<..., CreateXxxError>> {
-    return flow<CreateXxxInput>(input)
-      .andThen(validateCreateXxx)
-      .asyncAndThen(createXxxStep)
-      .map(toCreateXxxResponse)
-      .value();
+  return function createXxx(input: CreateXxxInput): ResultAsync<..., CreateXxxError> {
+    return okAsync(input)
+      .andThen(validateCreateXxx)   // sync Result-returning validator
+      .andThen(createXxxStep)       // ResultAsync-returning step
+      .map(toCreateXxxResponse);
   };
 }
 ```
+- `usecase.ts` は `async`/`try-catch` 禁止。`okAsync().andThen()...` チェーンのみで表現する（`scripts/check/arch-guards.sh` で強制）
+- リポジトリは `ResultAsync<T, E>` を返す（`Promise<Result<T, E>>` ではない）
+- DB エラーは infrastructure 層で `ResultAsync.fromPromise(promise, errorMapper)` によりラップする
 
 ### Key rules
 - **Domain is pure**: no Zod, no Drizzle, no HTTP, no DTOs from Application layer
@@ -185,7 +189,7 @@ const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, {
 
 | Package | Purpose |
 |---|---|
-| `@repo/result` | ROP: `Ok`, `Err`, `Result`, `ok()`, `err()`, `flow()`, `all()`, `tryCatch()` |
+| `neverthrow` (npm) | ROP: `Result`, `ResultAsync`, `ok()`, `err()`, `okAsync()`, `errAsync()` — see [ADR-005](docs/architecture/adr-005-neverthrow-for-error-handling.md) |
 | `@repo/db` | Drizzle client instance + schema |
 | `@repo/logging` | Pino-based logger |
 
@@ -201,9 +205,9 @@ const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, {
 const app = createFakeApp();
 const client = hc<AppType>("http://localhost", { fetch: app.request.bind(app) });
 
-// Result type guard
-if (result.type === "ok") { /* result.value */ }
-if (result.type === "err") { /* result.value */ }
+// Result type guard (neverthrow) — never `result.value` on the err side, it's `result.error`
+if (result.isOk()) { /* result.value */ }
+if (result.isErr()) { /* result.error */ }
 ```
 
 ### What tests to write (per feature addition)
@@ -226,7 +230,7 @@ if (result.type === "err") { /* result.value */ }
 
 ## TypeScript Style
 
-- No `as` type assertions (except `as const`, `as unknown` in tests, `as never` in type-only files)
+- No `as` type assertions except: `as const`; `import { X as Y }`; branded-type construction in `makeXxx`/`reconstituteXxx` domain factories (immediately after validation, or for trusted DB data); casts inside `*.test.ts`. See [ADR-003](docs/architecture/adr-003-as-type-assertion-policy.md) / [ADR-004](docs/architecture/adr-004-branded-types-as-cast.md)
 - No `any` — use type guards (`value is Type`) instead
 - Prefer guard clauses (early return) over nesting
 - Use Zod v4 API: `z.email()`, `z.url()` (not `z.string().email()`)
