@@ -6,6 +6,7 @@ import { createTasksService } from "@app/features/tasks/application/service";
 import { createTasksRepository } from "@app/features/tasks/infrastructure/tasks.repository.drizzle";
 import { createActivityRecorder } from "@app/integrations/composition/activity-recorder";
 import { createAuth } from "@app/integrations/external/auth";
+import { createDevAuth, type DevAuth } from "@app/integrations/external/dev-auth";
 import { createDb } from "@repo/db";
 import { createLogger } from "@repo/logging";
 import type { AppConfig } from "./config";
@@ -15,6 +16,8 @@ export type Container = {
   end: () => Promise<void>;
   logger: ReturnType<typeof createLogger>;
   auth: ReturnType<typeof createAuth>;
+  // 本番では未生成（nodeEnv === "production" の場合 undefined）。
+  devAuth: DevAuth | undefined;
   getSession: ReturnType<typeof makeGetSession>;
   tasks: ReturnType<typeof createTasksService>;
   activity: ReturnType<typeof createActivityService>;
@@ -30,6 +33,7 @@ export function createContainer(config: AppConfig): Container {
   });
 
   const auth = createAuth(config.auth, config.nodeEnv, db);
+  const devAuth = config.nodeEnv !== "production" ? createDevAuth(config.auth, db) : undefined;
   const verifySession = makeVerifySession(auth, logger);
   const getSession = makeGetSession({ verifySession });
 
@@ -41,5 +45,5 @@ export function createContainer(config: AppConfig): Container {
   const tasksRepository = createTasksRepository({ db });
   const tasks = createTasksService({ tasksRepository, activityRecorder, logger });
 
-  return { db, end, logger, auth, getSession, tasks, activity };
+  return { db, end, logger, auth, devAuth, getSession, tasks, activity };
 }

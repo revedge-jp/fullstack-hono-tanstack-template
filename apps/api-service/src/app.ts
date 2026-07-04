@@ -2,6 +2,7 @@ import { createApp as createHonoApp } from "@app/factory";
 import { createActivityRouter } from "@app/features/activity/presentation";
 import { createAuthRouter } from "@app/features/auth/presentation";
 import { createTasksRouter } from "@app/features/tasks/presentation";
+import { createDevAuthRouter } from "@app/routes/dev-auth";
 import { stringifyErrorSafe } from "@repo/logging";
 import { cors } from "hono/cors";
 import { prettyJSON } from "hono/pretty-json";
@@ -54,6 +55,7 @@ export function createApp(env?: Record<string, string | undefined>) {
       createTasksRouter({ tasks: container.tasks, getSession: container.getSession }),
     )
     .route("/api/activities", createActivityRouter({ activity: container.activity }))
+    .route("/api/dev", createDevAuthRouter({ devAuth: container.devAuth }))
     .get("/", (c) => c.json({ ok: true, message: "Hello Server!" }))
     .notFound((c) => c.json({ ok: false, error: "Not Found" }, 404))
     .onError((err, c) => {
