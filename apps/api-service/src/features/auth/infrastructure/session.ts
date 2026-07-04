@@ -1,6 +1,6 @@
 import type { Auth } from "@app/integrations/auth";
-import { err, ok, type Result } from "@repo/result";
-import { type AuthUser, reconstituteAuthUser } from "../domain/models";
+import { err, ok, ResultAsync } from "neverthrow";
+import { reconstituteAuthUser } from "../domain/models";
 
 type Logger = { error: (obj: unknown, msg?: string) => void };
 
@@ -9,13 +9,13 @@ type Logger = { error: (obj: unknown, msg?: string) => void };
  * Better Auth の session API を薄くラップする。
  */
 export function makeVerifySession(auth: Auth, logger: Logger) {
-  return async function verifySession(
-    request: Request,
-  ): Promise<Result<AuthUser, "Unauthorized" | "Unexpected">> {
-    try {
-      const session = await auth.api.getSession({ headers: request.headers });
+  return function verifySession(request: Request) {
+    return ResultAsync.fromPromise(auth.api.getSession({ headers: request.headers }), (e) => {
+      logger.error(e, "verifySession unexpected error");
+      return "Unexpected" as const;
+    }).andThen((session) => {
       if (!session?.user) {
-        return err("Unauthorized");
+        return err("Unauthorized" as const);
       }
       return ok(
         reconstituteAuthUser({
@@ -24,9 +24,6 @@ export function makeVerifySession(auth: Auth, logger: Logger) {
           name: session.user.name,
         }),
       );
-    } catch (e) {
-      logger.error(e, "verifySession unexpected error");
-      return err("Unexpected");
-    }
+    });
   };
 }

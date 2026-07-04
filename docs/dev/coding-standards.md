@@ -60,11 +60,11 @@ if (!isValidJobStatus(row.status)) {
 // ここでrow.statusはJobStatus型に絞り込まれている
 ```
 
-**許容される例外:**
+**許容される例外**（詳細判定フローは [ADR-003](../architecture/adr-003-as-type-assertion-policy.md) / ブランド型は [ADR-004](../architecture/adr-004-branded-types-as-cast.md)）:
 - `as const`（リテラル型の固定）
 - `import { X as Y }`（名前の変更）
 - テストコードでの `as unknown`
-- エラーハンドリングでの型ガード組み合わせ
+- ブランド型ファクトリ（`makeXxx`）・再構築関数（`reconstituteXxx`）内のバリデーション/信頼済みデータに限定したキャスト
 
 #### 型のエクスポート
 
@@ -169,35 +169,38 @@ const users = await fetchUsers({ limit: 1000 });
 
 ---
 
-## Result型（ROP）
+## Result型（ROP、neverthrow）
+
+[ADR-005](../architecture/adr-005-neverthrow-for-error-handling.md) により [neverthrow](https://github.com/supermacro/neverthrow) を採用している。
 
 ### 基本パターン
 
 ```typescript
-import { ok, err, flow, type Result } from "@repo/result";
+import { ok, err, okAsync, type Result, type ResultAsync } from "neverthrow";
 
 // 成功
 return ok({ item: { id: created.id } });
+return okAsync({ item: { id: created.id } });
 
-// 失敗
-return err("NotFound");
-return err("Conflict");
+// 失敗（as const でリテラル型を維持する）
+return err("NotFound" as const);
+return err("Conflict" as const);
 ```
 
 ### ユースケースの型配置
 
 ```typescript
-// ✅ ファイル先頭に型を定義（非export）
+// ✅ ファイル先頭に型を定義（非export）、usecase.ts は async/try-catch 禁止
 type CreatePostError = "Invalid" | "Conflict" | "Unexpected";
 
 export function makeCreatePost(deps: Dependencies) {
-  return async function createPost(
+  const createPostStep = makeCreatePostStep(deps);
+  return function createPost(
     input: CreatePostInput
-  ): Promise<Result<{ item: { id: number } }, CreatePostError>> {
-    return flow<CreatePostInput, CreatePostError>(input)
+  ): ResultAsync<{ item: { id: number } }, CreatePostError> {
+    return okAsync(input)
       .andThen(validateCreatePost)
-      .asyncAndThen(createPostStep)
-      .value();
+      .andThen(createPostStep);
   };
 }
 ```
@@ -207,14 +210,12 @@ export function makeCreatePost(deps: Dependencies) {
 ```typescript
 // ✅ 入出力の型はファイルローカル
 type CreatePostStepInput = CreatePostInput;
-type CreatePostStepOutput = Result<{ item: { id: number } }, "Conflict" | "Unexpected">;
+type CreatePostStepOutput = ResultAsync<{ item: { id: number } }, "Conflict" | "Unexpected">;
 
 export function makeCreatePostStep(deps: { postsRepository: PostsRepository }) {
   const { postsRepository } = deps;
-  return async function createPostStep(
-    i: CreatePostStepInput
-  ): Promise<CreatePostStepOutput> {
-    // 実装
+  return function createPostStep(i: CreatePostStepInput): CreatePostStepOutput {
+    return postsRepository.create(i);
   };
 }
 ```

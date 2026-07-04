@@ -207,3 +207,40 @@ else
   done
   exit 1
 fi
+
+echo "[guard] 旧 @repo/result API (result.type ===) の使用禁止"
+LEGACY_RESULT_VIOL=$(find apps/api-service/src -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+  xargs -0 grep -nE '\.type\s*===\s*["'"'"'](ok|err)["'"'"']' -- || true)
+if [ -z "$LEGACY_RESULT_VIOL" ]; then
+  echo "OK"
+else
+  echo "違反: それは旧 @repo/result API です。result.isOk() / result.isErr() を使ってください"
+  echo "$LEGACY_RESULT_VIOL" | while IFS= read -r line; do
+    echo "  • $line"
+  done
+  exit 1
+fi
+
+echo "[guard] usecase.ts は async/try-catch を禁止し okAsync/ResultAsync チェーンを使う"
+USECASE_FILES=$(find apps/api-service/src/features -type f -name 'usecase.ts' 2>/dev/null || true)
+if [ -n "$USECASE_FILES" ]; then
+  USECASE_ASYNC_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\basync\s+function\b|\basync\s*\(' -- || true)
+  USECASE_TRY_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\btry\s*\{' -- || true)
+  USECASE_NO_CHAIN=$(echo "$USECASE_FILES" | xargs grep -LE '\b(okAsync|ResultAsync)\b' -- || true)
+  if [ -n "$USECASE_ASYNC_VIOL" ]; then
+    echo "違反: usecase.ts で async は禁止です（okAsync().andThen() チェーンを使ってください）"
+    echo "$USECASE_ASYNC_VIOL" | while IFS= read -r line; do echo "  • $line"; done
+    exit 1
+  fi
+  if [ -n "$USECASE_TRY_VIOL" ]; then
+    echo "違反: usecase.ts で try/catch は禁止です（steps.ts に委譲し、Result チェーンで表現してください）"
+    echo "$USECASE_TRY_VIOL" | while IFS= read -r line; do echo "  • $line"; done
+    exit 1
+  fi
+  if [ -n "$USECASE_NO_CHAIN" ]; then
+    echo "違反: usecase.ts は okAsync または ResultAsync を使った Result チェーンである必要があります"
+    echo "$USECASE_NO_CHAIN" | while IFS= read -r line; do echo "  • $line"; done
+    exit 1
+  fi
+fi
+echo "OK"

@@ -110,7 +110,7 @@ const client = hc<AppType>("http://localhost", {
 
 ```typescript
 import { describe, expect, test } from "bun:test";
-import { err, ok } from "@repo/result";
+import { errAsync, okAsync } from "neverthrow";
 import { reconstituteUser, type User } from "../../domain/models";
 import type { UsersRepository } from "../../domain/users.repository";
 import { makeCreateUser } from "./usecase";
@@ -120,15 +120,15 @@ const ID_1 = "550e8400-e29b-41d4-a716-446655440001";
 describe("users.create ユースケース", () => {
   test("正常: 有効な入力でユーザーを作成する", async () => {
     const usersRepository: UsersRepository = {
-      list: async () => ok<User[]>([]),
-      create: async () => ok(reconstituteUser({ id: ID_1, email: "test@example.com", name: "Test" })),
-      getById: async () => ok(null),
-      update: async (user) => ok(user),
+      list: () => okAsync({ items: [] }),
+      create: () => okAsync(reconstituteUser({ id: ID_1, email: "test@example.com", name: "Test" })),
+      getById: () => okAsync(null),
+      update: (user) => okAsync(user),
     };
     const usecase = makeCreateUser({ usersRepository });
     const r = await usecase({ email: "test@example.com", name: "Test User" });
-    expect(r.type).toBe("ok");
-    if (r.type === "ok") {
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) {
       expect(r.value.item.id).toBe(ID_1);
     }
   });
@@ -137,19 +137,19 @@ describe("users.create ユースケース", () => {
     const usersRepository: UsersRepository = { /* ... */ } as UsersRepository;
     const usecase = makeCreateUser({ usersRepository });
     const r = await usecase({ email: "invalid-email", name: "User" });
-    expect(r.type).toBe("err");
-    if (r.type === "err") expect(r.value).toBe("Invalid");
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error).toBe("Invalid");
   });
 
   test("異常: メール重複で Conflict を返す", async () => {
     const usersRepository: UsersRepository = {
       // ...
-      create: async () => err("Conflict"),
+      create: () => errAsync("Conflict"),
     } as UsersRepository;
     const usecase = makeCreateUser({ usersRepository });
     const r = await usecase({ email: "dup@example.com", name: "User" });
-    expect(r.type).toBe("err");
-    if (r.type === "err") expect(r.value).toBe("Conflict");
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error).toBe("Conflict");
   });
 });
 ```

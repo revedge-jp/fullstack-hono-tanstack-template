@@ -197,14 +197,14 @@ TypeScriptの型安全性を維持するため、型アサーション（`as`キ
 
 詳細は`.cursor/rules/typescript-style.mdc`を参照してください。
 
-#### Result 型
+#### Result 型（[neverthrow](https://github.com/supermacro/neverthrow)、[ADR-005](../architecture/adr-005-neverthrow-for-error-handling.md)）
 
 ```typescript
-type Result<T, E> = Ok<T> | Err<E>;
+import type { Result, ResultAsync } from "neverthrow";
 ```
 
-- `Ok<T>`: 成功時の値
-- `Err<E>`: 失敗時のエラー（文字列リテラルのユニオン）
+- `Result<T, E>` / `ResultAsync<T, E>`: 成功時 `T`・失敗時 `E`（文字列リテラルのユニオン）
+- 判定は `result.isOk()` / `result.isErr()`。値の取得は成功側 `result.value`、失敗側 `result.error`
 
 #### ステップ関数
 
@@ -212,46 +212,40 @@ type Result<T, E> = Ok<T> | Err<E>;
 
 ```typescript
 type CreateUserStepInput = CreateUserInput;
-type CreateUserStepOutput = Result<{ item: { id: number } }, "Conflict" | "Unexpected">;
+type CreateUserStepOutput = ResultAsync<{ item: { id: number } }, "Conflict" | "Unexpected">;
 
 export function makeCreateUserStep(deps: { usersRepository: UsersRepository }) {
   const { usersRepository } = deps;
-  return async function createUserStep(i: CreateUserStepInput): Promise<CreateUserStepOutput> {
-    const created = await usersRepository.create(i);
-    if (isOk(created)) {
-      return ok({ item: { id: created.value.id } });
-    }
-    if (created.value === "Conflict") {
-      return err("Conflict");
-    }
-    return err("Unexpected");
+  return function createUserStep(i: CreateUserStepInput): CreateUserStepOutput {
+    return usersRepository.create(i).map((created) => ({ item: { id: created.id } }));
   };
 }
 ```
 
 #### ユースケース（チェイン）
 
-`flow` を使用してステップをチェイン:
+`okAsync().andThen()` チェーンでステップを連結する（`usecase.ts` は `async`/`try-catch` 禁止）:
 
 ```typescript
+import { okAsync, type ResultAsync } from "neverthrow";
+
 type CreateUserError = "Conflict" | "Invalid" | "Unexpected";
 
 export function makeCreateUser(deps: { usersRepository: UsersRepository }) {
   const createUserStep = makeCreateUserStep(deps);
-  return async function createUser(
+  return function createUser(
     input: CreateUserInput
-  ): Promise<Result<{ item: { id: number } }, CreateUserError>> {
-    return flow<CreateUserInput, CreateUserError>(input)
+  ): ResultAsync<{ item: { id: number } }, CreateUserError> {
+    return okAsync(input)
       .andThen(validateCreateUser)
-      .asyncAndThen(createUserStep)
-      .value();
+      .andThen(createUserStep);
   };
 }
 ```
 
-- `andThen`: 同期的な Result 変換
-- `asyncAndThen`: 非同期的な Result 変換
-- `value()`: 最終的な Result を取得
+- `andThen`: 同期・非同期どちらの Result 変換も受け付ける（バリデータは同期 `Result`、ステップは `ResultAsync` を返す）
+- `map` / `mapErr`: 成功値・エラー値それぞれの変換
+- presentation 層では `toHttp(c, result, errorMap, okStatus?)`（`apps/api-service/src/shared/http/to-http.ts`）でまとめて HTTP レスポンスに変換する
 
 詳細は [apps/api-service/README.md](../apps/api-service/README.md) を参照してください。
 
@@ -340,7 +334,7 @@ const users = await prisma.user.findMany();
 以下のパッケージは server で使用します。
 
 - **`@repo/database`**: Prisma スキーマ/操作ラッパ
-- **`@repo/result`**: Result 型ユーティリティ
+- **`neverthrow`** (npm): Result 型ユーティリティ（[ADR-005](../architecture/adr-005-neverthrow-for-error-handling.md)）
 
 ### その他のパッケージ
 
@@ -362,19 +356,18 @@ Prisma スキーマとクライアントのラッパー。
   const users = await prisma.user.findMany();
   ```
 
-#### `@repo/result`
+#### `neverthrow`
 
-Result 型ユーティリティ（ROP パターン用）。
+Result 型ユーティリティ（ROP パターン用、npm パッケージ）。
 
-- **エクスポート**: `Result<T, E>`, `ok()`, `err()`, `isOk()`, `flow()`
+- **エクスポート**: `Result<T, E>`, `ResultAsync<T, E>`, `ok()`, `err()`, `okAsync()`, `errAsync()`
 - **使用例**:
   ```typescript
-  import { ok, err, flow } from "@repo/result";
-  
-  const result = flow(input)
+  import { okAsync } from "neverthrow";
+
+  const result = okAsync(input)
     .andThen(validate)
-    .asyncAndThen(process)
-    .value();
+    .andThen(process);
   ```
 
 詳細は各パッケージの `package.json` と `src/index.ts` を参照してください。
