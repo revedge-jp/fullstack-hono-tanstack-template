@@ -10,6 +10,11 @@
 ## クイックスタート
 
 ```sh
+# 0) テンプレートの初期化（最初に一度だけ）
+#    {{APP_NAME}} プレースホルダーをアプリ名に一括置換する。
+#    これを飛ばすと wrangler.jsonc のバリデーションエラーで dev サーバーが起動しない
+./scripts/init-template.sh my-app
+
 # 1) 依存関係のインストール
 bun install
 
@@ -33,6 +38,19 @@ bun run dev           # 全体起動（依存の型生成も依存関係で実�
 - Server: http://localhost:8080
 
 詳細は [開発ガイド](docs/dev/development.md) を参照してください。
+
+### GitHub リポジトリのセットアップ（テンプレートから作った直後に一度だけ）
+
+ブランチ保護 Ruleset・マージ挙動・セキュリティ設定を一括適用し、Renovate の導入状況を確認します:
+
+```sh
+gh auth login          # 未認証の場合
+./scripts/setup-github.sh
+```
+
+- Ruleset と auto-merge は **public リポジトリまたは GitHub Pro 以上** が必要（対象外の場合はスクリプトが案内を出して他の設定は続行します）
+- Renovate は GitHub App の承認が必要なため、スクリプトの案内に従って https://github.com/apps/renovate からインストールしてください
+- 設定内容の詳細・チーム開発向けの変更は [GitHub Ruleset 設定ガイド](docs/deploy/github-ruleset.md) を参照
 
 ## リポジトリ構成
 

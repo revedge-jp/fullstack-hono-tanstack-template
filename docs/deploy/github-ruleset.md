@@ -4,9 +4,21 @@
 
 ## 概要
 
-GitHub Ruleset は、ブランチ保護ルールの後継機能で、より柔軟で強力なブランチ保護を提供します。このプロジェクトでは `main` ブランチを保護し、コード品質とセキュリティを担保しています。
+GitHub Ruleset は、ブランチ保護ルールの後継機能で、より柔軟で強力なブランチ保護を提供します。このプロジェクトでは `main` ブランチを保護し、コード品質とセキュリティを担保します。
 
-## 現在の設定
+## 適用方法
+
+以下の設定は `./scripts/setup-github.sh` で一括適用できます（冪等なので何度実行しても安全）:
+
+```bash
+gh auth login          # 未認証の場合
+./scripts/setup-github.sh
+```
+
+> [!NOTE]
+> **プランによる制約**: Ruleset と auto-merge は public リポジトリまたは GitHub Pro 以上のプランでのみ利用できます。private + Free プランの場合、スクリプトは該当項目をスキップして案内を出します（API はエラーを返さず黙って無視するものもあるため、スクリプトは適用後の実値を確認して報告します）。Secret scanning は private リポジトリでは GitHub Advanced Security が必要です。
+
+## このテンプレートが適用する設定
 
 ### Ruleset: `main-branch-protection`
 

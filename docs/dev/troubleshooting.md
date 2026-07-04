@@ -165,8 +165,7 @@ pino の場合、Node ビルドは stream 引数を渡さない限り内部で S
 
 **原因:** テンプレートの `wrangler.jsonc` は `"name": "{{APP_NAME}}"` プレースホルダーのまま。
 
-**解決方法:** プロジェクト生成時にプレースホルダーを実アプリ名に置換する。CI では
-ビルド前にダミー値へ置換している（`.github/workflows/ci.yml` 参照）。
+**解決方法:** `./scripts/init-template.sh <app-name>` で一括置換する（テンプレート初期化時に一度だけ実行）。CI ではビルド前にダミー値へ置換している（`.github/workflows/ci.yml` 参照）。
 
 ---
 
