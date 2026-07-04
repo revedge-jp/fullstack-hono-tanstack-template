@@ -36,7 +36,7 @@ src/features/posts/
 `src/features/posts/domain/posts.repository.ts`:
 
 ```typescript
-import type { Result } from "@repo/result";
+import { err, ok, type Result, type ResultAsync } from "neverthrow";
 
 export type Post = {
   id: number;
@@ -61,21 +61,21 @@ export function validatePostInvariants(
   content: string
 ): Result<null, "Invalid"> {
   if (!isValidPostTitle(title)) {
-    return { type: "err", value: "Invalid" };
+    return err("Invalid" as const);
   }
   // 他のドメイン不変条件（contentの長さチェックなど）があればここに追加
-  return { type: "ok", value: null };
+  return ok(null);
 }
 
-// リポジトリインターフェース（抽象）
+// リポジトリインターフェース（抽象）。ResultAsync<T, E> を返す（Promise<Result<T, E>> ではない）
 export type PostsRepository = {
-  list(): Promise<Post[]>;
+  list(): ResultAsync<{ items: Post[] }, "Unexpected">;
   create(input: {
     title: string;
     content: string;
     authorId: number;
-  }): Promise<Result<Post, "Conflict" | "Unexpected">>;
-  getById(id: number): Promise<Post | null>;
+  }): ResultAsync<Post, "Conflict" | "Unexpected">;
+  getById(id: number): ResultAsync<Post | null, "Unexpected">;
 };
 ```
 
@@ -107,49 +107,41 @@ export function mapDbPostToDomain(dbPost: DbPost): Post {
 
 ### 3.2. リポジトリ実装
 
-`src/features/posts/infrastructure/posts.repository.prisma.ts`:
+`src/features/posts/infrastructure/posts.repository.drizzle.ts`:
 
 ```typescript
-import type { PrismaClient } from "@repo/db";
-import { err, ok, type Result } from "@repo/result";
+import type { Database } from "@repo/db";
+import { ResultAsync } from "neverthrow";
+import { isPgError } from "@app/shared/db-error";
 import type { PostsRepository, Post } from "../domain/posts.repository";
 import { mapDbPostToDomain } from "./mappers";
 
-export function createPostsRepository(deps: { prisma: PrismaClient }): PostsRepository {
-  const { prisma } = deps;
+export function createPostsRepository(deps: { db: Database }): PostsRepository {
+  const { db } = deps;
 
   return {
-    async list(): Promise<Post[]> {
-      const rows = await prisma.post.findMany({ orderBy: { id: "desc" } });
-      return rows.map(mapDbPostToDomain);
-    },
-    async create(input: {
-      title: string;
-      content: string;
-      authorId: number;
-    }): Promise<Result<Post, "Conflict" | "Unexpected">> {
-      try {
-        const row = await prisma.post.create({ data: input });
-        return ok(mapDbPostToDomain(row));
-      } catch (e: unknown) {
-        if (
-          typeof e === "object" &&
-          e !== null &&
-          "code" in e &&
-          (e as { code?: string }).code === "P2002"
-        ) {
-          return err("Conflict");
-        }
-        return err("Unexpected");
-      }
-    },
-    async getById(id: number): Promise<Post | null> {
-      const row = await prisma.post.findUnique({ where: { id } });
-      return row ? mapDbPostToDomain(row) : null;
-    },
+    list: () =>
+      ResultAsync.fromPromise(
+        db.query.posts.findMany({ orderBy: (p, { desc }) => desc(p.id) }),
+        () => "Unexpected" as const,
+      ).map((rows) => ({ items: rows.map(mapDbPostToDomain) })),
+
+    create: (input: { title: string; content: string; authorId: number }) =>
+      ResultAsync.fromPromise(
+        db.insert(posts).values(input).returning().then((rows) => rows[0]),
+        (e) => (isPgError(e, "23505") ? ("Conflict" as const) : ("Unexpected" as const)),
+      ).map(mapDbPostToDomain),
+
+    getById: (id: number) =>
+      ResultAsync.fromPromise(
+        db.query.posts.findFirst({ where: (p, { eq }) => eq(p.id, id) }),
+        () => "Unexpected" as const,
+      ).map((row) => (row ? mapDbPostToDomain(row) : null)),
   };
 }
 ```
+
+`db.insert` の一意制約違反（PostgreSQL エラーコード `23505`）を `isPgError` で検出して `"Conflict"` にマッピングしている。
 
 ## 4. Application層の実装
 
@@ -161,7 +153,7 @@ Application層のバリデータは、1) 契約スキーマのチェック と 2
 `src/features/posts/application/create/validators.ts`:
 
 ```typescript
-import { err, ok, type Result } from "@repo/result";
+import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 import { validatePostInvariants } from "../../domain/posts.repository"; // Domainバリデーション
 
@@ -179,14 +171,14 @@ export function validateCreatePost(
   // 1. 契約スキーマで形式チェック (Zod)
   const parsed = CreatePostRequestSchema.safeParse(input);
   if (!parsed.success) {
-    return err("Invalid");
+    return err("Invalid" as const);
   }
 
   // 2. ドメイン不変条件をチェック (Domain層へ委譲)
   // DTOを分解して、プリミティブな値をDomain関数に渡す
   const domainResult = validatePostInvariants(input.title, input.content);
-  if (domainResult.type === "err") {
-    return err("Invalid");
+  if (domainResult.isErr()) {
+    return err("Invalid" as const);
   }
 
   return ok(input);
@@ -202,27 +194,18 @@ export function validateCreatePost(
 `src/features/posts/application/create/steps.ts`:
 
 ```typescript
-import { err, isOk, ok, type Result } from "@repo/result";
+import type { ResultAsync } from "neverthrow";
 import type { PostsRepository } from "../../domain/posts.repository";
 import type { CreatePostInput } from "./validators";
 
 // 入出力型（ファイルローカル）
 type CreatePostStepInput = CreatePostInput;
-type CreatePostStepOutput = Result<{ item: { id: number } }, "Conflict" | "Unexpected">;
+type CreatePostStepOutput = ResultAsync<{ item: { id: number } }, "Conflict" | "Unexpected">;
 
 export function makeCreatePostStep(deps: { postsRepository: PostsRepository }) {
   const { postsRepository } = deps;
-  return async function createPostStep(
-    i: CreatePostStepInput
-  ): Promise<CreatePostStepOutput> {
-    const created = await postsRepository.create(i);
-    if (isOk(created)) {
-      return ok({ item: { id: created.value.id } });
-    }
-    if (created.value === "Conflict") {
-      return err("Conflict");
-    }
-    return err("Unexpected");
+  return function createPostStep(i: CreatePostStepInput): CreatePostStepOutput {
+    return postsRepository.create(i).map((created) => ({ item: { id: created.id } }));
   };
 }
 ```
@@ -233,7 +216,7 @@ export function makeCreatePostStep(deps: { postsRepository: PostsRepository }) {
 
 ```typescript
 import type { PostsRepository } from "../../domain/posts.repository";
-import { flow, type Result } from "@repo/result";
+import { okAsync, type ResultAsync } from "neverthrow";
 import { makeCreatePostStep } from "./steps";
 import { type CreatePostInput, validateCreatePost } from "./validators";
 
@@ -241,13 +224,10 @@ type CreatePostError = "Conflict" | "Invalid" | "Unexpected";
 
 export function makeCreatePost(deps: { postsRepository: PostsRepository }) {
   const createPostStep = makeCreatePostStep(deps);
-  return async function createPost(
+  return function createPost(
     input: CreatePostInput
-  ): Promise<Result<{ item: { id: number } }, CreatePostError>> {
-    return flow<CreatePostInput, CreatePostError>(input)
-      .andThen(validateCreatePost)
-      .asyncAndThen(createPostStep)
-      .value();
+  ): ResultAsync<{ item: { id: number } }, CreatePostError> {
+    return okAsync(input).andThen(validateCreatePost).andThen(createPostStep);
   };
 }
 ```
@@ -257,23 +237,15 @@ export function makeCreatePost(deps: { postsRepository: PostsRepository }) {
 `src/features/posts/application/list/steps.ts`:
 
 ```typescript
-import { err, ok, type Result } from "@repo/result";
+import type { ResultAsync } from "neverthrow";
 import type { Post, PostsRepository } from "../../domain/posts.repository";
 
-type FetchPostsStepInput = null;
-type FetchPostsStepOutput = Result<{ items: Post[] }, "Unexpected">;
+type FetchPostsStepOutput = ResultAsync<{ items: Post[] }, "Unexpected">;
 
 export function makeFetchPostsStep(deps: { postsRepository: PostsRepository }) {
   const { postsRepository } = deps;
-  return async function fetchPostsStep(
-    _: FetchPostsStepInput
-  ): Promise<FetchPostsStepOutput> {
-    try {
-      const items = await postsRepository.list();
-      return ok({ items });
-    } catch {
-      return err("Unexpected");
-    }
+  return function fetchPostsStep(): FetchPostsStepOutput {
+    return postsRepository.list();
   };
 }
 ```
@@ -282,17 +254,15 @@ export function makeFetchPostsStep(deps: { postsRepository: PostsRepository }) {
 
 ```typescript
 import type { Post, PostsRepository } from "../../domain/posts.repository";
-import { flow, type Result } from "@repo/result";
+import { okAsync, type ResultAsync } from "neverthrow";
 import { makeFetchPostsStep } from "./steps";
 
 type ListPostsError = "Unexpected";
 
 export function makeListPosts(deps: { postsRepository: PostsRepository }) {
-  const fetchPostsStep = makeFetchPostsStep(deps) as (
-    _: null
-  ) => Promise<Result<{ items: Post[] }, "Unexpected">>;
-  return async function listPosts(): Promise<Result<{ items: Post[] }, ListPostsError>> {
-    return flow<null, ListPostsError>(null).asyncAndThen(fetchPostsStep).value();
+  const fetchPostsStep = makeFetchPostsStep(deps);
+  return function listPosts(): ResultAsync<{ items: Post[] }, ListPostsError> {
+    return okAsync(undefined).andThen(fetchPostsStep);
   };
 }
 ```
@@ -368,8 +338,8 @@ export * from "./http/posts";
 
 ```typescript
 import type { PostsService } from "@features/posts/application/service";
+import { toHttp } from "@app/shared/http/to-http";
 import { zValidator } from "@hono/zod-validator";
-import { isOk } from "@repo/result";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -383,8 +353,7 @@ export function createPostsRouter(cntr: { posts: PostsService }) {
   const app = new Hono()
     .get("/", async (c) => {
       const result = await cntr.posts.listPosts();
-      if (!isOk(result)) return c.json({ message: "unexpected" }, 500);
-      return c.json(result.value, 200);
+      return toHttp(c, result, { Unexpected: 500 });
     })
     .post("/", zValidator("json", CreatePostRequestSchema), async (c) => {
       const body = c.req.valid("json");
@@ -393,11 +362,7 @@ export function createPostsRouter(cntr: { posts: PostsService }) {
         content: body.content,
         authorId: body.authorId,
       });
-      if (!isOk(result)) {
-        if (result.value === "Invalid") return c.json({ message: "invalid" }, 400);
-        return c.json({ message: "unexpected" }, 500);
-      }
-      return c.json(result.value, 201);
+      return toHttp(c, result, { Invalid: 400, Conflict: 409, Unexpected: 500 }, 201);
     });
 
   return app;
@@ -410,17 +375,17 @@ export function createPostsRouter(cntr: { posts: PostsService }) {
 
 ```typescript
 import { createPostsService } from "./features/posts/application/service";
-import { createPostsRepository } from "./features/posts/infrastructure/posts.repository.prisma";
+import { createPostsRepository } from "./features/posts/infrastructure/posts.repository.drizzle";
 
-export function createContainer(config: AppConfig) {
-  const prisma = prismaClient;
+export function createContainer(config: AppConfig): Container {
+  const { db, end } = createDb(config.databaseUrl);
 
   // ... 既存のコード ...
 
-  const postsRepository = createPostsRepository({ prisma });
+  const postsRepository = createPostsRepository({ db });
   const posts = createPostsService({ postsRepository });
 
-  return { users, posts };
+  return { db, end, posts /* , ... */ };
 }
 ```
 
@@ -466,8 +431,10 @@ bun run arch:check
 - [ ] Containerに登録されているか
 - [ ] app.ts にルーターをマウントしたか
 - [ ] ContractsにHTTPスキーマが定義されているか
-- [ ] `bun run arch:check`が通るか
+- [ ] `bun run arch:check`が通るか（`check:feature` の feature 構造完全性チェックを含む）
 - [ ] `bun run typecheck`が通るか
+- [ ] ロジックを変更した場合は `cd apps/api-service && bun run mutation` で "perpetually green" なテストがないか確認したか
+  （詳細は [品質ゲート ガイド](./quality-gates.md)）
 
 ## 外部SDKが必要な場合
 

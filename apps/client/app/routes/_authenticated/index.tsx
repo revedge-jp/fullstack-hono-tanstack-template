@@ -19,9 +19,14 @@ function HomePage() {
           <p className="text-sm text-zinc-500">{user.email}</p>
         </div>
         <p className="text-zinc-500">Coming soon.</p>
-        <Link to="/about" className="text-sm text-zinc-500 underline">
-          about
-        </Link>
+        <div className="flex gap-3">
+          <Link to="/tasks" className="text-sm text-zinc-500 underline">
+            tasks
+          </Link>
+          <Link to="/about" className="text-sm text-zinc-500 underline">
+            about
+          </Link>
+        </div>
         <SignOutButton />
       </main>
     </div>

@@ -8,9 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Backend** (`apps/api-service`): Hono on Bun
 - **Frontend** (`apps/client`): TanStack Start + React 19 + Tailwind v4
 - **Database** (`packages/database`): Drizzle ORM + PostgreSQL (via `@repo/db`)
-- **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/auth.ts`
+- **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/external/auth.ts`
 - **Testing**: `bun test` (native, no vitest/jest)
 - **Linter/Formatter**: Biome
+- **Quality strategy**: "generation vs verification" — see [品質ゲート ガイド](docs/dev/quality-gates.md) / [ADR-006](docs/architecture/adr-006-ai-era-quality-strategy.md)
 
 ## Commands
 
@@ -46,9 +47,19 @@ bun run db:studio     # Drizzle Studio
 
 ### Architecture Checks
 ```bash
-bun run arch:check    # All architecture/dependency checks
+bun run arch:check    # All architecture/dependency checks (incl. jscpd + guard self-test)
 bun run dep:cycles    # Detect circular dependencies
 bun run knip          # Detect unused exports / dependencies
+bun run check:feature # Feature structure completeness (required layers/tests/wiring)
+```
+
+### Quality Gates (see [quality-gates.md](docs/dev/quality-gates.md) for full detail)
+```bash
+bun run coverage:check         # api-service domain/application coverage threshold (85%)
+bun run coverage:check:client  # client actions/queries coverage threshold (80%)
+cd apps/api-service && bun run mutation  # Mutation testing (domain/application, break 90%)
+bun run dup:check              # Duplicate code detection (jscpd, threshold 5%)
+bun run arch:selftest          # Verify arch-guards actually catch known violations
 ```
 
 ## Architecture: api-service
@@ -66,37 +77,47 @@ presentation → application → domain ← infrastructure
 src/features/{feature}/
 ├── domain/
 │   ├── models.ts                  # Entities, value objects (pure, no external deps)
-│   └── {feature}.repository.ts   # Repository interface
+│   └── {feature}.repository.ts   # Repository interface (only if the feature owns persistence)
 ├── infrastructure/
 │   ├── mappers.ts                 # DB ↔ Domain conversion
 │   └── {feature}.repository.drizzle.ts
 ├── application/
+│   ├── ports.ts                    # Abstract port types this feature needs from other features (optional)
 │   ├── {action}/
 │   │   ├── validators.ts          # DTO definition (XxxInput) + Zod validation
-│   │   ├── steps.ts               # makeXxxStep(deps) → Result<T, E>
-│   │   ├── usecase.ts             # makeXxx(deps) → flow chain
+│   │   ├── steps.ts               # makeXxxStep(deps) → ResultAsync<T, E>
+│   │   ├── usecase.ts             # makeXxx(deps) → okAsync().andThen() chain
 │   │   └── mappers.ts             # Domain → response shape
-│   └── service.ts                 # Aggregates use cases (injected via DI)
+│   └── service.ts                 # Aggregates use cases (injected via DI; required once a feature has 2+ actions)
 └── presentation/
-    └── router.ts                  # HTTP I/O only, calls service
+    ├── router.ts                  # HTTP I/O only, calls service
+    └── index.ts                   # Re-exports router (barrel used by app.ts)
 ```
+Canonical reference implementation: `tasks` (full CRUD + ports pattern). `auth` is a legitimate minimal
+exception (single usecase, no owned repository — Better Auth handles its own persistence);
+`scripts/check/feature-structure.mjs` accounts for this and only requires `service.ts`/`index.ts`/repository
+for features that actually need them.
 
 ### Use case pattern (ROP)
 ```typescript
 // usecase.ts
+import { okAsync, type ResultAsync } from "neverthrow";
+
 type CreateXxxError = "Conflict" | "Invalid" | "Unexpected";  // defined at top, non-exported
 
 export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
   const createXxxStep = makeCreateXxxStep(deps);
-  return async function createXxx(input: CreateXxxInput): Promise<Result<..., CreateXxxError>> {
-    return flow<CreateXxxInput>(input)
-      .andThen(validateCreateXxx)
-      .asyncAndThen(createXxxStep)
-      .map(toCreateXxxResponse)
-      .value();
+  return function createXxx(input: CreateXxxInput): ResultAsync<..., CreateXxxError> {
+    return okAsync(input)
+      .andThen(validateCreateXxx)   // sync Result-returning validator
+      .andThen(createXxxStep)       // ResultAsync-returning step
+      .map(toCreateXxxResponse);
   };
 }
 ```
+- `usecase.ts` は `async`/`try-catch` 禁止。`okAsync().andThen()...` チェーンのみで表現する（`scripts/check/arch-guards.sh` で強制）
+- リポジトリは `ResultAsync<T, E>` を返す（`Promise<Result<T, E>>` ではない）
+- DB エラーは infrastructure 層で `ResultAsync.fromPromise(promise, errorMapper)` によりラップする
 
 ### Key rules
 - **Domain is pure**: no Zod, no Drizzle, no HTTP, no DTOs from Application layer
@@ -104,6 +125,44 @@ export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
 - **`process.env` forbidden** in features and integrations; use `src/config.ts` → DI via container
 - **DI**: `src/container.ts` assembles all deps; `src/app.ts` mounts routers
 - **Error types** defined at top of `usecase.ts`, non-exported
+
+### Feature-to-feature integration (ports + adapter + DI)
+
+**A feature must never `import` another feature directly** (`dependency-cruiser` enforces this per-feature —
+`server-application-cross-features-{feature}` rules in `dependency-cruiser.config.cjs`; add a new entry there
+when you add a feature). When feature A needs feature B's behavior:
+
+1. **A declares the port it needs** in `features/A/application/ports.ts` — an abstract type expressing
+   A's own requirement, with no knowledge of B:
+   ```typescript
+   // features/tasks/application/ports.ts
+   export type ActivityRecorder = {
+     recordTaskCreated(task: { id: string; title: string }): ResultAsync<void, "Unexpected">;
+   };
+   ```
+2. **The adapter implementing the port lives in `integrations/composition/`**, and is the only place the
+   A→B connection is visible. It's built from B's `application/service.ts`:
+   ```typescript
+   // integrations/composition/activity-recorder.ts
+   export function createActivityRecorder(deps: { activity: ActivityService }): ActivityRecorder {
+     return {
+       recordTaskCreated: (task) =>
+         deps.activity.recordActivity({ kind: "task_created", message: `...` }).map(() => undefined),
+     };
+   }
+   ```
+3. **`container.ts` wires it**: build the "provider" feature's service first, wrap it with the adapter,
+   then inject into the "consumer" feature's service.
+
+Real example: `tasks` → `activity` (`features/tasks/application/ports.ts`,
+`integrations/composition/activity-recorder.ts`, wiring in `container.ts`).
+
+`integrations/` is split by role:
+- `integrations/external/` — thin wrappers around third-party SDKs (e.g. `external/auth.ts` for Better Auth).
+  Must not import from `features/`.
+- `integrations/composition/` — feature-to-feature adapters as above. May import a feature's
+  `application/service.ts` or `application/ports.ts`, but not its `domain`/`infrastructure`/`presentation`
+  (`server-integrations-composition-only-application` dependency-cruiser rule).
 
 ## Architecture: client
 
@@ -185,7 +244,7 @@ const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, {
 
 | Package | Purpose |
 |---|---|
-| `@repo/result` | ROP: `Ok`, `Err`, `Result`, `ok()`, `err()`, `flow()`, `all()`, `tryCatch()` |
+| `neverthrow` (npm) | ROP: `Result`, `ResultAsync`, `ok()`, `err()`, `okAsync()`, `errAsync()` — see [ADR-005](docs/architecture/adr-005-neverthrow-for-error-handling.md) |
 | `@repo/db` | Drizzle client instance + schema |
 | `@repo/logging` | Pino-based logger |
 
@@ -201,9 +260,9 @@ const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, {
 const app = createFakeApp();
 const client = hc<AppType>("http://localhost", { fetch: app.request.bind(app) });
 
-// Result type guard
-if (result.type === "ok") { /* result.value */ }
-if (result.type === "err") { /* result.value */ }
+// Result type guard (neverthrow) — never `result.value` on the err side, it's `result.error`
+if (result.isOk()) { /* result.value */ }
+if (result.isErr()) { /* result.error */ }
 ```
 
 ### What tests to write (per feature addition)
@@ -216,7 +275,7 @@ if (result.type === "err") { /* result.value */ }
 **api-service — only when applicable:**
 - `validators.test.ts` — if `validators.ts` has non-trivial logic
 - `domain/models.test.ts` — if domain has behavior (value objects)
-- Append to `__tests__/scenario/{feature}.scenario.test.ts` — multi-step flows
+- `__tests__/integration/{feature}.int.test.ts` — real-DB behavior (constraints, ownership scoping)
 
 **client — always:**
 - `actions/{action}.test.ts` (co-located)
@@ -226,7 +285,7 @@ if (result.type === "err") { /* result.value */ }
 
 ## TypeScript Style
 
-- No `as` type assertions (except `as const`, `as unknown` in tests, `as never` in type-only files)
+- No `as` type assertions except: `as const`; `import { X as Y }`; branded-type construction in `makeXxx`/`reconstituteXxx` domain factories (immediately after validation, or for trusted DB data); casts inside `*.test.ts`. See [ADR-003](docs/architecture/adr-003-as-type-assertion-policy.md) / [ADR-004](docs/architecture/adr-004-branded-types-as-cast.md)
 - No `any` — use type guards (`value is Type`) instead
 - Prefer guard clauses (early return) over nesting
 - Use Zod v4 API: `z.email()`, `z.url()` (not `z.string().email()`)

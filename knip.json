@@ -15,8 +15,7 @@
     "apps/client/components/ui/**": ["exports", "types", "files"],
 
     "packages/typescript-config/*.json": ["unresolved"],
-    "apps/api-service/src/app.ts": ["types"],
-    "packages/result/src/index.ts": ["exports"]
+    "apps/api-service/src/app.ts": ["types"]
   },
   "ignoreDependencies": [
     "@tailwindcss/postcss",
@@ -24,6 +23,7 @@
     "@repo/tailwind-config",
     "tw-animate-css",
     "@feature-sliced/steiger-plugin",
-    "pino-pretty"
+    "pino-pretty",
+    "@stryker-mutator/command-runner"
   ]
 }

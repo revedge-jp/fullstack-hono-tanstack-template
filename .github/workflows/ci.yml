@@ -39,13 +39,11 @@ jobs:
             client:
               - 'apps/client/**'
               - 'apps/api-service/**'
-              - 'packages/result/**'
               - 'packages/typescript-config/**'
               - 'packages/tailwind-config/**'
             api-service:
               - 'apps/api-service/**'
               - 'packages/database/**'
-              - 'packages/result/**'
             packagesAll:
               - 'packages/**'
             deps:
@@ -106,6 +104,24 @@ jobs:
           else
             echo "Skip unit tests (api-service unchanged)"
           fi
+
+      - name: Run contract / scenario / client unit tests
+        if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true'
+        env:
+          CI: true
+        run: bunx turbo run test:unit test:contract --concurrency=4 --cache-dir=.turbo --continue
+
+      - name: Unit coverage threshold (domain/application)
+        if: needs.changes.outputs.api-service == 'true'
+        run: bun run coverage:check
+
+      - name: Mutation testing (domain/application)
+        if: needs.changes.outputs.api-service == 'true'
+        run: cd apps/api-service && bun run mutation
+
+      - name: Client coverage threshold (actions/queries)
+        if: needs.changes.outputs.client == 'true'
+        run: bun run coverage:check:client
 
       - name: Architecture & FSD Checks
         run: |
@@ -299,7 +315,7 @@ jobs:
     name: API Service Integration Tests
     runs-on: ubuntu-latest
     needs: changes
-    if: false # integration tests not yet implemented
+    if: needs.changes.outputs.api-service == 'true'
     timeout-minutes: 20
     services:
       postgres:
@@ -361,6 +377,10 @@ jobs:
           # failure があれば失敗
           if [[ "${{ needs.ci.result }}" == "failure" ]]; then
             echo "CI checks failed"
+            exit 1
+          fi
+          if [[ "${{ needs.api-service-integration-tests.result }}" == "failure" ]]; then
+            echo "Integration tests failed"
             exit 1
           fi
           if [[ "${{ needs.e2e-tests.result }}" == "failure" ]]; then

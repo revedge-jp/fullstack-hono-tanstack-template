@@ -1,21 +1,50 @@
+// dependency-cruiser は from/to 間の正規表現バックリファレンス（\1 等）をサポートしない
+// （to.path は from.path の capture group を参照できず、独立した正規表現として評価される）。
+// そのため「feature 間の直接依存禁止」は、既知の feature 名を列挙してルールを動的生成する。
+// 新しい feature を追加したら、このリストにも追記すること。
+const SERVER_FEATURE_DIRS = ["activity", "auth", "tasks"];
+const CLIENT_FEATURE_DIRS = ["auth"];
+
+// npm パッケージへの to.path は「解決済みファイルパス」に対してマッチする
+// （インポート指定子そのものではない）。node_modules 配下のパスは
+// パッケージマネージャ・レイアウト（bun の `.bun/<pkg>@<ver>+hash/`、pnpm の `.pnpm/` 等）で
+// 形が変わるため、`node_modules/` の後に任意の中間パスを許容してパッケージ名にマッチさせる。
+// `.*` を optional group ( (…)? ) で包むと dependency-cruiser の安全な正規表現チェックに
+// 引っかかる（ReDoS 疑いで弾かれる）ため、group化せずそのまま使う。
+const npmPackagePath = (pkg) => `(^|/)node_modules/.*/${pkg}/`;
+
+const serverCrossFeatureRules = SERVER_FEATURE_DIRS.map((feature) => ({
+  name: `server-application-cross-features-${feature}`,
+  severity: "error",
+  comment:
+    "feature 間の直接依存禁止。連携が必要な場合は自 feature の application/ports.ts に" +
+    "抽象ポート型を定義し、実装(アダプタ)は integrations/composition に置き、container.ts で配線する。",
+  from: { path: `^apps/api-service/src/features/${feature}/application/` },
+  to: { path: `^apps/api-service/src/features/(?!${feature}/)` },
+}));
+
+const clientCrossFeatureRules = CLIENT_FEATURE_DIRS.map((feature) => ({
+  name: `client-cross-features-${feature}`,
+  severity: "error",
+  comment:
+    "client: features 間の直接参照を禁止（機能間の独立性を担保）。共通コンポーネントは apps/client/shared へ。",
+  from: { path: `^apps/client/features/${feature}/` },
+  to: { path: `^apps/client/features/(?!${feature}/)` },
+}));
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   options: {
     tsConfig: {
       fileName: "tsconfig.depcruise.json",
     },
+    // doNotFollow は node_modules 配下への「再帰」を止めるが、エッジ自体は葉として報告される
+    // ため to.path での判定に使える。exclude は node_modules を含めない
+    // （含めるとエッジ自体がグラフから消え、npm パッケージを禁止する to.path ルールが
+    // 全く発火しなくなる — 実際にこの不具合が存在していた）。
     doNotFollow: { path: "node_modules" },
     exclude: {
-      path: [
-        "node_modules",
-        "\\.next",
-        "dist",
-        "build",
-        "generated",
-        "__tests__",
-        "\\.test\\.",
-        "\\.spec\\.",
-      ],
+      path: ["\\.next", "dist", "build", "generated", "__tests__", "\\.test\\.", "\\.spec\\."],
     },
   },
   forbidden: [
@@ -26,20 +55,15 @@ module.exports = {
       from: { path: "^apps/client/shared/" },
       to: { path: "^apps/client/features/" },
     },
-    // client: features 間の直接参照を禁止（機能間の独立性を担保）
-    // 共通コンポーネントが必要な場合は apps/client/shared に移動すること
-    {
-      name: "client-cross-features",
-      severity: "error",
-      from: { path: "^apps/client/features/([^/]+)/" },
-      to: { path: "^apps/client/features/(?!\\1)/" },
-    },
+    ...clientCrossFeatureRules,
     // server: domain 層で DB 直参照禁止
+    // @repo/db は tsconfig paths でワークスペース内ファイルに解決されるため、
+    // to.path は解決後のファイルパス（packages/database/）にマッチさせる
     {
       name: "server-domain-no-db",
       severity: "error",
       from: { path: "^apps/api-service/src/features/.+/domain/" },
-      to: { path: "^(?:@repo/db|drizzle-orm(?:/|$))" },
+      to: { path: `^packages/database/|${npmPackagePath("drizzle-orm")}` },
     },
     // server: features -> routes の逆参照禁止
     {
@@ -93,7 +117,7 @@ module.exports = {
       severity: "error",
       from: { path: "^apps/api-service/src/features/[^/]+/domain/" },
       to: {
-        path: "^(?:@?hono(?:/|$)|zod|axios|node-fetch)",
+        path: ["hono", "zod", "axios", "node-fetch"].map(npmPackagePath).join("|"),
       },
     },
     // server: infrastructure から application/presentation/routes への逆依存禁止
@@ -110,15 +134,9 @@ module.exports = {
       name: "server-application-no-db",
       severity: "error",
       from: { path: "^apps/api-service/src/features/[^/]+/application/" },
-      to: { path: "^(?:@repo/db|drizzle-orm(?:/|$))" },
+      to: { path: `^packages/database/|${npmPackagePath("drizzle-orm")}` },
     },
-    // server: application 層のクロス feature 参照を警告
-    {
-      name: "server-application-cross-features",
-      severity: "warn",
-      from: { path: "^apps/api-service/src/features/([^/]+)/application/" },
-      to: { path: "^apps/api-service/src/features/(?!\\1)/" },
-    },
+    ...serverCrossFeatureRules,
     // server: middlewares から integrations への直接参照禁止（ports.ts 経由を強制）
     {
       name: "server-middlewares-no-direct-integrations",
@@ -126,15 +144,21 @@ module.exports = {
       from: { path: "^apps/api-service/src/middlewares/" },
       to: { path: "^apps/api-service/src/integrations/" },
     },
-    // server: integrations は features の ports.ts 型のみ参照可（他の feature コードへの依存禁止）
+    // server: integrations/external（外部SDKラッパー）は features に依存不可
     {
-      name: "server-integrations-no-features-except-ports",
+      name: "server-integrations-external-no-features",
       severity: "error",
-      from: { path: "^apps/api-service/src/integrations/" },
-      to: {
-        path: "^apps/api-service/src/features/",
-        pathNot: "^apps/api-service/src/features/[^/]+/ports\\.ts$",
-      },
+      from: { path: "^apps/api-service/src/integrations/external/" },
+      to: { path: "^apps/api-service/src/features/" },
+    },
+    // server: integrations/composition（feature 間合成アダプタ）は各 feature の application 層
+    // （service.ts / ports.ts）のみ参照可。domain・infrastructure・presentation への直接依存は禁止し、
+    // feature の公開APIを経由させる。
+    {
+      name: "server-integrations-composition-only-application",
+      severity: "error",
+      from: { path: "^apps/api-service/src/integrations/composition/" },
+      to: { path: "^apps/api-service/src/features/[^/]+/(domain|infrastructure|presentation)/" },
     },
     // server: features 層から Web フレームワークの直接参照を禁止（presentation 層のみ許可）
     {
@@ -144,7 +168,7 @@ module.exports = {
         path: "^apps/api-service/src/features/",
         pathNot: "^apps/api-service/src/features/[^/]+/presentation/",
       },
-      to: { path: "^@?hono(?:/|$)" },
+      to: { path: npmPackagePath("hono") },
     },
   ],
 };

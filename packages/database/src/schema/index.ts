@@ -1,3 +1,5 @@
+export type { DbActivity } from "./activities";
+export { activities } from "./activities";
 export type {
   DbAuthAccount,
   DbAuthSession,
@@ -10,3 +12,5 @@ export {
   authUsers,
   authVerifications,
 } from "./auth";
+export type { DbTask } from "./tasks";
+export { TASK_STATUS_VALUES, tasks } from "./tasks";
