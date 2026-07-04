@@ -1,6 +1,10 @@
 {
   "name": "kikagaku-saas-template",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "dotenv -e .env -- turbo run dev --log-order=stream --output-logs=full --concurrency=4",
@@ -48,7 +52,6 @@
     "prepare": "lefthook install"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.2",
     "@feature-sliced/steiger-plugin": "^0.5.8",
     "dependency-cruiser": "^17.4.3",
     "dotenv-cli": "^11.0.0",
@@ -56,25 +59,22 @@
     "knip": "^6.24.0",
     "lefthook": "^2.1.9",
     "madge": "^8.0.0",
+    "oxfmt": "0.57.0",
     "oxlint": "^1.72.0",
     "steiger": "^0.5.13",
     "turbo": "^2.10.3",
     "typescript": "6.0.3"
   },
   "overrides": {
-    "hono": "^4.12.2",
-    "minimatch": ">=10.2.3",
-    "fast-xml-parser": ">=5.3.8",
     "defu": ">=6.1.5",
-    "picomatch": ">=2.3.2",
-    "lodash-es": ">=4.17.24"
+    "fast-xml-parser": ">=5.3.8",
+    "hono": "^4.12.2",
+    "lodash-es": ">=4.17.24",
+    "minimatch": ">=10.2.3",
+    "picomatch": ">=2.3.2"
   },
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "bun@1.3.9",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+  "packageManager": "bun@1.3.9"
 }
