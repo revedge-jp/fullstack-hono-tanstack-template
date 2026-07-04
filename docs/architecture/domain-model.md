@@ -24,7 +24,7 @@ sequenceDiagram
     participant AppValidate as Application Validation<br/>(validateCreateUser)
     participant Domain as Domain Model<br/>(User Invariants)
     participant Repo as UsersRepository
-    participant DB as Prisma (User)
+    participant DB as Drizzle (User)
 
     Client->>Route: POST /api/users<br/>JSON(CreateUserRequest)
     Route->>Service: createUser(payload)

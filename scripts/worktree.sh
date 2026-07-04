@@ -97,7 +97,7 @@ extract_slot_number() {
   fi
 }
 
-# worktree のセットアップ（依存インストール、Prisma生成等）
+# worktree のセットアップ（依存インストール等）
 setup_worktree() {
   local worktree_path="$1"
   local branch="${2:-}"
@@ -189,8 +189,8 @@ setup_worktree() {
   # apps/client/.env のポート設定を更新
   if [[ -f "apps/client/.env" ]]; then
     echo -e "${YELLOW}→ apps/client/.env のポート設定を更新${NC}"
-    sed -i '' '/^NEXT_PUBLIC_API_URL=/d' apps/client/.env 2>/dev/null || true
-    echo "NEXT_PUBLIC_API_URL=\"http://localhost:$API_PORT\"" >> apps/client/.env
+    sed -i '' '/^API_BASE_URL=/d' apps/client/.env 2>/dev/null || true
+    echo "API_BASE_URL=\"http://localhost:$API_PORT\"" >> apps/client/.env
   fi
   
   # apps/api-service/.env のポート設定を更新
@@ -206,10 +206,6 @@ setup_worktree() {
   echo -e "${YELLOW}→ bun install 実行中...${NC}"
   bun install
   
-  # Prisma Client 生成
-  echo -e "${YELLOW}→ Prisma Client 生成中...${NC}"
-  bun run db:generate
-
   echo -e "${GREEN}=== セットアップ完了 ===${NC}"
   echo -e "${BLUE}worktree ディレクトリ: $worktree_path${NC}"
   echo ""

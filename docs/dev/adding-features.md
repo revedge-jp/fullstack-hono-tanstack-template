@@ -12,7 +12,7 @@ src/features/posts/
   │   └── posts.repository.ts          # リポジトリインターフェース
   ├── infrastructure/
   │   ├── mappers.ts                   # DB ↔ Domain マッパー
-  │   └── posts.repository.prisma.ts   # リポジトリ実装
+  │   └── posts.repository.drizzle.ts  # リポジトリ実装
   ├── application/
   │   ├── create/
   │   │   ├── steps.ts                # ステップ関数
@@ -80,7 +80,7 @@ export type PostsRepository = {
 ```
 
 **注意事項**:
-- Domain層は外部ライブラリ（Zod、Prisma、HTTP等）に依存しない
+- Domain層は外部ライブラリ（Zod、Drizzle、HTTP等）に依存しない
 - ドメイン不変条件のバリデーション関数は純粋関数として実装
 - **DTO型（`CreatePostInput`など）はDomain層には置かない**
 
@@ -398,7 +398,7 @@ import { createPostsRouter } from "@features/posts/presentation";
 
 // apiRoutes の定義内で .route("/posts", createPostsRouter(container)) を追加
 const apiRoutes = createHonoApp({ router: new RegExpRouter() })
-  .route("/health", createHealthRouter({ prisma: container.prisma }))
+  .route("/health", createHealthRouter({ db: container.db }))
   .route("/users", createUsersRouter(container))
   .route("/posts", createPostsRouter(container));  // 追加
 ```

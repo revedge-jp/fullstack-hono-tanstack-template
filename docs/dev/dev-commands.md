@@ -9,7 +9,7 @@ push 前の統合チェックを一括実行します。
 - 実行内容（Lint/Type/Test/Architecture を常時実行。Lint/Type/Test は turbo filter により差分限定）
   - Lint（Biome）: `turbo run lint`
   - Typecheck（TypeScript）: `turbo run typecheck`
-  - Tests: DB に対して `prisma migrate deploy` を行った上で `turbo run test` を実行
+  - Tests: DB に対して `bun run db:migrate`（drizzle-kit migrate）を行った上で `turbo run test` を実行
   - Architecture: 依存/設計ガードの検査（常時実行）
 - 既定の変更影響フィルタ: `...[origin/main]`（turbo filter）
 

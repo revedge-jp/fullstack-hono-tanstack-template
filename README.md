@@ -1,10 +1,11 @@
-# kikagaku-saas-template
+# fullstack-hono-tanstack-template
 
 モノレポ（Turborepo）構成の SaaS テンプレート。
 
-- **フロント**: Next.js（`apps/client`）
-- **API**: Hono（`apps/api-service`）+ Result 指向（ROP）設計
-- **DB**: Prisma（`packages/database`）
+- **フロント**: TanStack Start + React 19（`apps/client`）
+- **API**: Hono（`apps/api-service`）+ Result 指向（ROP、neverthrow）設計
+- **DB**: Drizzle ORM + PostgreSQL（`packages/database`）
+- **デプロイ**: Cloudflare Workers（client と api-service を単一 Worker にバンドル）
 
 ## クイックスタート
 
@@ -20,9 +21,8 @@ bun install
 # 3) データベースの起動
 bun run db:up:all     # Postgres（本番/テスト）を起動
 
-# 4) マイグレーションとPrisma Client生成
-bun run db:migrate    # マイグレーション（開発）
-bun run db:generate   # Prisma Client 生成
+# 4) マイグレーションの適用
+bun run db:migrate    # マイグレーション適用（drizzle-kit migrate）
 
 # 5) 開発サーバーの起動
 bun run dev           # 全体起動（依存の型生成も依存関係で実行）
@@ -38,16 +38,16 @@ bun run dev           # 全体起動（依存の型生成も依存関係で実�
 
 ### アプリケーション
 
-- `apps/client`: Next.js アプリ（Tailwind v4, shadcn/ui ベースの共有 UI は `@repo/ui`）
+- `apps/client`: TanStack Start アプリ（React 19, Tailwind v4, shadcn/ui）
   - 詳細: [apps/client/README.md](apps/client/README.md)
 - `apps/api-service`: Hono API（クリーンアーキ/ROP、テスト一式）
   - 詳細: [apps/api-service/README.md](apps/api-service/README.md)
 
 ### パッケージ
 
-- `packages/database` (`@repo/db`): Prisma スキーマ/操作ラッパ
-- `packages/contracts`: API コントラクト/型（クライアント・サーバー間で共有）
-- `packages/result`: Result 型ユーティリティ
+- `packages/database` (`@repo/db`): Drizzle スキーマ/クライアントのラッパ
+- `packages/logging` (`@repo/logging`): pino ベースのロガー（Workers 対応）
+- 型共有は Hono RPC（`AppType`）、Result 型は npm の `neverthrow` を使用
 - `packages/ui`: 共有 UI コンポーネント（client/admin-client で共有）
 - `packages/typescript-config`, `packages/tailwind-config`: 共有設定
 
@@ -65,8 +65,8 @@ bun run dev           # 全体起動（依存の型生成も依存関係で実�
 
 ### デプロイ向け
 
-- [デプロイガイド](docs/deploy/deployment.md) - デプロイの概要と初期セットアップ（`./scripts/setup.sh` による一括セットアップ推奨）
-- [インフラ詳細](infra/terraform/README.md) - Terraform の詳細とローカル実行方法
+- [Cloudflare Workers デプロイガイド](docs/deploy/cloudflare-workers.md) - デプロイの概要とセットアップ
+- [GitHub ルールセット設定](docs/deploy/github-ruleset.md) - ブランチ保護の設定
 
 ## よく使うコマンド
 
@@ -90,9 +90,9 @@ bun run db:up         # Postgres を起動
 bun run db:down       # Postgres を停止/削除
 bun run db:up:test    # テスト用DBのみ起動
 bun run db:down:test  # テスト用DBのみ停止/削除
-bun run db:studio     # Prisma Studio
-bun run db:migrate    # 開発マイグレーション
-bun run db:generate   # Prisma Client 生成
+bun run db:studio     # Drizzle Studio
+bun run db:generate   # マイグレーションファイル生成（drizzle-kit generate）
+bun run db:migrate    # マイグレーション適用（drizzle-kit migrate）
 ```
 
 ### アーキテクチャ/依存チェック
@@ -167,7 +167,8 @@ git push -u origin <branch>
 #### Client (`apps/client`)
 
 - `API_BASE_URL`: API サーバーのベース URL（既定: `http://localhost:8080`）
-  - 本番環境では Cloud Run の直接 URL が自動注入されます（ロードバランサー経由は外部アクセス用）
+  - 本番（CF Workers）では client と api-service が同一 Worker のため HTTP ループバックは使わず、
+    SSR からは AsyncLocalStorage 経由で container を直接呼び出す（ADR-001）
 
 ### 設定例
 

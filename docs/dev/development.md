@@ -14,9 +14,9 @@
 
 ### 概要
 
-Next.js (App Router) を使用したフロントエンドアプリケーション。Feature-Sliced Design (FSD) アーキテクチャを採用しています。
+TanStack Start を使用したフロントエンドアプリケーション（SSR + CSR）。Feature-Sliced Design (FSD) ライクなアーキテクチャを採用しています。
 
-詳細は [apps/client/README.md](../apps/client/README.md) を参照してください。
+詳細は [apps/client/README.md](../../apps/client/README.md) を参照してください。
 
 ### FSD（Feature-Sliced Design）構造
 
@@ -24,37 +24,37 @@ Next.js (App Router) を使用したフロントエンドアプリケーショ�
 
 ```
 apps/client/
-├── app/                    # Next.js App Router（pages）
+├── app/                    # TanStack Start（routes / router / server entry）
+│   ├── routes/             # ファイルベースルーティング（_authenticated 等）
+│   └── server.ts           # Worker の fetch ハンドラー（api-service をバンドル）
 ├── features/               # 機能単位のスライス
-│   ├── users/
-│   │   ├── actions/        # Server Actions
-│   │   ├── queries/        # データ取得ロジック
+│   ├── tasks/
+│   │   ├── actions/        # createServerFn による mutation
+│   │   ├── queries/        # データ取得（SSR loader 用 createServerFn / queryOptions）
 │   │   ├── ui/             # UI コンポーネント
 │   │   └── index.ts        # パブリック API
-├── widgets/                # 複合的な UI ブロック
 ├── shared/                 # 共有レイヤ（横断関心）
-│   └── lib/
-│       └── api.ts          # API クライアント設定
-└── components/            # 汎用 UI コンポーネント
+│   └── lib/                # server-container / app-context 等
+└── components/             # 汎用 UI コンポーネント
     └── ui/                 # shadcn/ui コンポーネント
 ```
 
 #### レイヤー規則
 
 - **features**: 機能単位のスライス。`actions`、`queries`、`ui` に分割
-- **widgets**: 複数の features を組み合わせた複合的な UI ブロック
-- **shared**: 横断関心（config, api, lib, utils, styles）を配置
+- **shared**: 横断関心（config, lib, utils, styles）を配置
 - **components**: 汎用的な UI コンポーネント（shadcn/ui など）
 
 #### 依存関係ルール
 
 - `shared` から `features` への参照は禁止（dependency-cruiser で検証）
-- `features` 間の直接参照は警告（必要に応じて `widgets` 経由）
-- API クライアントは `shared/lib/api.ts` で一元管理
+- `features` 間の直接参照は禁止（dependency-cruiser で検証、feature 名は自動導出）
 
-### Next.js Cache API / Partial Prerendering
+### データ取得（SSR ファースト）
 
-- `app/page.tsx` は `revalidate = 30` と `experimental_ppr = true` を指定しており、Partial Prerendering による初期レスポンス高速化と、Cache API による増分再検証を併用します。
+- 基本はルートの `loader` + `createServerFn` でサーバーサイド取得し、初回表示のローディングを無くす
+- ユーザー操作で動的に変わるデータのみ TanStack Query の `useQuery` を使う
+- パターンの詳細は [CLAUDE.md](../../CLAUDE.md#architecture-client) を参照
 
 ### shadcn/ui
 
@@ -100,7 +100,7 @@ if (res.status === 200) {
 - リクエスト/レスポンスの型はサーバーの Zod スキーマから自動推論（単一ソース）
 - `api-service` の `build` スクリプトが `.d.ts` を生成（`tsc --emitDeclarationOnly`）
 
-詳細は [apps/client/README.md](../apps/client/README.md) を参照してください。
+詳細は [apps/client/README.md](../../apps/client/README.md) を参照してください。
 
 ## Server
 
@@ -108,7 +108,7 @@ if (res.status === 200) {
 
 Hono を使用した REST API サーバー。クリーンアーキテクチャと Result 指向（ROP）設計を採用しています。
 
-詳細は [apps/api-service/README.md](../apps/api-service/README.md) を参照してください。
+詳細は [apps/api-service/README.md](../../apps/api-service/README.md) を参照してください。
 
 ### Hono フレームワーク
 
@@ -190,7 +190,7 @@ TypeScriptの型安全性を維持するため、型アサーション（`as`キ
 以下のケースでは`as`キャストの使用が許容されます:
 
 - `as const`: リテラル型の固定（例: `status: 404 as const`）
-- `import { X as Y }`: 名前の変更（例: `import { prisma as prismaClient }`）
+- `import { X as Y }`: 名前の変更（例: `import { tasks as tasksTable }`）
 - テストコードでの`as unknown`: 型チェックを回避する必要がある場合
 - 型生成専用ファイルでの`as never`: 型生成のためのダミー値
 - エラーハンドリングでの型ガード: `typeof`チェックと組み合わせて使用（例: `e as { code?: string }`）
@@ -247,7 +247,7 @@ export function makeCreateUser(deps: { usersRepository: UsersRepository }) {
 - `map` / `mapErr`: 成功値・エラー値それぞれの変換
 - presentation 層では `toHttp(c, result, errorMap, okStatus?)`（`apps/api-service/src/shared/http/to-http.ts`）でまとめて HTTP レスポンスに変換する
 
-詳細は [apps/api-service/README.md](../apps/api-service/README.md) を参照してください。
+詳細は [apps/api-service/README.md](../../apps/api-service/README.md) を参照してください。
 
 ### 外部SDK/integrations層
 
@@ -260,13 +260,13 @@ export function makeCreateUser(deps: { usersRepository: UsersRepository }) {
 実装例:
 - `src/integrations/google-auth.ts`: Google OIDC認証SDKのラッパー
 
-詳細は [apps/api-service/README.md](../apps/api-service/README.md#外部sdkintegrations) を参照してください。
+詳細は [apps/api-service/README.md](../../apps/api-service/README.md#外部sdkintegrations) を参照してください。
 
 ## DB
 
 ### 概要
 
-Prisma を使用したデータベース管理。PostgreSQL を想定しています。
+Drizzle ORM を使用したデータベース管理。PostgreSQL を想定しています。
 
 ### データベースの立ち上げ
 
@@ -292,48 +292,43 @@ Docker Compose の設定:
 ### マイグレーション
 
 ```bash
-# 開発用マイグレーション（スキーマ変更を反映）
-bun run db:migrate
-
-# Prisma Client 生成
+# スキーマ変更からマイグレーションファイルを生成（drizzle-kit generate）
 bun run db:generate
+
+# マイグレーションを適用（drizzle-kit migrate）
+bun run db:migrate
 ```
 
-**注意**: `db:migrate` は `prisma migrate dev` を実行し、マイグレーション適用時に Prisma Client を自動生成します。手動で生成する場合は `db:generate` を使用してください。
+スキーマは `packages/database/src/schema/` の TypeScript ファイルで定義します。
 
-### Prisma Studio
+### Drizzle Studio
 
-データベースの内容を確認するには Prisma Studio を使用します。
+データベースの内容を確認するには Drizzle Studio を使用します。
 
 ```bash
 bun run db:studio
 ```
 
-### Prisma の使用方法
+### Drizzle の使用方法
 
-`packages/database` パッケージから Prisma Client をインポートして使用します。
+`packages/database` パッケージから DB インスタンスとスキーマをインポートして使用します。
 
 ```typescript
-import { prisma } from "@repo/db";
+import { createDb, tasks } from "@repo/db";
 
-// 使用例
-const users = await prisma.user.findMany();
+const { db } = createDb(config.databaseUrl);
+const rows = await db.query.tasks.findMany();
 ```
 
-詳細は [packages/database](../packages/database/README.md) を参照してください。
+詳細は [packages/database](../../packages/database/README.md) を参照してください。
 
 ## パッケージ
 
-### client/admin-client で共有
-
-以下のパッケージは client と admin-client（将来追加）で共有できます。
-
-- **`@repo/ui`**: 共有 UI コンポーネント（React コンポーネント）
 ### server で使用
 
 以下のパッケージは server で使用します。
 
-- **`@repo/database`**: Prisma スキーマ/操作ラッパ
+- **`@repo/db`**: Drizzle スキーマ/クライアントのラッパ
 - **`neverthrow`** (npm): Result 型ユーティリティ（[ADR-005](../architecture/adr-005-neverthrow-for-error-handling.md)）
 
 ### その他のパッケージ
@@ -343,17 +338,18 @@ const users = await prisma.user.findMany();
 
 ### パッケージ詳細
 
-#### `@repo/database`
+#### `@repo/db`
 
-Prisma スキーマとクライアントのラッパー。
+Drizzle スキーマとクライアントのラッパー。
 
-- **スキーマ**: `packages/database/prisma/schema.prisma`
-- **エクスポート**: `prisma` インスタンスと Prisma 型
+- **スキーマ**: `packages/database/src/schema/*.ts`
+- **エクスポート**: `createDb()`、各テーブル定義、`Db*` 型
 - **使用例**:
   ```typescript
-  import { prisma, type User } from "@repo/db";
-  
-  const users = await prisma.user.findMany();
+  import { createDb, tasks, type DbTask } from "@repo/db";
+
+  const { db } = createDb(databaseUrl);
+  const rows = await db.query.tasks.findMany();
   ```
 
 #### `neverthrow`
@@ -496,10 +492,10 @@ bunx hono search middleware --pretty
 
 ### 本番環境
 
-本番環境では、Terraform が環境変数を自動設定します。
+本番環境（Cloudflare Workers）では、`apps/client/wrangler.jsonc` の `vars`（非機密）と
+Workers Secrets（`wrangler secret put`、機密）で環境変数を設定します。
 
-- Server: `DATABASE_URL`（Secret Manager から）
-- Client: `API_BASE_URL`（Cloud Run の直接 URL）
+- `DATABASE_URL`: Workers Secret として登録
 
 **環境変数を追加する際の手順**は [環境変数ガイド](environment-variables.md) を参照してください。詳細な一覧や本番・CI への反映方法も同ドキュメントに記載しています。
 
@@ -508,6 +504,6 @@ bunx hono search middleware --pretty
 - [環境変数ガイド](environment-variables.md) - 環境変数一覧と追加フロー
 - [システムアーキテクチャ](../architecture/architecture.md) - システム全体の構成
 - [開発コマンド詳細](dev-commands.md) - よく使うコマンドの詳細説明
-- [apps/client/README.md](../apps/client/README.md) - Client 詳細
-- [apps/api-service/README.md](../apps/api-service/README.md) - Server 設計ガイド
+- [apps/client/README.md](../../apps/client/README.md) - Client 詳細
+- [apps/api-service/README.md](../../apps/api-service/README.md) - Server 設計ガイド
 

@@ -1,6 +1,6 @@
 # トラブルシューティング
 
-ax-saas-template でよくある問題と解決方法をまとめています。
+本テンプレートでよくある問題と解決方法をまとめています。
 
 ## 目次
 
@@ -8,16 +8,11 @@ ax-saas-template でよくある問題と解決方法をまとめています。
   - [DB接続エラー](#db接続エラー)
   - [型エラー](#型エラー)
   - [ポート競合](#ポート競合)
-  - [Prisma関連](#prisma関連)
+  - [マイグレーション関連](#マイグレーション関連)
   - [Bun/依存関係](#bun依存関係)
-- [認証・認可](#認証認可)
-  - [ログインできない](#ログインできない)
-  - [セッション関連](#セッション関連)
-- [CI/CD・デプロイ](#cicdデプロイ)
-  - [GitHub Actions](#github-actions)
-  - [Terraform](#terraform)
-  - [Cloud Run](#cloud-run)
-  - [Cloud SQL](#cloud-sql)
+- [Cloudflare Workers 特有の問題](#cloudflare-workers-特有の問題)
+- [認証](#認証)
+- [CI/CD](#cicd)
 - [worktree](#worktree)
 
 ---
@@ -43,7 +38,6 @@ bun run db:down && bun run db:up:all
 
 # 3. 環境変数を確認
 cat .env | grep DATABASE_URL
-# 期待値: postgresql://postgres:postgres@localhost:5432/app_db?schema=public
 ```
 
 #### 症状: `database "app_db" does not exist`
@@ -57,20 +51,7 @@ docker exec -it ax_saas_postgres psql -U postgres -c "CREATE DATABASE app_db;"
 
 ### 型エラー
 
-#### 症状: Prismaの型が見つからない
-
-```
-Cannot find module '@prisma/client'
-```
-
-**解決方法:**
-
-```bash
-# Prisma Client を再生成
-bun run db:generate
-```
-
-#### 症状: APIの型が古い
+#### 症状: APIの型が古い / client 側で `AppType` の推論が壊れる
 
 ```
 Property 'xxx' does not exist on type ...
@@ -85,12 +66,6 @@ Property 'xxx' does not exist on type ...
 ### ポート競合
 
 #### 症状: `EADDRINUSE` エラー
-
-```
-Error: listen EADDRINUSE: address already in use :::3000
-```
-
-**解決方法:**
 
 ```bash
 # 使用中のポートを確認
@@ -108,35 +83,26 @@ API_PORT=8082
 
 ---
 
-### Prisma関連
+### マイグレーション関連
 
-#### 症状: マイグレーションエラー
-
-```
-Error: P3006: Migration failed to apply
-```
-
-**解決方法:**
+#### 症状: マイグレーションが適用できない
 
 ```bash
-# 1. マイグレーション状態を確認
-cd packages/database
-npx prisma migrate status
+# 1. 生成済みマイグレーションと journal の整合を確認
+ls packages/database/drizzle/
+cat packages/database/drizzle/meta/_journal.json
 
-# 2. 強制リセット（開発環境のみ）
+# 2. 強制リセット（開発環境のみ。データは消える）
 bun run db:down && bun run db:up:all
 bun run db:migrate
-
-# 3. スキーマの同期（マイグレーションなし）
-npx prisma db push
 ```
 
-#### 症状: `Schema engine error`
+#### 症状: スキーマを変更したのに反映されない
 
 ```bash
-# Prismaのキャッシュをクリア
-rm -rf node_modules/.prisma
+# スキーマ変更 → マイグレーション生成 → 適用 の順で実行する
 bun run db:generate
+bun run db:migrate
 ```
 
 ---
@@ -161,55 +127,71 @@ bun install --force
 
 ---
 
-## 認証・認可
+## Cloudflare Workers 特有の問題
+
+client は開発時でも `@cloudflare/vite-plugin` 経由で **workerd（Workers ランタイムの emulation）上で動く**。
+そのため「Bun では動くのに client 経由だと落ちる」問題は大抵ランタイム差が原因。
+
+#### 症状: `unable to determine transport target` / `worker_threads` 系のエラー
+
+**原因:** Workers ランタイム（emulation 含む）には `worker_threads` がない。pino-pretty など
+worker_threads を使うライブラリは `NODE_ENV=development` でも client 経由では動かない。
+
+**解決方法:** 環境変数ではなく **ランタイム検出**で分岐する。標準的な検出方法:
+
+```typescript
+const isWorkers = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
+```
+
+`packages/logging/src/create-logger.ts` が実例。
+
+#### 症状: `WeakRef is not defined` 等、Node 専用 API のエラー
+
+**原因:** ライブラリが内部で Node 専用 API（`WeakRef`、sonic-boom、fs ストリーム等）に触れている。
+pino の場合、Node ビルドは stream 引数を渡さない限り内部で SonicBoom を構築しようとする。
+
+**解決方法:** ライブラリに「console のみに依存する書き込み先」を明示的に渡す
+（`create-logger.ts` の `workersConsoleStream` が実例）。
+
+#### 症状: SSR の loader から自分の `/api/*` を fetch すると 404
+
+**原因:** CF Workers + Static Assets では、同一オリジンへの `fetch()` サブリクエストは
+自分自身の fetch ハンドラーを経由しない（[ADR-001](../architecture/adr-001-cf-workers-session-check.md)）。
+
+**解決方法:** AsyncLocalStorage 経由で api-service の container を直接呼ぶ
+（`apps/client/shared/lib/server-container.ts`、実例は `features/tasks/queries/get-tasks.ts`）。
+
+#### 症状: `bun run dev` (client) が wrangler.jsonc のエラーで起動しない
+
+**原因:** テンプレートの `wrangler.jsonc` は `"name": "{{APP_NAME}}"` プレースホルダーのまま。
+
+**解決方法:** プロジェクト生成時にプレースホルダーを実アプリ名に置換する。CI では
+ビルド前にダミー値へ置換している（`.github/workflows/ci.yml` 参照）。
+
+---
+
+## 認証
 
 ### ログインできない
 
-#### 症状: Googleログインポップアップが表示されない
+#### 症状: Googleログインにリダイレクトされない / 失敗する
 
 **確認事項:**
-1. Firebase設定が正しいか（`.env`の`NEXT_PUBLIC_FIREBASE_*`）
-2. GCPの承認済みドメインに`localhost`が含まれているか
-3. ブラウザのコンソールにエラーが出ていないか
+1. `.env` の `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` が正しいか
+2. Google Cloud Console の OAuth クライアントで承認済みリダイレクト URI に
+   `http://localhost:3000/api/auth/callback/google` が含まれているか
+3. `BETTER_AUTH_SECRET` / `BETTER_AUTH_URL` が設定されているか
 
-**解決方法:**
+#### 症状: `BETTER_AUTH_SECRET should be at least 32 characters` 警告
 
 ```bash
-# 環境変数を確認
-cat .env | grep FIREBASE
+# 強固なシークレットを生成して .env に設定
+openssl rand -base64 32
 ```
 
-#### 症状: 403 Forbidden（本番環境）
-
-**確認事項:**
-1. IAP設定で許可されたドメインに含まれているか
-2. Google Workspaceアカウントを使用しているか
-
 ---
 
-### IAP JWT関連
-
-#### 症状: `IAP JWT verification failed` エラー
-
-**確認事項:**
-1. `GOOGLE_CLOUD_PROJECT_NUMBER` が正しいか
-2. `IAP_BACKEND_SERVICE_ID` が正しいか
-3. Audienceが期待値と一致しているか
-
-#### 症状: 本番環境でIAP JWT検証がスキップされる
-
-**原因:** `IAP_BACKEND_SERVICE_ID` が未設定（初回デプロイ時に発生することあり）
-
-**解決方法:**
-1. Cloud Consoleで Backend Service ID を確認
-2. Secret Manager に設定
-3. Cloud Run を再デプロイ
-
-> JWT検証がスキップされても、IAP自体・VPC・Ingress制限による保護は有効です。
-
----
-
-## CI/CD・デプロイ
+## CI/CD
 
 ### GitHub Actions
 
@@ -225,127 +207,15 @@ Error: Input required and not supplied: xxx
 # Secret名を確認（大文字小文字も含む）
 gh secret list
 
-# Secretが正しく設定されているか確認
-# Settings → Secrets and variables → Actions
+# Settings → Secrets and variables → Actions で設定
+# デプロイに必要: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / DATABASE_URL
 ```
 
-#### 症状: WIF認証エラー
-
-```
-Error: google-github-actions/auth failed
-```
+#### 症状: wrangler deploy が認証エラー
 
 **確認事項:**
-1. `WIF_PROVIDER_*`の値が正しいか（プロジェクト番号）
-2. `WIF_SA_*`のサービスアカウントが存在するか
-3. GitHub Actionsからのアクセスが許可されているか
-
-```bash
-# WIF Providerの確認
-gcloud iam workload-identity-pools providers describe github-oidc \
-  --location=global \
-  --workload-identity-pool=github
-```
-
----
-
-### Terraform
-
-#### 症状: `storage: bucket doesn't exist`
-
-**確認事項:**
-1. `TFSTATE_BUCKET_*`に`gs://`が含まれていないか（バケット名のみ）
-2. バケットが存在するか
-3. CI SAにバケットへのアクセス権限があるか
-
-```bash
-# バケットの確認
-gsutil ls gs://${TFSTATE_BUCKET}
-
-# 権限の付与
-SA="ci-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
-gcloud storage buckets add-iam-policy-binding gs://${TFSTATE_BUCKET} \
-  --member="serviceAccount:$SA" \
-  --role="roles/storage.objectAdmin"
-```
-
-#### 症状: `Error 409: already exists`
-
-既存リソースがTerraform stateにインポートされていない。
-
-**解決方法:**
-
-```bash
-# 自動インポート（推奨）
-cd infra/terraform/scripts
-TF_BACKEND_BUCKET=$BUCKET_STG TF_BACKEND_PREFIX=stg/terraform.tfstate ./infra-apply-staged.sh
-
-# 手動インポート
-terraform import google_artifact_registry_repository.repo \
-  projects/${PROJECT_ID}/locations/${REGION}/repositories/ax-repo
-```
-
-詳細は [Terraform README](../infra/terraform/README.md) を参照。
-
----
-
-### Cloud Run
-
-#### 症状: ロードバランサー経由でアクセスできない
-
-**確認事項:**
-1. ロードバランサーのプロビジョニング完了（数分かかる）
-2. Cloud Runサービスの`ingress`設定
-3. URLマップのパスルーティング
-
-```bash
-# IPアドレスを確認
-terraform output load_balancer_ip
-
-# Cloud Runサービスの確認
-gcloud run services describe ax-client --region asia-northeast1
-```
-
-### Cloud SQL
-
-#### 症状: `P1000: Authentication failed`
-
-Cloud SQLのユーザーとSecretの不一致。
-
-**解決方法:**
-
-```bash
-# 1. ユーザー確認
-gcloud sql users list --instance ax-db --project $PROJECT_ID
-
-# 2. パスワードリセット
-NEW='<your-password>'
-gcloud sql users set-password appuser \
-  --instance ax-db \
-  --project "$PROJECT_ID" \
-  --password "$NEW"
-
-# 3. DATABASE_URLを更新（URLエンコードに注意）
-HOST=$(gcloud sql instances describe ax-db --project "$PROJECT_ID" --format='value(ipAddresses.ipAddress)')
-ENC=$(python3 - <<'PY' "$NEW"
-import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=''))
-PY
-)
-printf 'postgresql://appuser:%s@%s:5432/app?schema=public\n' "$ENC" "$HOST" | \
-  gcloud secrets versions add database-url --project "$PROJECT_ID" --data-file=-
-```
-
-#### 症状: DBマイグレーションが失敗
-
-```bash
-# ログを確認
-gcloud run jobs executions list --region asia-northeast1 --project $PROJECT_ID
-
-# 確認事項
-# - DATABASE_URL Secretの値/権限
-# - VPC Connectorの設定
-# - Private IPの確認
-```
+1. `CLOUDFLARE_API_TOKEN` に Workers 編集権限があるか
+2. `CLOUDFLARE_ACCOUNT_ID` が正しいか
 
 ---
 
@@ -355,10 +225,10 @@ gcloud run jobs executions list --region asia-northeast1 --project $PROJECT_ID
 
 ```bash
 # 強制削除
-git worktree remove --force ../ax-saas-template-feat-xxx
+git worktree remove --force ../<worktree-dir>
 
 # それでも失敗する場合
-rm -rf ../ax-saas-template-feat-xxx
+rm -rf ../<worktree-dir>
 git worktree prune
 ```
 
@@ -375,42 +245,11 @@ git worktree prune
 worktreeごとに完全な`node_modules`が必要なため、初回は時間がかかる。
 2回目以降はBunのグローバルキャッシュで高速化される。
 
-### 症状: Prismaのスキーマ変更が反映されない
-
-```bash
-# 各worktreeで再生成が必要
-bun run db:generate
-```
-
----
-
-## その他
-
-### 症状: Application Default Credentialsエラー（ローカル開発）
-
-```
-Error: Could not load the default credentials
-```
-
-**解決方法:**
-
-```bash
-gcloud auth application-default login
-```
-
-### 症状: Docker buildxの問題
-
-```bash
-# buildx builderを再作成
-docker buildx rm ax-builder || true
-docker buildx create --use --name ax-builder
-```
-
 ---
 
 ## 問題が解決しない場合
 
-1. **ログを確認**: ターミナル、ブラウザコンソール、Cloud Logging
+1. **ログを確認**: ターミナル、ブラウザコンソール、Cloudflare ダッシュボード
 2. **ドキュメントを確認**: 関連するドキュメントを再読
 3. **チームに質問**: Slackの関連チャンネル
 4. **Issueを作成**: 再現手順とエラーメッセージを含める
@@ -420,7 +259,5 @@ docker buildx create --use --name ax-builder
 ## 関連ドキュメント
 
 - [開発ガイド](development.md) - 環境構築の詳細
-- [デプロイガイド](../deploy/deployment.md) - CI/CDの詳細
-- [Terraform README](../infra/terraform/README.md) - インフラの詳細
+- [Cloudflare Workers デプロイガイド](../deploy/cloudflare-workers.md) - デプロイ・CI/CDの詳細
 - [git worktree運用ガイド](git-worktree.md) - worktreeの詳細
-

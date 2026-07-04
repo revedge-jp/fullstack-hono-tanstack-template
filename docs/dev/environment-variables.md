@@ -65,17 +65,17 @@
    - `loadConfig()` の戻り値オブジェクトにマッピングを追加
 3. **`turbo.json`** の該当タスクの `env` 配列に追加する（build/dev/test 等で使用する場合）
 4. **CI**: `.github/workflows/ci.yml` の該当ジョブの `env` に追加する（テストやビルドで必要な場合）
-5. **本番環境**: `infra/terraform` の `server_env` 経由で渡す。Secret が必要な場合は Secret Manager を利用
+5. **本番環境**: `apps/client/wrangler.jsonc` の `vars`（非機密）または `wrangler secret put`（機密）で渡す
 6. **ドキュメント**: 本ファイルの一覧と `README.md` の環境変数セクションを更新する
 
 ### client に環境変数を追加する場合
 
 1. **`.env.example`** にサンプル値を追加する
 2. **参照箇所**を実装する（例: `apps/client/shared/lib/api.ts`）。現状バリデーションはないが、フォールバックを適切に設定する
-3. **`NEXT_PUBLIC_` prefix**: クライアント（ブラウザ）に露出する変数は `NEXT_PUBLIC_` を付与する。機密情報は絶対に含めない
+3. **`VITE_` prefix**: クライアント（ブラウザ）に露出する変数は Vite の慣例に従い `VITE_` を付与する。機密情報は絶対に含めない
 4. **turbo.json**: client の build で使用する場合は `env` に追加する
 5. **CI**: E2E 等で必要なら `.github/workflows/ci.yml` の `e2e-tests` ジョブの `env` に追加する
-6. **本番環境**: `client_env` 経由で Terraform に渡す。または `cloud-run.tf` に固定の `env` ブロックを追加する
+6. **本番環境**: `apps/client/wrangler.jsonc` の `vars` に追加する（環境別は `env.staging` / `env.production` 配下）
 7. **ドキュメント**: 本ファイルの一覧と `README.md` を更新する
 
 ### Docker / インフラのみの環境変数の場合
@@ -95,56 +95,41 @@
 | `apps/api-service/src/config.ts` | api-service の環境変数バリデーション（Zod）と型定義の中心。`loadConfig()` で起動時に検証 |
 | `turbo.json` | Turborepo のタスクごとに `env` を宣言。**キャッシュキーに影響**するため、build 結果に影響する変数はここに追加する |
 | `docker-compose.yml` | Postgres 等のコンテナ起動時の環境変数。`${VAR:-default}` で上書き可能 |
-| `infra/terraform/cloud-run.tf` | 本番 Cloud Run の環境変数。固定値は `env` ブロック、動的値は `server_env` / `client_env` |
-| `infra/terraform/variables.tf` | `server_env` / `client_env` の変数定義。デプロイ時に `-var` で渡す |
+| `apps/client/wrangler.jsonc` | 本番 Cloudflare Workers の環境変数（`vars`）。環境別は `env.staging` / `env.production` |
+| `apps/client/.dev.vars` | ローカル開発時に Workers ランタイムへ渡す変数（`.env` への symlink、`.gitignore` 済み） |
 
 ### turbo.json に env を追加する理由
 
-Turborepo はタスクの実行結果をキャッシュする際、`env` で宣言した環境変数の値をキャッシュキーに含めます。環境変数が変わることでビルド結果が変わる場合（例: `DATABASE_URL` は Prisma のスキーマ生成に影響しないが、本番では別の値）、該当タスクの `env` に追加する必要があります。
+Turborepo はタスクの実行結果をキャッシュする際、`env` で宣言した環境変数の値をキャッシュキーに含めます。環境変数が変わることでビルド結果が変わる場合（例: `DATABASE_URL` は本番では別の値）、該当タスクの `env` に追加する必要があります。
 
 ---
 
 ## 本番環境への反映
 
-### 固定値
+### 非機密の固定値（vars）
 
-`infra/terraform/cloud-run.tf` の `env` ブロックに直接追加します。
+`apps/client/wrangler.jsonc` の `vars` に追加します（環境別は `env.staging` / `env.production` 配下）。
 
-```hcl
-env {
-  name  = "MY_VAR"
-  value = "fixed-value"
-}
-```
-
-### 動的値・オーバーライド（server_env / client_env）
-
-`variables.tf` の `server_env` / `client_env` は map 型で、デプロイ時に `-var` で渡します。
-
-- **Server**: `server_env` に `KEY=value` 形式で追加
-- **Client**: `client_env` に `KEY=value` 形式で追加
-
-デプロイスクリプト（`scripts/ci-cd/deploy-steps.sh`）や `.github/workflows/_deploy.yml` では、次の形式で渡します:
-
-```bash
--var="server_env={MY_KEY=\"my-value\",BUILD_SHA=\"${COMMIT_SHA}\"}"
-```
-
-### 機密情報（Secret Manager）
-
-パスワードや API キーなどは Secret Manager に登録し、`cloud-run.tf` の `value_source` で参照します。
-
-```hcl
-env {
-  name = "SECRET_VAR"
-  value_source {
-    secret_key_ref {
-      secret  = google_secret_manager_secret.my_secret.name
-      version = "latest"
+```jsonc
+{
+  "env": {
+    "production": {
+      "vars": { "MY_VAR": "fixed-value" }
     }
   }
 }
 ```
+
+### 機密情報（Workers Secrets）
+
+パスワードや API キーなどは wrangler secret として登録します。デプロイ後も値は参照できません。
+
+```bash
+cd apps/client
+bunx wrangler secret put DATABASE_URL --env production
+```
+
+ローカル開発では `.dev.vars`（`.env` への symlink）から同じ変数が Workers ランタイムに渡ります。
 
 ---
 
@@ -154,15 +139,15 @@ env {
 
 各ジョブの `env` で環境変数を設定します。主なジョブ:
 
-- **ci**: `DATABASE_URL`（Prisma 生成用ダミー）、`CI`
+- **ci**: `DATABASE_URL`（ダミー値）、`CI`
 - **e2e-tests**: `DATABASE_URL`, `TEST_DATABASE_URL`, `CI`
 - **api-service-integration-tests**: `DATABASE_URL`, `CI`
 
 新しい環境変数がテストやビルドに必要なら、該当ジョブの `env` に追加してください。
 
-### デプロイ（`.github/workflows/_deploy.yml`）
+### デプロイ（`.github/workflows/deploy.yml`）
 
-`server_env` / `client_env` は Terraform の `-var` で渡されます。デプロイワークフローで新しい変数を渡す場合は、`scripts/ci-cd/deploy-steps.sh` や `.github/workflows/_deploy.yml` の該当箇所を更新します。
+デプロイは `wrangler deploy` で行い、`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `DATABASE_URL`（マイグレーション用）を GitHub Secrets から渡します。アプリの環境変数自体は `wrangler.jsonc` の `vars` と Workers Secrets が担います。
 
 ---
 
@@ -185,6 +170,5 @@ env {
 ## 参照
 
 - [開発ガイド - 環境変数](development.md#環境変数) - 開発環境の概要
-- [README - 環境変数](../README.md#環境変数) - クイックスタート向け
-- [認証ガイド](authentication.md) - Firebase 等の認証関連環境変数
-- [デプロイガイド](../deploy/deployment.md) - デプロイ時の環境変数（`PROJECT_ID`, `REGION` 等）
+- [README - 環境変数](../../README.md#環境変数) - クイックスタート向け
+- [Cloudflare Workers デプロイガイド](../deploy/cloudflare-workers.md) - デプロイ時の環境変数

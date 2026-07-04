@@ -9,9 +9,9 @@ export TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgresql://postgres:postgres@lo
 echo "==> Starting test database..."
 docker compose -f "$ROOT_DIR/docker-compose.yml" up -d postgres-test --wait
 
-echo "==> Running prisma migrate deploy..."
+echo "==> Running drizzle migrations..."
 cd "$ROOT_DIR/packages/database"
-DATABASE_URL="$TEST_DATABASE_URL" bunx prisma migrate deploy
+DATABASE_URL="$TEST_DATABASE_URL" bun run db:migrate
 
 echo "==> Running Playwright E2E tests..."
 cd "$ROOT_DIR/apps/client"
