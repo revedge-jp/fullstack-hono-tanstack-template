@@ -13,8 +13,11 @@ export const tasks = pgTable(
       .references(() => authUsers.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     status: text("status").notNull().default("todo"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // precision: 3（ミリ秒）— JS の Date はミリ秒精度のため、DB 側をマイクロ秒のままにすると
+    // keyset ページネーションのカーソル（createdAt を JS で往復させる）で μ 秒が切り捨てられ、
+    // 同一ミリ秒内の行がページ境界ですり抜ける。精度を JS と揃えてラウンドトリップを正確にする。
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
   },
   (table) => [
     unique("tasks_owner_id_title_unique").on(table.ownerId, table.title),

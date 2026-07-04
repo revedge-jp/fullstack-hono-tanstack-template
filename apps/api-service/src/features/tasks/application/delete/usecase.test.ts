@@ -6,7 +6,7 @@ import { makeDeleteTask } from "./usecase";
 function buildRepo(overrides: Partial<TasksRepository> = {}): TasksRepository {
   return {
     create: () => errAsync("Unexpected" as const),
-    list: () => okAsync({ items: [] }),
+    list: () => okAsync({ items: [], hasMore: false }),
     getById: () => okAsync(null),
     update: (task) => okAsync(task),
     delete: () => okAsync(undefined),

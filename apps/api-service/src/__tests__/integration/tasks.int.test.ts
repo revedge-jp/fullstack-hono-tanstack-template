@@ -44,7 +44,7 @@ describe("TasksRepository (実DB)", () => {
     const task = created.value;
     expect(task.status).toBe("todo");
 
-    const listed = await tasksRepository.list({ ownerId: OWNER_ID });
+    const listed = await tasksRepository.list({ ownerId: OWNER_ID, limit: 50 });
     expect(listed.isOk()).toBe(true);
     if (listed.isOk()) {
       expect(listed.value.items.some((t) => t.id === task.id)).toBe(true);
@@ -90,6 +90,56 @@ describe("TasksRepository (実DB)", () => {
     if (result.isOk()) {
       expect(result.value).toBeNull();
     }
+  });
+
+  test("keyset ページネーション: limit 件ずつ取得し、重複も欠落もなく全件を辿れる", async () => {
+    const pgOwner = `int-test-pagination-${crypto.randomUUID()}`;
+    await db.insert(authUsers).values({
+      id: pgOwner,
+      name: "Pagination Test User",
+      email: `${pgOwner}@example.com`,
+    });
+
+    const createdIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const created = await tasksRepository.create({
+        ownerId: pgOwner,
+        title: title(`Page task ${i} ${crypto.randomUUID()}`),
+      });
+      expect(created.isOk()).toBe(true);
+      if (created.isOk()) {
+        createdIds.push(created.value.id);
+      }
+    }
+
+    const seen: string[] = [];
+    let after: { createdAt: Date; id: string } | undefined;
+    let pages = 0;
+    while (pages < 10) {
+      const page = await tasksRepository.list({ ownerId: pgOwner, limit: 2, after });
+      expect(page.isOk()).toBe(true);
+      if (!page.isOk()) {
+        break;
+      }
+      seen.push(...page.value.items.map((t) => t.id));
+      pages += 1;
+      if (!page.value.hasMore) {
+        break;
+      }
+      const last = page.value.items.at(-1);
+      expect(last).toBeDefined();
+      if (!last) {
+        break;
+      }
+      after = { createdAt: last.createdAt, id: last.id };
+    }
+
+    // 5件を limit=2 で辿ると 3 ページ、重複・欠落なし
+    expect(pages).toBe(3);
+    expect(new Set(seen).size).toBe(5);
+    expect(seen.sort()).toEqual([...createdIds].sort());
+
+    await db.delete(authUsers).where(eq(authUsers.id, pgOwner));
   });
 
   test("所有者が異なる delete は NotFound を返す", async () => {

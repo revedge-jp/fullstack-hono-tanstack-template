@@ -1,6 +1,6 @@
 import { isPgError } from "@app/shared/db-error";
 import { type Database, tasks } from "@repo/db";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 import { err, ok, ResultAsync } from "neverthrow";
 import type { TasksRepository } from "../domain/tasks.repository";
 import { mapDbTaskToDomain } from "./mappers";
@@ -17,14 +17,29 @@ export function createTasksRepository(deps: { db: Database }): TasksRepository {
         return row ? ok(mapDbTaskToDomain(row)) : err("Unexpected" as const);
       }),
 
-    list: ({ ownerId }) =>
+    list: ({ ownerId, limit, after }) =>
       ResultAsync.fromPromise(
         db.query.tasks.findMany({
-          where: eq(tasks.ownerId, ownerId),
-          orderBy: (t, { desc }) => desc(t.createdAt),
+          where: and(
+            eq(tasks.ownerId, ownerId),
+            // keyset: (createdAt, id) の複合キーで after より「後ろ」（降順で古い側）に絞る。
+            // createdAt が同時刻の行は id でタイブレークする（OFFSET と違い行ズレしない）
+            after
+              ? or(
+                  lt(tasks.createdAt, after.createdAt),
+                  and(eq(tasks.createdAt, after.createdAt), lt(tasks.id, after.id)),
+                )
+              : undefined,
+          ),
+          orderBy: [desc(tasks.createdAt), desc(tasks.id)],
+          // limit+1 件フェッチして「次のページがあるか」を判定する
+          limit: limit + 1,
         }),
         () => "Unexpected" as const,
-      ).map((rows) => ({ items: rows.map(mapDbTaskToDomain) })),
+      ).map((rows) => ({
+        items: rows.slice(0, limit).map(mapDbTaskToDomain),
+        hasMore: rows.length > limit,
+      })),
 
     getById: (id, ownerId) =>
       ResultAsync.fromPromise(

@@ -20,7 +20,7 @@ function buildRepo(overrides: Partial<TasksRepository> = {}): TasksRepository {
           updatedAt: new Date(),
         }),
       ),
-    list: () => okAsync({ items: [] }),
+    list: () => okAsync({ items: [], hasMore: false }),
     getById: () => okAsync(null),
     update: (task) => okAsync(task),
     delete: () => okAsync(undefined),
@@ -36,12 +36,12 @@ function buildActivityRecorder(overrides: Partial<ActivityRecorder> = {}): Activ
 }
 
 function buildLogger() {
-  const warned: unknown[] = [];
+  const warned: { obj: unknown; msg?: string }[] = [];
   return {
     warned,
     logger: {
-      warn: (obj: unknown) => {
-        warned.push(obj);
+      warn: (obj: unknown, msg?: string) => {
+        warned.push({ obj, msg });
       },
     },
   };
@@ -109,6 +109,7 @@ describe("tasks.create usecase", () => {
       expect(r.value.item.id).toBe(ID_1);
     }
     expect(warned).toHaveLength(1);
-    expect(warned[0]).toEqual({ err: "Unexpected", taskId: ID_1 });
+    expect(warned[0]?.obj).toEqual({ err: "Unexpected", taskId: ID_1 });
+    expect(warned[0]?.msg).toBe("activity の記録に失敗しました");
   });
 });

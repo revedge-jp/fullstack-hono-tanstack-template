@@ -22,7 +22,13 @@ const mockTask = reconstituteTask({
 
 type MockTasks = {
   createTask?: () => ResultAsync<{ item: { id: string } }, "Conflict" | "Invalid" | "Unexpected">;
-  listTasks?: () => ResultAsync<{ items: (typeof mockTask)[] }, "Unexpected">;
+  listTasks?: (input?: {
+    cursor?: string;
+    limit?: number;
+  }) => ResultAsync<
+    { items: (typeof mockTask)[]; nextCursor: string | null },
+    "Invalid" | "Unexpected"
+  >;
   getTask?: () => ResultAsync<typeof mockTask, "NotFound" | "Unexpected">;
   advanceTask?: () => ResultAsync<typeof mockTask, "AlreadyDone" | "NotFound" | "Unexpected">;
   deleteTask?: () => ResultAsync<void, "NotFound" | "Unexpected">;
@@ -32,7 +38,7 @@ type MockTasks = {
 function createTestApp(overrides: MockTasks = {}) {
   const tasks = {
     createTask: overrides.createTask ?? (() => okAsync({ item: { id: mockTask.id } })),
-    listTasks: overrides.listTasks ?? (() => okAsync({ items: [mockTask] })),
+    listTasks: overrides.listTasks ?? (() => okAsync({ items: [mockTask], nextCursor: null })),
     getTask: overrides.getTask ?? (() => okAsync(mockTask)),
     advanceTask: overrides.advanceTask ?? (() => okAsync(mockTask)),
     deleteTask: overrides.deleteTask ?? (() => okAsync(undefined)),
@@ -78,13 +84,40 @@ describe("POST /api/tasks — contract", () => {
 });
 
 describe("GET /api/tasks — contract", () => {
-  test("正常: 200 + { ok: true, data: { items } }", async () => {
+  test("正常: 200 + { ok: true, data: { items, nextCursor } }", async () => {
     const app = createTestApp();
     const res = await app.request("/api/tasks");
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.data.items).toHaveLength(1);
+    expect(body.data.nextCursor).toBeNull();
+  });
+
+  test("cursor / limit クエリがユースケースへ渡る", async () => {
+    let received: unknown;
+    const app = createTestApp({
+      listTasks: (input) => {
+        received = input;
+        return okAsync({ items: [], nextCursor: null });
+      },
+    });
+    const res = await app.request("/api/tasks?cursor=abc&limit=5");
+    expect(res.status).toBe(200);
+    expect(received).toMatchObject({ cursor: "abc", limit: 5 });
+  });
+
+  test("不正な cursor: 400 + { ok: false, error: 'Invalid' }", async () => {
+    const app = createTestApp({ listTasks: () => errAsync("Invalid" as const) });
+    const res = await app.request("/api/tasks?cursor=broken");
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: "Invalid" });
+  });
+
+  test("limit が範囲外(0)の場合: 400（クエリバリデーション）", async () => {
+    const app = createTestApp();
+    const res = await app.request("/api/tasks?limit=0");
+    expect(res.status).toBe(400);
   });
 });
 

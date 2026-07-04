@@ -23,7 +23,7 @@ const mockTask = reconstituteTask({
 function createTestApp() {
   const tasks = {
     createTask: () => okAsync({ item: { id: mockTask.id } }),
-    listTasks: () => okAsync({ items: [mockTask] }),
+    listTasks: () => okAsync({ items: [mockTask], nextCursor: null }),
     getTask: () => okAsync(mockTask),
     advanceTask: () => okAsync(mockTask),
     deleteTask: () => okAsync(undefined),
