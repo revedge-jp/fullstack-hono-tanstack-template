@@ -93,8 +93,8 @@ gh auth login          # 未認証の場合
 ```sh
 bun run dev           # モノレポ全体の dev（必要な型生成を依存で実行）
 bun run build         # 変更対象の build（Turbo 依存）
-bun run lint          # Biome
-bun run lint:fix      # Biome （--write --unsafe）
+bun run lint          # oxlint + Biome format check
+bun run lint:fix      # oxlint --fix + Biome format
 bun run typecheck     # TypeScript
 bun run test          # サーバーのテスト（統合/契約含む）
 bun run test:unit     # サーバーのユニットテスト

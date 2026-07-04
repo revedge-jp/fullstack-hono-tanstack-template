@@ -43,7 +43,7 @@ describe("requestLogger middleware", () => {
     expect(access?.level).toBe("info");
     expect(access?.bindings).toEqual({ requestId: "req-123" });
     expect(access?.obj).toMatchObject({ method: "GET", path: "/hello", status: 200 });
-    const durationMs = (access?.obj as { durationMs: number }).durationMs;
+    const durationMs = (access!.obj as { durationMs: number }).durationMs;
     expect(durationMs).toBeGreaterThanOrEqual(0);
   });
 

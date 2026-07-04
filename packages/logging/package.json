@@ -16,8 +16,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
-    "lint:fix": "biome check . --write --unsafe",
+    "lint": "oxlint . && biome check .",
+    "lint:fix": "oxlint --fix . && biome check . --write",
     "test": "bun test src",
     "test:unit": "bun test src"
   },

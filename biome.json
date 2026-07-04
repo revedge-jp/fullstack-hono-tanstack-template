@@ -1,9 +1,5 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.3.4/schema.json",
-  "plugins": [
-    "./biome-plugins/no-export-star.grit",
-    "./biome-plugins/no-window-location-href.grit"
-  ],
   "files": {
     "ignoreUnknown": true
   },
@@ -27,54 +23,7 @@
     }
   },
   "linter": {
-    "enabled": true,
-    "includes": ["**/*.{ts,tsx,js,jsx}"],
-    "rules": {
-      "recommended": true,
-      "correctness": {
-        "noUnusedVariables": "error",
-        "noUnusedImports": "error",
-        "useHookAtTopLevel": "error",
-        "useExhaustiveDependencies": "warn"
-      },
-      "style": {
-        "noNamespace": "error",
-        "useBlockStatements": "warn",
-        "useImportType": "error",
-        "noNonNullAssertion": "error"
-      },
-      "suspicious": {
-        "noExplicitAny": "warn",
-        "noArrayIndexKey": "warn",
-        "noConsole": {
-          "level": "warn",
-          "options": {
-            "allow": ["warn", "error", "info"]
-          }
-        },
-        "noDebugger": "error"
-      },
-      "complexity": {
-        "noUselessFragments": "error",
-        "useOptionalChain": "warn"
-      },
-      "performance": {
-        "noAccumulatingSpread": "warn",
-        "noImgElement": "warn"
-      },
-      "a11y": {
-        "useButtonType": "warn"
-      },
-      "nursery": {
-        "useSortedClasses": {
-          "level": "warn",
-          "options": {
-            "attributes": ["classList"],
-            "functions": ["clsx", "cva", "tw", "cn"]
-          }
-        }
-      }
-    }
+    "enabled": false
   },
   "javascript": {
     "formatter": {
@@ -100,7 +49,6 @@
   "overrides": [
     {
       "includes": ["**/*.gen.ts", "**/*.gen.tsx"],
-      "linter": { "enabled": false },
       "formatter": { "enabled": false },
       "assist": { "enabled": false }
     },
@@ -111,91 +59,8 @@
         "**/shared/ui-shadcn/**",
         "**/apps/client/shared/ui-shadcn/**"
       ],
-      "linter": { "enabled": false },
       "formatter": { "enabled": false },
       "assist": { "enabled": false }
-    },
-    {
-      "includes": [
-        "apps/client/app/globals.css",
-        "packages/tailwind-config/shared-styles.css",
-        "packages/ui/src/styles.css"
-      ],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noUnknownAtRules": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": [
-        "**/loading.tsx",
-        "**/*loading.tsx",
-        "**/*skeleton*.tsx",
-        "**/*-skeleton.tsx",
-        "**/skeleton/**/*.tsx"
-      ],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noArrayIndexKey": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": [
-        "**/scripts/**/*",
-        "**/*.config.*",
-        "**/*.test.*",
-        "**/*.spec.*",
-        "**/__tests__/**",
-        "**/tests/e2e/**",
-        "**/test-setup.ts",
-        "**/test-*.ts",
-        "**/debug-*.ts",
-        "**/instrumentation.ts"
-      ],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noConsole": "off",
-            "noExplicitAny": "off"
-          },
-          "style": {
-            "noNonNullAssertion": "off"
-          },
-          "performance": {
-            "noImgElement": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["**/infrastructure/**/*", "**/integrations/**/*", "apps/**/src/index.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noConsole": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": [
-        "apps/client/features/**/queries/**/*",
-        "apps/client/features/**/actions/**/*",
-        "apps/client/features/**/ui/**/*"
-      ],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noConsole": "off"
-          }
-        }
-      }
     }
   ]
 }

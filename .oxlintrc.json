@@ -1,0 +1,95 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "react", "oxc"],
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.output/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "**/report/**",
+    "**/*.gen.ts",
+    "**/*.gen.tsx",
+    "**/ui-shadcn/**",
+    "apps/client/components/ui/**"
+  ],
+  "rules": {
+    "no-unused-vars": "error",
+    "no-console": ["warn", { "allow": ["warn", "error", "info"] }],
+    "no-debugger": "error",
+    "curly": "warn",
+    "typescript/no-namespace": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-explicit-any": "warn",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/no-array-index-key": "warn",
+    "react/jsx-no-useless-fragment": "error",
+    "react/button-has-type": "warn",
+    "oxc/no-accumulating-spread": "warn"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/loading.tsx",
+        "**/*loading.tsx",
+        "**/*skeleton*.tsx",
+        "**/*-skeleton.tsx",
+        "**/skeleton/**/*.tsx"
+      ],
+      "rules": {
+        "react/no-array-index-key": "off"
+      }
+    },
+    {
+      "files": [
+        "**/scripts/**/*",
+        "**/*.config.*",
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/__tests__/**",
+        "**/tests/e2e/**",
+        "**/test-setup.ts",
+        "**/test-*.ts",
+        "**/debug-*.ts",
+        "**/instrumentation.ts"
+      ],
+      "rules": {
+        "no-console": "off",
+        "typescript/no-explicit-any": "off",
+        "typescript/no-non-null-assertion": "off"
+      }
+    },
+    {
+      "files": [
+        "**/infrastructure/**/*",
+        "**/integrations/**/*",
+        "apps/*/src/index.ts",
+        "packages/logging/src/**/*"
+      ],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": [
+        "apps/client/features/*/queries/**/*",
+        "apps/client/features/*/actions/**/*",
+        "apps/client/features/*/ui/**/*"
+      ],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ]
+}

@@ -463,7 +463,7 @@ describe("shifts.get usecase", () => {
 bun run check-all
 
 # 個別実行
-bun run lint          # Lint（Biome）
+bun run lint          # Lint（oxlint + Biome format check）
 bun run lint:fix      # Lint 自動修正
 bun run typecheck     # 型チェック
 bun run test          # テスト

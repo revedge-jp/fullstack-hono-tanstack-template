@@ -2,9 +2,13 @@
 # https://github.com/evilmartians/lefthook
 
 pre-commit:
-  parallel: true
+  piped: true # oxlint --fix → biome format の順で同一ファイルに書き込むため直列実行
   commands:
-    biome-check:
+    1_oxlint:
+      glob: "*.{js,ts,cjs,mjs,jsx,tsx}"
+      run: bunx oxlint --fix {staged_files}
+      stage_fixed: true
+    2_biome-format:
       glob: "*.{js,ts,cjs,mjs,jsx,tsx,json,jsonc}"
       run: bunx biome check --write --no-errors-on-unmatched --files-ignore-unknown=true --colors=off {staged_files}
       stage_fixed: true

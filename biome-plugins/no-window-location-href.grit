@@ -1,3 +1,0 @@
-`window.location.href = $_` where {
-  register_diagnostic(span=$_, message="window.location.href への代入は禁止されています。router.push() を使用してください。")
-}

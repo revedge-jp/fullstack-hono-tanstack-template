@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database** (`packages/database`): Drizzle ORM + PostgreSQL (via `@repo/db`)
 - **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/external/auth.ts`
 - **Testing**: `bun test` (native, no vitest/jest)
-- **Linter/Formatter**: Biome
+- **Linter**: oxlint / **Formatter**: Biome
 - **Quality strategy**: "generation vs verification" — see [品質ゲート ガイド](docs/dev/quality-gates.md) / [ADR-006](docs/architecture/adr-006-ai-era-quality-strategy.md)
 
 ## Commands
@@ -20,8 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 bun run dev           # Start all apps (Turborepo)
 bun run build         # Build all
 bun run typecheck     # TypeScript check across workspace
-bun run lint          # Biome lint (all)
-bun run lint:fix      # Biome lint + auto-fix
+bun run lint          # oxlint + Biome format check (all)
+bun run lint:fix      # oxlint --fix + Biome format
 ```
 
 ### Testing
