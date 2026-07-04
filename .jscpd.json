@@ -1,0 +1,23 @@
+{
+  "path": ["apps", "packages"],
+  "format": ["typescript", "tsx", "javascript", "jsx"],
+  "minTokens": 50,
+  "threshold": 5,
+  "gitignore": true,
+  "reporters": ["console"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/.output/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/generated/**",
+    "**/coverage/**",
+    "**/routeTree.gen.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/__tests__/**",
+    "**/components/ui/**"
+  ]
+}

@@ -431,8 +431,10 @@ bun run arch:check
 - [ ] Containerに登録されているか
 - [ ] app.ts にルーターをマウントしたか
 - [ ] ContractsにHTTPスキーマが定義されているか
-- [ ] `bun run arch:check`が通るか
+- [ ] `bun run arch:check`が通るか（`check:feature` の feature 構造完全性チェックを含む）
 - [ ] `bun run typecheck`が通るか
+- [ ] ロジックを変更した場合は `cd apps/api-service && bun run mutation` で "perpetually green" なテストがないか確認したか
+  （詳細は [品質ゲート ガイド](./quality-gates.md)）
 
 ## 外部SDKが必要な場合
 

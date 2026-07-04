@@ -23,6 +23,7 @@
     "@repo/tailwind-config",
     "tw-animate-css",
     "@feature-sliced/steiger-plugin",
-    "pino-pretty"
+    "pino-pretty",
+    "@stryker-mutator/command-runner"
   ]
 }
