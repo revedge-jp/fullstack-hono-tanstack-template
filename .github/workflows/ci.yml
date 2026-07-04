@@ -270,9 +270,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-chromium-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-playwright-chromium-
+            ${{ runner.os }}-playwright-chromium-v2-
 
       - uses: ./.github/actions/setup-workspace
         with:
@@ -285,7 +285,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-chromium-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('**/bun.lock') }}
 
       - name: Run database migrations
         working-directory: packages/database
