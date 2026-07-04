@@ -66,7 +66,7 @@ export function makeCreatePost(deps: { postsRepository: PostsRepository }) {
 - **Domain層の関数はDTOを知らない**（プリミティブな値やDomainオブジェクトを受け取る）
 - Application層のバリデータ（`validateXxx`）が、DTOを分解してDomain層の不変条件検証（`validateXxxInvariants`）を呼び出す
 - HTTP層で契約スキーマ（`CreateXxxRequestSchema`）のバリデーションは完了しているが、Application層でも型の一致や追加の検証を行う
-- ドメイン層は外部ライブラリ（Zod、Prisma、HTTP等）に依存させない
+- ドメイン層は外部ライブラリ（Zod、Drizzle、HTTP等）に依存させない
 
 ### 型安全性と型アサーション
 
@@ -117,7 +117,7 @@ application/create/steps/
 
 ---
 
-## Server設計（Hono + DI + Prisma）
+## Server設計（Hono + DI + Drizzle）
 
 ### スクリプト（api-service）
 ```sh
@@ -133,10 +133,10 @@ bun run coverage         # カバレッジ
 
 ### DI/コンテナ
 - 依存は`src/container.ts`で組み立て、`createApp`でルータへ注入
-- DBは`@repo/db`の`prisma`を利用（`@prisma/client`ベース）
+- DBは`@repo/db`の`createDb()`を利用（Drizzle ORM + postgres-js）
 
 ### ルーティング/バリデーション
-- ルータは`features/*/presentation/`（共通ルートは`routes/`）配下。バリデーションは`sValidator`（`@hono/standard-validator`）でハンドラ直前に実施
+- ルータは`features/*/presentation/`（共通ルートは`routes/`）配下。バリデーションは`zValidator`（`@hono/zod-validator`）でハンドラ直前に実施
 - ルータ→ユースケース→ステップの流れで、HTTP/ドメインの責務を分離
 
 主要エンドポイント（例）
@@ -165,9 +165,9 @@ curl -s http://localhost:8080/api/health | jq .
 - `middlewares`、`routes`、`features`層から外部SDKを直接importしない
 - `integrations`層は外部SDKの薄いラッパーとして、アプリケーション固有の型やエラーハンドリングを提供する
 
-### DB/Prisma
-- `packages/database`は`@prisma/client`を利用。`prisma generate`で`node_modules`に生成
-- 生成物はGit管理しない（DB操作はルートのスクリプトで実行）
+### DB/Drizzle
+- `packages/database`はDrizzle ORMを利用。スキーマは`src/schema/*.ts`のTypeScriptファイルで定義
+- マイグレーションは`drizzle/`配下にGit管理（`bun run db:generate`で生成、`db:migrate`で適用）
 
 ### テスト
 - ユニット: ステップ/ユースケース単体の振る舞いを`Result`で検証

@@ -239,7 +239,7 @@ export function makeCreatePostStep(deps: { postsRepository: PostsRepository }) {
 ```typescript
 // ❌ Domain層に外部ライブラリを持ち込まない
 import { z } from "zod";  // NG
-import type { PrismaClient } from "@repo/db";  // NG
+import type { Database } from "@repo/db";  // NG
 
 // ✅ 純粋な関数・型のみ
 export function isValidPostTitle(title: string): boolean {
@@ -494,6 +494,6 @@ bun run knip
 - [開発ガイド](development.md) - 開発環境の詳細
 - [機能追加ガイド](adding-features.md) - クリーンアーキテクチャの実装例
 - [ドメインモデル設計](../architecture/domain-model.md) - DDD/ROPの詳細
-- [api-service README](../apps/api-service/README.md) - サーバー側の詳細
-- [client README](../apps/client/README.md) - クライアント側の詳細
+- [api-service README](../../apps/api-service/README.md) - サーバー側の詳細
+- [client README](../../apps/client/README.md) - クライアント側の詳細
 

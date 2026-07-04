@@ -164,6 +164,5 @@ https://github.com/{owner}/{repo}/settings/security_analysis
 
 ## 関連ドキュメント
 
-- [CI/CD パイプライン](../.github/workflows/ci.yml) - CIの詳細
-- [デプロイガイド](deployment.md) - デプロイフローの全体像
-- [GitHub Secrets 設定](github-secrets-setup.md) - シークレットの設定方法
+- [CI/CD パイプライン](../../.github/workflows/ci.yml) - CIの詳細
+- [Cloudflare Workers デプロイガイド](cloudflare-workers.md) - デプロイフローの全体像とシークレット設定

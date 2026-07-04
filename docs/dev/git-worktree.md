@@ -88,7 +88,7 @@ cp ../ax-saas-template/.env .env
 bun install
 ```
 
-### 3. Prisma Client 生成
+### 3. マイグレーションファイル生成（スキーマ変更時のみ）
 
 ```bash
 bun run db:generate
@@ -234,7 +234,7 @@ git worktree prune
 worktree ごとに完全な `node_modules` が必要なため、初回は時間がかかります。
 Bun のグローバルキャッシュにより、2回目以降は高速化されます。
 
-### Q: Prisma のスキーマ変更が反映されない
+### Q: Drizzle のスキーマ変更が反映されない
 
 ```bash
 # 各 worktree で再生成が必要

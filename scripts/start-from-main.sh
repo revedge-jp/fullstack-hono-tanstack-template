@@ -64,13 +64,6 @@ LEFTHOOK=0 bun install --silent
 if [ -f "packages/database/package.json" ]; then
   echo "🗄️ データベースをセットアップ中..."
 
-  echo "   🔧 Prismaクライアントを生成中..."
-  if bun run db:generate >/dev/null 2>&1; then
-    echo "   ✅ Prismaクライアントが生成されました"
-  else
-    echo "   ⚠️ Prisma generateに失敗しました（続行中...）"
-  fi
-
   echo "   🔄 データベースマイグレーションを実行中..."
   MIGRATE_OUTPUT=$(bun run db:migrate 2>&1 || true)
   if echo "${MIGRATE_OUTPUT}" | grep -q "Already in sync\|Migration.*applied"; then
