@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+
 import type { SessionUser } from "@/shared/lib/app-context";
 
 const mockUser: SessionUser = { id: "u1", email: "a@example.com", name: "A" };

@@ -9,6 +9,7 @@ import { prettyJSON } from "hono/pretty-json";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
+
 import { loadConfig } from "./config";
 import { createContainer } from "./container";
 import { requestLogger } from "./middlewares/request-logger";

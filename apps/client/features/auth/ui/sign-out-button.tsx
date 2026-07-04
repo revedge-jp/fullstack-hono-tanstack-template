@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "@tanstack/react-router";
+
 import { Button } from "@/components/ui/button";
+
 import { signOut } from "../actions/sign-out";
 
 export function SignOutButton() {

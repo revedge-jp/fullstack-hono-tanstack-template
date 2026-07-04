@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import type { AuthUser } from "@app/features/auth/domain/models";
 import { createAuthRouter } from "@app/features/auth/presentation/router";
 import { Hono } from "hono";

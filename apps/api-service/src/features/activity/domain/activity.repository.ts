@@ -1,4 +1,5 @@
 import type { ResultAsync } from "neverthrow";
+
 import type { Activity } from "./models";
 
 export type ActivityRepository = {

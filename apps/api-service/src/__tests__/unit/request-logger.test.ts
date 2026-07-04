@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { type RequestLogger, requestLogger } from "@app/middlewares/request-logger";
 import { Hono } from "hono";
 import { requestId } from "hono/request-id";

@@ -2,7 +2,9 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
+
 import { createTask } from "../actions/create-task";
 
 export function CreateTaskForm() {
@@ -39,7 +41,7 @@ export function CreateTaskForm() {
           追加
         </Button>
       </div>
-      {message && <p className="text-destructive text-sm">{message}</p>}
+      {message && <p className="text-sm text-destructive">{message}</p>}
     </form>
   );
 }

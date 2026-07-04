@@ -1,4 +1,5 @@
 import { createFactory } from "hono/factory";
+
 import type { RequestLogger } from "./middlewares/request-logger";
 
 type AppEnv = {

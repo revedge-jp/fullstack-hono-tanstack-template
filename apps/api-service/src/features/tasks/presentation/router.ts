@@ -6,6 +6,7 @@ import { zValidator } from "@hono/zod-validator";
 import type { Context } from "hono";
 import { err } from "neverthrow";
 import { z } from "zod";
+
 import type { TasksService } from "../application/service";
 
 const CreateTaskRequestSchema = z.object({ title: z.string().min(1).max(200) });

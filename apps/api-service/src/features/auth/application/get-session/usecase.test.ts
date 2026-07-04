@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+
 import { errAsync, okAsync } from "neverthrow";
+
 import type { AuthUser } from "../../domain/models";
 import { makeGetSession } from "./usecase";
 

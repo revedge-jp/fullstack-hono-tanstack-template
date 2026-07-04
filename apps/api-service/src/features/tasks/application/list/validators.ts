@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+
 import { decodeTaskCursor, type TaskCursor } from "./cursor";
 
 export const DEFAULT_TASKS_PAGE_SIZE = 20;

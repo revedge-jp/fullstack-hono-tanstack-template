@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+
 import { authUsers } from "./auth";
 
 export const TASK_STATUS_VALUES = ["todo", "in_progress", "done"] as const;

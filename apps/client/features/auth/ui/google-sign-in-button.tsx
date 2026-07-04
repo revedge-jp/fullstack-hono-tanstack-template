@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
+
 import { signInWithGoogle } from "../actions/sign-in";
 
 export function GoogleSignInButton() {
@@ -24,7 +26,7 @@ export function GoogleSignInButton() {
       <Button onClick={handleClick} variant="outline" disabled={isPending}>
         {isPending ? "リダイレクト中..." : "Google でサインイン"}
       </Button>
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
     </div>
   );
 }

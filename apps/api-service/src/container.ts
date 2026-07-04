@@ -9,6 +9,7 @@ import { createAuth } from "@app/integrations/external/auth";
 import { createDevAuth, type DevAuth } from "@app/integrations/external/dev-auth";
 import { createDb } from "@repo/db";
 import { createLogger } from "@repo/logging";
+
 import type { AppConfig } from "./config";
 
 export type Container = {
