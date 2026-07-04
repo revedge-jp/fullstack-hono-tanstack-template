@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "ミューテーションテスト。domain/application の純粋ロジック層のみを対象にし、DB不要のテストで変異体を検出する。",
+  "mutate": [
+    "src/features/*/domain/**/*.ts",
+    "src/features/*/application/**/*.ts",
+    "!src/features/**/*.test.ts",
+    "!src/features/*/application/service.ts",
+    "!src/features/*/application/index.ts",
+    "!src/features/*/application/ports.ts"
+  ],
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "bun test src/features src/__tests__/contract"
+  },
+  "coverageAnalysis": "off",
+  "reporters": ["clear-text", "html"],
+  "timeoutMS": 20000,
+  "concurrency": 4,
+  "thresholds": { "high": 95, "low": 90, "break": 90 }
+}

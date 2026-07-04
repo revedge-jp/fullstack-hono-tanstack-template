@@ -5,6 +5,14 @@
 const SERVER_FEATURE_DIRS = ["activity", "auth", "tasks"];
 const CLIENT_FEATURE_DIRS = ["auth"];
 
+// npm パッケージへの to.path は「解決済みファイルパス」に対してマッチする
+// （インポート指定子そのものではない）。node_modules 配下のパスは
+// パッケージマネージャ・レイアウト（bun の `.bun/<pkg>@<ver>+hash/`、pnpm の `.pnpm/` 等）で
+// 形が変わるため、`node_modules/` の後に任意の中間パスを許容してパッケージ名にマッチさせる。
+// `.*` を optional group ( (…)? ) で包むと dependency-cruiser の安全な正規表現チェックに
+// 引っかかる（ReDoS 疑いで弾かれる）ため、group化せずそのまま使う。
+const npmPackagePath = (pkg) => `(^|/)node_modules/.*/${pkg}/`;
+
 const serverCrossFeatureRules = SERVER_FEATURE_DIRS.map((feature) => ({
   name: `server-application-cross-features-${feature}`,
   severity: "error",
@@ -30,18 +38,13 @@ module.exports = {
     tsConfig: {
       fileName: "tsconfig.depcruise.json",
     },
+    // doNotFollow は node_modules 配下への「再帰」を止めるが、エッジ自体は葉として報告される
+    // ため to.path での判定に使える。exclude は node_modules を含めない
+    // （含めるとエッジ自体がグラフから消え、npm パッケージを禁止する to.path ルールが
+    // 全く発火しなくなる — 実際にこの不具合が存在していた）。
     doNotFollow: { path: "node_modules" },
     exclude: {
-      path: [
-        "node_modules",
-        "\\.next",
-        "dist",
-        "build",
-        "generated",
-        "__tests__",
-        "\\.test\\.",
-        "\\.spec\\.",
-      ],
+      path: ["\\.next", "dist", "build", "generated", "__tests__", "\\.test\\.", "\\.spec\\."],
     },
   },
   forbidden: [
@@ -54,11 +57,13 @@ module.exports = {
     },
     ...clientCrossFeatureRules,
     // server: domain 層で DB 直参照禁止
+    // @repo/db は tsconfig paths でワークスペース内ファイルに解決されるため、
+    // to.path は解決後のファイルパス（packages/database/）にマッチさせる
     {
       name: "server-domain-no-db",
       severity: "error",
       from: { path: "^apps/api-service/src/features/.+/domain/" },
-      to: { path: "^(?:@repo/db|drizzle-orm(?:/|$))" },
+      to: { path: `^packages/database/|${npmPackagePath("drizzle-orm")}` },
     },
     // server: features -> routes の逆参照禁止
     {
@@ -112,7 +117,7 @@ module.exports = {
       severity: "error",
       from: { path: "^apps/api-service/src/features/[^/]+/domain/" },
       to: {
-        path: "^(?:@?hono(?:/|$)|zod|axios|node-fetch)",
+        path: ["hono", "zod", "axios", "node-fetch"].map(npmPackagePath).join("|"),
       },
     },
     // server: infrastructure から application/presentation/routes への逆依存禁止
@@ -129,7 +134,7 @@ module.exports = {
       name: "server-application-no-db",
       severity: "error",
       from: { path: "^apps/api-service/src/features/[^/]+/application/" },
-      to: { path: "^(?:@repo/db|drizzle-orm(?:/|$))" },
+      to: { path: `^packages/database/|${npmPackagePath("drizzle-orm")}` },
     },
     ...serverCrossFeatureRules,
     // server: middlewares から integrations への直接参照禁止（ports.ts 経由を強制）
@@ -163,7 +168,7 @@ module.exports = {
         path: "^apps/api-service/src/features/",
         pathNot: "^apps/api-service/src/features/[^/]+/presentation/",
       },
-      to: { path: "^@?hono(?:/|$)" },
+      to: { path: npmPackagePath("hono") },
     },
   ],
 };

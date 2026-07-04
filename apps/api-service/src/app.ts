@@ -1,7 +1,7 @@
 import { createApp as createHonoApp } from "@app/factory";
-import { createActivityRouter } from "@app/features/activity/presentation/router";
-import { createAuthRouter } from "@app/features/auth/presentation/router";
-import { createTasksRouter } from "@app/features/tasks/presentation/router";
+import { createActivityRouter } from "@app/features/activity/presentation";
+import { createAuthRouter } from "@app/features/auth/presentation";
+import { createTasksRouter } from "@app/features/tasks/presentation";
 import { stringifyErrorSafe } from "@repo/logging";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";

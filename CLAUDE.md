@@ -8,9 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Backend** (`apps/api-service`): Hono on Bun
 - **Frontend** (`apps/client`): TanStack Start + React 19 + Tailwind v4
 - **Database** (`packages/database`): Drizzle ORM + PostgreSQL (via `@repo/db`)
-- **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/auth.ts`
+- **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/external/auth.ts`
 - **Testing**: `bun test` (native, no vitest/jest)
 - **Linter/Formatter**: Biome
+- **Quality strategy**: "generation vs verification" — see [品質ゲート ガイド](docs/dev/quality-gates.md) / [ADR-006](docs/architecture/adr-006-ai-era-quality-strategy.md)
 
 ## Commands
 
@@ -46,9 +47,19 @@ bun run db:studio     # Drizzle Studio
 
 ### Architecture Checks
 ```bash
-bun run arch:check    # All architecture/dependency checks
+bun run arch:check    # All architecture/dependency checks (incl. jscpd + guard self-test)
 bun run dep:cycles    # Detect circular dependencies
 bun run knip          # Detect unused exports / dependencies
+bun run check:feature # Feature structure completeness (required layers/tests/wiring)
+```
+
+### Quality Gates (see [quality-gates.md](docs/dev/quality-gates.md) for full detail)
+```bash
+bun run coverage:check         # api-service domain/application coverage threshold (85%)
+bun run coverage:check:client  # client actions/queries coverage threshold (80%)
+cd apps/api-service && bun run mutation  # Mutation testing (domain/application, break 90%)
+bun run dup:check              # Duplicate code detection (jscpd, threshold 5%)
+bun run arch:selftest          # Verify arch-guards actually catch known violations
 ```
 
 ## Architecture: api-service

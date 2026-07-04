@@ -20,16 +20,17 @@ if [ -n "$EXPORT_VIOL" ]; then
 fi
 echo "OK"
 
-echo "[guard] api-service の throw 禁止（middlewares とテストは除外）"
+echo "[guard] api-service の throw 禁止（middlewares・起動時 config 検証・テストは除外）"
 # 除外対象を先に -prune し、ファイルのみを -type f で絞り込む
+# config.ts は起動時（リクエスト処理の外）の fail-fast 検証であり、ROP フローの対象外のため除外する
 THROW_VIOL=$(find apps/api-service/src \
-  \( -path '*/__tests__/*' -o -name '*.test.ts' -o -name '*.spec.ts' -o -path '*/middlewares/*' \) -prune -o \
+  \( -path '*/__tests__/*' -o -name '*.test.ts' -o -name '*.spec.ts' -o -path '*/middlewares/*' -o -name 'config.ts' \) -prune -o \
   -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
-  xargs -0 grep -nE '\\bthrow\\b' -- || true)
+  xargs -0 grep -nE '\bthrow\b' -- || true)
 if [ -z "$THROW_VIOL" ]; then
   echo "OK"
 else
-  echo "違反: api-service では throw の使用が禁止されています（middlewares とテストは除外）"
+  echo "違反: api-service では throw の使用が禁止されています（middlewares・config.ts・テストは除外）"
   echo "$THROW_VIOL" | while IFS= read -r line; do
     echo "  • $line"
   done
@@ -254,3 +255,6 @@ else
   echo "$BAD_PORTS" | while IFS= read -r line; do echo "  • $line"; done
   exit 1
 fi
+
+echo "[guard] feature 構造の完全性（必須の層・co-located テスト・配線）"
+node scripts/check/feature-structure.mjs

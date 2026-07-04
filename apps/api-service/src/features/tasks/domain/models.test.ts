@@ -44,6 +44,16 @@ describe("makeTaskTitle", () => {
       expect(r.error).toBe("InvalidTitle");
     }
   });
+
+  test("正常: 境界値 1文字を許可する", () => {
+    const r = makeTaskTitle("a");
+    expect(r.isOk()).toBe(true);
+  });
+
+  test("正常: 境界値 200文字ちょうどを許可する", () => {
+    const r = makeTaskTitle("a".repeat(200));
+    expect(r.isOk()).toBe(true);
+  });
 });
 
 describe("advanceTaskStatus", () => {
