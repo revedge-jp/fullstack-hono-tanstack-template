@@ -77,20 +77,26 @@ presentation → application → domain ← infrastructure
 src/features/{feature}/
 ├── domain/
 │   ├── models.ts                  # Entities, value objects (pure, no external deps)
-│   └── {feature}.repository.ts   # Repository interface
+│   └── {feature}.repository.ts   # Repository interface (only if the feature owns persistence)
 ├── infrastructure/
 │   ├── mappers.ts                 # DB ↔ Domain conversion
 │   └── {feature}.repository.drizzle.ts
 ├── application/
+│   ├── ports.ts                    # Abstract port types this feature needs from other features (optional)
 │   ├── {action}/
 │   │   ├── validators.ts          # DTO definition (XxxInput) + Zod validation
-│   │   ├── steps.ts               # makeXxxStep(deps) → Result<T, E>
-│   │   ├── usecase.ts             # makeXxx(deps) → flow chain
+│   │   ├── steps.ts               # makeXxxStep(deps) → ResultAsync<T, E>
+│   │   ├── usecase.ts             # makeXxx(deps) → okAsync().andThen() chain
 │   │   └── mappers.ts             # Domain → response shape
-│   └── service.ts                 # Aggregates use cases (injected via DI)
+│   └── service.ts                 # Aggregates use cases (injected via DI; required once a feature has 2+ actions)
 └── presentation/
-    └── router.ts                  # HTTP I/O only, calls service
+    ├── router.ts                  # HTTP I/O only, calls service
+    └── index.ts                   # Re-exports router (barrel used by app.ts)
 ```
+Canonical reference implementation: `tasks` (full CRUD + ports pattern). `auth` is a legitimate minimal
+exception (single usecase, no owned repository — Better Auth handles its own persistence);
+`scripts/check/feature-structure.mjs` accounts for this and only requires `service.ts`/`index.ts`/repository
+for features that actually need them.
 
 ### Use case pattern (ROP)
 ```typescript
@@ -119,6 +125,44 @@ export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
 - **`process.env` forbidden** in features and integrations; use `src/config.ts` → DI via container
 - **DI**: `src/container.ts` assembles all deps; `src/app.ts` mounts routers
 - **Error types** defined at top of `usecase.ts`, non-exported
+
+### Feature-to-feature integration (ports + adapter + DI)
+
+**A feature must never `import` another feature directly** (`dependency-cruiser` enforces this per-feature —
+`server-application-cross-features-{feature}` rules in `dependency-cruiser.config.cjs`; add a new entry there
+when you add a feature). When feature A needs feature B's behavior:
+
+1. **A declares the port it needs** in `features/A/application/ports.ts` — an abstract type expressing
+   A's own requirement, with no knowledge of B:
+   ```typescript
+   // features/tasks/application/ports.ts
+   export type ActivityRecorder = {
+     recordTaskCreated(task: { id: string; title: string }): ResultAsync<void, "Unexpected">;
+   };
+   ```
+2. **The adapter implementing the port lives in `integrations/composition/`**, and is the only place the
+   A→B connection is visible. It's built from B's `application/service.ts`:
+   ```typescript
+   // integrations/composition/activity-recorder.ts
+   export function createActivityRecorder(deps: { activity: ActivityService }): ActivityRecorder {
+     return {
+       recordTaskCreated: (task) =>
+         deps.activity.recordActivity({ kind: "task_created", message: `...` }).map(() => undefined),
+     };
+   }
+   ```
+3. **`container.ts` wires it**: build the "provider" feature's service first, wrap it with the adapter,
+   then inject into the "consumer" feature's service.
+
+Real example: `tasks` → `activity` (`features/tasks/application/ports.ts`,
+`integrations/composition/activity-recorder.ts`, wiring in `container.ts`).
+
+`integrations/` is split by role:
+- `integrations/external/` — thin wrappers around third-party SDKs (e.g. `external/auth.ts` for Better Auth).
+  Must not import from `features/`.
+- `integrations/composition/` — feature-to-feature adapters as above. May import a feature's
+  `application/service.ts` or `application/ports.ts`, but not its `domain`/`infrastructure`/`presentation`
+  (`server-integrations-composition-only-application` dependency-cruiser rule).
 
 ## Architecture: client
 
@@ -231,7 +275,7 @@ if (result.isErr()) { /* result.error */ }
 **api-service — only when applicable:**
 - `validators.test.ts` — if `validators.ts` has non-trivial logic
 - `domain/models.test.ts` — if domain has behavior (value objects)
-- Append to `__tests__/scenario/{feature}.scenario.test.ts` — multi-step flows
+- `__tests__/integration/{feature}.int.test.ts` — real-DB behavior (constraints, ownership scoping)
 
 **client — always:**
 - `actions/{action}.test.ts` (co-located)
