@@ -9,6 +9,7 @@ type CreateTaskError = "Conflict" | "Invalid" | "Unexpected";
 export function makeCreateTask(deps: {
   tasksRepository: TasksRepository;
   activityRecorder: ActivityRecorder;
+  logger: { warn: (obj: unknown, msg?: string) => void };
 }) {
   const createTaskStep = makeCreateTaskStep(deps);
   return function createTask(

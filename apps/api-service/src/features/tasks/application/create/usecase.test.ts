@@ -35,6 +35,18 @@ function buildActivityRecorder(overrides: Partial<ActivityRecorder> = {}): Activ
   };
 }
 
+function buildLogger() {
+  const warned: unknown[] = [];
+  return {
+    warned,
+    logger: {
+      warn: (obj: unknown) => {
+        warned.push(obj);
+      },
+    },
+  };
+}
+
 describe("tasks.create usecase", () => {
   test("正常: 有効な入力でタスクを作成し activity を記録する", async () => {
     let recordedTaskId: string | undefined;
@@ -45,7 +57,8 @@ describe("tasks.create usecase", () => {
         return okAsync(undefined);
       },
     });
-    const usecase = makeCreateTask({ tasksRepository, activityRecorder });
+    const { logger, warned } = buildLogger();
+    const usecase = makeCreateTask({ tasksRepository, activityRecorder, logger });
 
     const r = await usecase({ ownerId: "user-1", title: "Write docs" });
     expect(r.isOk()).toBe(true);
@@ -53,12 +66,14 @@ describe("tasks.create usecase", () => {
       expect(r.value.item.id).toBe(ID_1);
     }
     expect(recordedTaskId).toBe(ID_1);
+    expect(warned).toHaveLength(0);
   });
 
   test("異常: タイトルが空の場合 Invalid を返す", async () => {
     const tasksRepository = buildRepo();
     const activityRecorder = buildActivityRecorder();
-    const usecase = makeCreateTask({ tasksRepository, activityRecorder });
+    const { logger } = buildLogger();
+    const usecase = makeCreateTask({ tasksRepository, activityRecorder, logger });
 
     const r = await usecase({ ownerId: "user-1", title: "   " });
     expect(r.isErr()).toBe(true);
@@ -70,7 +85,8 @@ describe("tasks.create usecase", () => {
   test("異常: タイトル重複で Conflict を返す", async () => {
     const tasksRepository = buildRepo({ create: () => errAsync("Conflict" as const) });
     const activityRecorder = buildActivityRecorder();
-    const usecase = makeCreateTask({ tasksRepository, activityRecorder });
+    const { logger } = buildLogger();
+    const usecase = makeCreateTask({ tasksRepository, activityRecorder, logger });
 
     const r = await usecase({ ownerId: "user-1", title: "Write docs" });
     expect(r.isErr()).toBe(true);
@@ -79,17 +95,20 @@ describe("tasks.create usecase", () => {
     }
   });
 
-  test("異常: activity 記録が失敗した場合 Unexpected を返す(fail-closed)", async () => {
+  test("activity 記録が失敗してもタスク作成は成功として返す(fail-open)、warn ログが残る", async () => {
     const tasksRepository = buildRepo();
     const activityRecorder = buildActivityRecorder({
       recordTaskCreated: () => errAsync("Unexpected" as const),
     });
-    const usecase = makeCreateTask({ tasksRepository, activityRecorder });
+    const { logger, warned } = buildLogger();
+    const usecase = makeCreateTask({ tasksRepository, activityRecorder, logger });
 
     const r = await usecase({ ownerId: "user-1", title: "Write docs" });
-    expect(r.isErr()).toBe(true);
-    if (r.isErr()) {
-      expect(r.error).toBe("Unexpected");
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) {
+      expect(r.value.item.id).toBe(ID_1);
     }
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toEqual({ err: "Unexpected", taskId: ID_1 });
   });
 });

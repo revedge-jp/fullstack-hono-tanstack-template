@@ -39,7 +39,7 @@ export function createContainer(config: AppConfig): Container {
   const activityRecorder = createActivityRecorder({ activity });
 
   const tasksRepository = createTasksRepository({ db });
-  const tasks = createTasksService({ tasksRepository, activityRecorder });
+  const tasks = createTasksService({ tasksRepository, activityRecorder, logger });
 
   return { db, end, logger, auth, getSession, tasks, activity };
 }

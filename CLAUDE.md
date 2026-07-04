@@ -129,8 +129,9 @@ export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
 ### Feature-to-feature integration (ports + adapter + DI)
 
 **A feature must never `import` another feature directly** (`dependency-cruiser` enforces this per-feature —
-`server-application-cross-features-{feature}` rules in `dependency-cruiser.config.cjs`; add a new entry there
-when you add a feature). When feature A needs feature B's behavior:
+`server-application-cross-features-{feature}` rules in `dependency-cruiser.config.cjs`; the feature list is
+auto-derived from the `features/` directory, so new features are covered automatically). When feature A needs
+feature B's behavior:
 
 1. **A declares the port it needs** in `features/A/application/ports.ts` — an abstract type expressing
    A's own requirement, with no knowledge of B:

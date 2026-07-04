@@ -17,5 +17,7 @@
   "reporters": ["clear-text", "html"],
   "timeoutMS": 20000,
   "concurrency": 4,
+  "_comment_incremental": "変更ファイルのみ変異させ、feature が増えても実行時間を平坦に保つ（reports/ は gitignore 済み。CI はキャッシュなしのため毎回フル実行になる）",
+  "incremental": true,
   "thresholds": { "high": 95, "low": 90, "break": 90 }
 }

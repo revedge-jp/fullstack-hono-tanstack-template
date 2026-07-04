@@ -20,6 +20,7 @@ mock.module("@tanstack/react-start/server", () => ({
 }));
 
 let mockOk = true;
+let mockStatus = 200;
 let mockBody: unknown = {
   ok: true,
   data: { items: [{ id: "task-1", title: "Write docs", status: "todo" }] },
@@ -29,7 +30,9 @@ mock.module("hono/client", () => ({
   hc: () => ({
     api: {
       tasks: {
-        $get: mock(() => Promise.resolve({ ok: mockOk, json: async () => mockBody })),
+        $get: mock(() =>
+          Promise.resolve({ ok: mockOk, status: mockStatus, json: async () => mockBody }),
+        ),
       },
     },
   }),
@@ -41,6 +44,7 @@ describe("tasks.getTasksServerFn", () => {
   beforeEach(() => {
     mockContainer = undefined;
     mockOk = true;
+    mockStatus = 200;
     mockBody = {
       ok: true,
       data: { items: [{ id: "task-1", title: "Write docs", status: "todo" }] },
@@ -64,12 +68,22 @@ describe("tasks.getTasksServerFn", () => {
       });
     });
 
-    test("異常: セッション未認証の場合は空配列を返す", async () => {
+    test("未認証の場合は空配列を返す（リダイレクトは _authenticated ガードが担う）", async () => {
       mockContainer = {
         getSession: async () => ({ isErr: () => true }),
       };
       const result = await getTasksServerFn();
       expect(result).toEqual({ items: [] });
+    });
+
+    test("異常: 一覧取得が失敗した場合は throw する（0件と区別してエラーバウンダリへ）", async () => {
+      mockContainer = {
+        getSession: async () => ({ isErr: () => false, value: { id: "user-1" } }),
+        tasks: {
+          listTasks: async () => ({ isErr: () => true }),
+        },
+      };
+      await expect(getTasksServerFn()).rejects.toThrow("タスク一覧の取得に失敗しました");
     });
   });
 
@@ -81,10 +95,22 @@ describe("tasks.getTasksServerFn", () => {
       });
     });
 
-    test("異常: API が失敗した場合は空配列を返す", async () => {
+    test("401 の場合は空配列を返す（リダイレクトは _authenticated ガードが担う）", async () => {
       mockOk = false;
+      mockStatus = 401;
       const result = await getTasksServerFn();
       expect(result).toEqual({ items: [] });
+    });
+
+    test("異常: API が 500 を返した場合は throw する", async () => {
+      mockOk = false;
+      mockStatus = 500;
+      await expect(getTasksServerFn()).rejects.toThrow("タスク一覧の取得に失敗しました");
+    });
+
+    test("異常: レスポンス形状が不正な場合は throw する", async () => {
+      mockBody = { unexpected: true };
+      await expect(getTasksServerFn()).rejects.toThrow("タスク一覧のレスポンスが不正です");
     });
   });
 });

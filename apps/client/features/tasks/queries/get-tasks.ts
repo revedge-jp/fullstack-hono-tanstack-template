@@ -13,6 +13,10 @@ const TasksListResponseSchema = z.union([
   z.object({ ok: z.literal(false), error: z.string() }),
 ]);
 
+// バックエンド障害を「タスク 0 件」と区別するため、取得失敗は throw して
+// ルートの errorComponent（エラーバウンダリ）に委譲する。
+// 未認証だけは空配列で返す（_authenticated ガードがリダイレクトを担うため、
+// SSR 中の一瞬のセッション切れでエラーページを出さない）。
 export const getTasksServerFn = createServerFn().handler(
   async (): Promise<{ items: TaskItem[] }> => {
     const request = getRequest();
@@ -27,7 +31,7 @@ export const getTasksServerFn = createServerFn().handler(
       }
       const result = await container.tasks.listTasks({ ownerId: session.value.id });
       if (result.isErr()) {
-        return { items: [] };
+        throw new Error("タスク一覧の取得に失敗しました");
       }
       return {
         items: result.value.items.map((t: TaskItem) => ({
@@ -42,12 +46,15 @@ export const getTasksServerFn = createServerFn().handler(
     const cookie = request.headers.get("cookie") ?? "";
     const baseUrl = new URL(request.url).origin;
     const res = await hc<AppType>(baseUrl).api.tasks.$get({}, { init: { headers: { cookie } } });
-    if (!res.ok) {
+    if (res.status === 401) {
       return { items: [] };
+    }
+    if (!res.ok) {
+      throw new Error("タスク一覧の取得に失敗しました");
     }
     const parsed = TasksListResponseSchema.safeParse(await res.json());
     if (!parsed.success || !parsed.data.ok) {
-      return { items: [] };
+      throw new Error("タスク一覧のレスポンスが不正です");
     }
     return { items: parsed.data.data.items };
   },
