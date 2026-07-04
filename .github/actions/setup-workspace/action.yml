@@ -18,10 +18,6 @@ inputs:
     description: 'Whether Playwright browser cache was restored (skip browser download if true)'
     required: false
     default: 'false'
-  generate-prisma:
-    description: 'Generate Prisma client if cache miss'
-    required: false
-    default: 'true'
 
 runs:
   using: 'composite'
@@ -61,39 +57,20 @@ runs:
           packages/*/node_modules
         key: ${{ runner.os }}-nm-${{ hashFiles('bun.lock') }}
 
-    - name: Restore Prisma cache
-      id: prisma-cache
-      if: inputs.generate-prisma == 'true'
-      uses: actions/cache/restore@v4
-      with:
-        path: packages/database/prisma/generated
-        key: ${{ runner.os }}-prisma-${{ hashFiles('packages/database/prisma/schema.prisma', 'packages/database/prisma/**/*.prisma') }}
-        restore-keys: |
-          ${{ runner.os }}-prisma-
-
-    - name: Generate Prisma Client
-      if: inputs.generate-prisma == 'true' && steps.prisma-cache.outputs.cache-hit != 'true'
-      shell: bash
-      run: cd packages/database && bun run db:generate
-      env:
-        DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
-
-    - name: Save Prisma cache
-      if: inputs.generate-prisma == 'true' && steps.prisma-cache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
-      with:
-        path: packages/database/prisma/generated
-        key: ${{ runner.os }}-prisma-${{ hashFiles('packages/database/prisma/schema.prisma', 'packages/database/prisma/**/*.prisma') }}
-
     # Playwright のインストールを2段階に分離:
     # - OS 依存パッケージ（libnss3 等）: runner は新規 VM のため毎回必要
     # - ブラウザバイナリ: ~/.cache/ms-playwright がキャッシュヒットならスキップ可能
+    # apps/client で実行することで、workspace の @playwright/test と同じバージョンの
+    # ブラウザをインストールする（ルート実行だと bunx が npm の最新 playwright を解決し、
+    # テストが期待するブラウザバージョンと食い違う）
     - name: Install Playwright OS dependencies
       if: inputs.install-playwright == 'true'
       shell: bash
+      working-directory: apps/client
       run: bunx playwright install-deps chromium
 
     - name: Install Playwright browsers
       if: inputs.install-playwright == 'true' && inputs.playwright-cache-hit != 'true'
       shell: bash
+      working-directory: apps/client
       run: bunx playwright install chromium
