@@ -15,6 +15,13 @@
       "when": 1783151578792,
       "tag": "0001_goofy_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783159666655,
+      "tag": "0002_light_nightmare",
+      "breakpoints": true
     }
   ]
 }

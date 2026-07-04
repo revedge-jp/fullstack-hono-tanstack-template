@@ -88,10 +88,26 @@ describe("GET /api/tasks — contract", () => {
   });
 });
 
+// :id ルートは UUID 形式のみ受け付ける（非 UUID は DB に触れず 404）ため、
+// テストの URL も UUID 形式で組み立てる
+const EXISTING_ID = "00000000-0000-4000-8000-000000000001";
+const MISSING_ID = "00000000-0000-4000-8000-00000000dead";
+
 describe("GET /api/tasks/:id — contract", () => {
   test("存在しない場合: 404 + { ok: false, error: 'NotFound' }", async () => {
     const app = createTestApp({ getTask: () => errAsync("NotFound" as const) });
-    const res = await app.request("/api/tasks/unknown");
+    const res = await app.request(`/api/tasks/${MISSING_ID}`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: "NotFound" });
+  });
+
+  test("id が UUID 形式でない場合: DB に問い合わせず 404", async () => {
+    const app = createTestApp({
+      getTask: () => {
+        throw new Error("getTask should not be called for a non-UUID id");
+      },
+    });
+    const res = await app.request("/api/tasks/not-a-uuid");
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ ok: false, error: "NotFound" });
   });
@@ -100,22 +116,34 @@ describe("GET /api/tasks/:id — contract", () => {
 describe("PATCH /api/tasks/:id — contract", () => {
   test("done から進めた場合: 409 + { ok: false, error: 'AlreadyDone' }", async () => {
     const app = createTestApp({ advanceTask: () => errAsync("AlreadyDone" as const) });
-    const res = await app.request("/api/tasks/task-1", { method: "PATCH" });
+    const res = await app.request(`/api/tasks/${EXISTING_ID}`, { method: "PATCH" });
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ ok: false, error: "AlreadyDone" });
+  });
+
+  test("id が UUID 形式でない場合: 404", async () => {
+    const app = createTestApp();
+    const res = await app.request("/api/tasks/not-a-uuid", { method: "PATCH" });
+    expect(res.status).toBe(404);
   });
 });
 
 describe("DELETE /api/tasks/:id — contract", () => {
   test("正常: 204", async () => {
     const app = createTestApp();
-    const res = await app.request("/api/tasks/task-1", { method: "DELETE" });
+    const res = await app.request(`/api/tasks/${EXISTING_ID}`, { method: "DELETE" });
     expect(res.status).toBe(204);
   });
 
   test("存在しない場合: 404", async () => {
     const app = createTestApp({ deleteTask: () => errAsync("NotFound" as const) });
-    const res = await app.request("/api/tasks/unknown", { method: "DELETE" });
+    const res = await app.request(`/api/tasks/${MISSING_ID}`, { method: "DELETE" });
+    expect(res.status).toBe(404);
+  });
+
+  test("id が UUID 形式でない場合: 404", async () => {
+    const app = createTestApp();
+    const res = await app.request("/api/tasks/not-a-uuid", { method: "DELETE" });
     expect(res.status).toBe(404);
   });
 });

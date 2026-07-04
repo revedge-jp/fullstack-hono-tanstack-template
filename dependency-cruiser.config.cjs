@@ -1,9 +1,21 @@
 // dependency-cruiser は from/to 間の正規表現バックリファレンス（\1 等）をサポートしない
 // （to.path は from.path の capture group を参照できず、独立した正規表現として評価される）。
-// そのため「feature 間の直接依存禁止」は、既知の feature 名を列挙してルールを動的生成する。
-// 新しい feature を追加したら、このリストにも追記すること。
-const SERVER_FEATURE_DIRS = ["activity", "auth", "tasks"];
-const CLIENT_FEATURE_DIRS = ["auth"];
+// そのため「feature 間の直接依存禁止」は、feature 名ごとにルールを動的生成する。
+// feature 名はディレクトリ一覧から自動導出する（手動リストだと feature 追加時に
+// 追記を忘れ、新 feature だけガードが効かない事故が起きるため）。
+const { readdirSync } = require("node:fs");
+const listFeatureDirs = (base) => {
+  try {
+    return readdirSync(base, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+};
+const SERVER_FEATURE_DIRS = listFeatureDirs("apps/api-service/src/features");
+const CLIENT_FEATURE_DIRS = listFeatureDirs("apps/client/features");
 
 // npm パッケージへの to.path は「解決済みファイルパス」に対してマッチする
 // （インポート指定子そのものではない）。node_modules 配下のパスは

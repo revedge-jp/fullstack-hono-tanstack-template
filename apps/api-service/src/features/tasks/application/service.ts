@@ -13,10 +13,11 @@ export type TasksService = ReturnType<typeof createTasksService>;
 export function createTasksService(deps: {
   tasksRepository: TasksRepository;
   activityRecorder: ActivityRecorder;
+  logger: { warn: (obj: unknown, msg?: string) => void };
 }) {
-  const { tasksRepository, activityRecorder } = deps;
+  const { tasksRepository, activityRecorder, logger } = deps;
 
-  const createTask = makeCreateTask({ tasksRepository, activityRecorder });
+  const createTask = makeCreateTask({ tasksRepository, activityRecorder, logger });
   const listTasks = makeListTasks({ tasksRepository });
   const getTask = makeGetTask({ tasksRepository });
   const advanceTask = makeAdvanceTask({ tasksRepository });

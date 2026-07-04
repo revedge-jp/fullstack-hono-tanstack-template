@@ -10,6 +10,16 @@ import type { TasksService } from "../application/service";
 
 const CreateTaskRequestSchema = z.object({ title: z.string().min(1).max(200) });
 
+// tasks.id は uuid カラムのため、非 UUID 文字列をそのままリポジトリに渡すと
+// PostgreSQL の 22P02（invalid_text_representation）→ "Unexpected"（500）になってしまう。
+// UUID 形式でない id は「存在し得ない ID」なので、DB に触れる前に 404 として扱う。
+const TaskIdParamSchema = z.object({ id: z.uuid() });
+const taskIdParam = zValidator("param", TaskIdParamSchema, (result, c) => {
+  if (!result.success) {
+    return c.json({ ok: false, error: "NotFound" }, 404);
+  }
+});
+
 async function requireUser(
   c: Context,
   getSession: ReturnType<typeof makeGetSession>,
@@ -43,28 +53,34 @@ export function createTasksRouter(deps: {
       const result = await deps.tasks.listTasks({ ownerId: user.id });
       return toHttp(c, result, { Unexpected: 500 });
     })
-    .get("/:id", async (c) => {
+    .get("/:id", taskIdParam, async (c) => {
       const user = await requireUser(c, deps.getSession);
       if (user instanceof Response) {
         return user;
       }
-      const result = await deps.tasks.getTask({ id: c.req.param("id"), ownerId: user.id });
+      const result = await deps.tasks.getTask({ id: c.req.valid("param").id, ownerId: user.id });
       return toHttp(c, result, { NotFound: 404, Unexpected: 500 });
     })
-    .patch("/:id", async (c) => {
+    .patch("/:id", taskIdParam, async (c) => {
       const user = await requireUser(c, deps.getSession);
       if (user instanceof Response) {
         return user;
       }
-      const result = await deps.tasks.advanceTask({ id: c.req.param("id"), ownerId: user.id });
+      const result = await deps.tasks.advanceTask({
+        id: c.req.valid("param").id,
+        ownerId: user.id,
+      });
       return toHttp(c, result, { AlreadyDone: 409, NotFound: 404, Unexpected: 500 });
     })
-    .delete("/:id", async (c) => {
+    .delete("/:id", taskIdParam, async (c) => {
       const user = await requireUser(c, deps.getSession);
       if (user instanceof Response) {
         return user;
       }
-      const result = await deps.tasks.deleteTask({ id: c.req.param("id"), ownerId: user.id });
+      const result = await deps.tasks.deleteTask({
+        id: c.req.valid("param").id,
+        ownerId: user.id,
+      });
       if (result.isOk()) {
         return c.body(null, 204);
       }
