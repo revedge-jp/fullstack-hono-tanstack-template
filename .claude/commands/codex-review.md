@@ -99,10 +99,11 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 
 依存方向: `presentation → application → domain ← infrastructure → integrations`
 
-- `domain/` 配下に Zod・Prisma・HTTP の import がないか
+- `domain/` 配下に Zod・Drizzle・HTTP の import がないか
 - DTOやバリデーション定義（`XxxInput`）が `application/validators.ts` にあるか
 - 外部SDK（GCP等）が `src/integrations/` 以外で直接 import されていないか
 - `features/` 配下で `process.env` を直接参照していないか（`src/config.ts` 経由であるべき）
+- feature が他 feature を直接 import していないか（`features/A/application/` から `features/B/...` への直接 import は禁止。B の機能が必要なら A 側に `application/ports.ts` を定義し、`integrations/composition/` のアダプター経由で注入する。詳細: CLAUDE.md の「Feature-to-feature integration」節）
 
 ### 3-B: ROP エラー型チェーン
 
@@ -118,8 +119,8 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 
 ### 3-D: DB 操作の安全性
 
-- 複数の DB 操作が単一のユースケース内に存在する場合、`prisma.$transaction` で囲まれているか
-- リスト取得でループ内に DB クエリがないか（N+1 問題）。`findMany` の後にループで `findUnique` を呼ぶパターンは `include` または `IN` クエリに置き換えるべき
+- 複数の DB 操作が単一のユースケース内に存在する場合、`db.transaction(async (tx) => ...)` で囲まれているか
+- リスト取得でループ内に DB クエリがないか（N+1 問題）。ループで個別クエリを呼ぶパターンは `with`（リレーション先読み）または `inArray` を使った一括クエリに置き換えるべき
 
 ### 3-E: TypeScript
 
