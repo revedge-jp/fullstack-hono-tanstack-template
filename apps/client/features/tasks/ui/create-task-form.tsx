@@ -1,12 +1,12 @@
 "use client";
 
-import { useRouter } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { createTaskServerFn } from "../actions/create-task";
+import { createTask } from "../actions/create-task";
 
 export function CreateTaskForm() {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -15,14 +15,14 @@ export function CreateTaskForm() {
     e.preventDefault();
     setPending(true);
     setMessage(null);
-    const result = await createTaskServerFn({ data: { title } });
+    const result = await createTask({ title });
     setPending(false);
     if (!result.ok) {
       setMessage(result.message);
       return;
     }
     setTitle("");
-    await router.invalidate();
+    await queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 
   return (

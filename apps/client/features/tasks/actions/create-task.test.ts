@@ -1,53 +1,48 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-mock.module("@tanstack/react-start", () => ({
-  createServerFn: () => ({
-    inputValidator: () => ({
-      handler: (fn: (ctx: { data: { title: string } }) => unknown) => fn,
-    }),
-  }),
-}));
-
-mock.module("@tanstack/react-start/server", () => ({
-  getRequest: () => new Request("http://localhost/", { headers: { cookie: "session=test" } }),
-}));
-
 let mockOk = true;
-let mockErrorBody: unknown = { ok: false, error: "Invalid" };
+let mockBody: unknown = { ok: false, error: "Invalid" };
+let lastJson: unknown;
 
 mock.module("hono/client", () => ({
   hc: () => ({
     api: {
       tasks: {
-        $post: mock(() =>
-          Promise.resolve({
-            ok: mockOk,
-            json: async () => mockErrorBody,
-          }),
-        ),
+        $post: mock((args: { json?: unknown }) => {
+          lastJson = args?.json;
+          return Promise.resolve({ ok: mockOk, json: async () => mockBody });
+        }),
       },
     },
   }),
 }));
 
-const { createTaskServerFn } = await import("./create-task");
+const { createTask } = await import("./create-task");
 
-describe("tasks.createTaskServerFn", () => {
+describe("tasks.createTask action", () => {
   beforeEach(() => {
     mockOk = true;
-    mockErrorBody = { ok: false, error: "Invalid" };
+    mockBody = { ok: false, error: "Invalid" };
+    lastJson = undefined;
   });
 
-  test("正常: API が成功を返す場合 { ok: true } を返す", async () => {
-    mockOk = true;
-    const result = await createTaskServerFn({ data: { title: "Write docs" } });
+  test("正常: API が成功を返す場合 { ok: true } を返し、title が渡る", async () => {
+    const result = await createTask({ title: "Write docs" });
     expect(result).toEqual({ ok: true });
+    expect(lastJson).toEqual({ title: "Write docs" });
   });
 
   test("異常: API がエラーを返す場合 { ok: false, message } を返す", async () => {
     mockOk = false;
-    mockErrorBody = { ok: false, error: "Conflict" };
-    const result = await createTaskServerFn({ data: { title: "Write docs" } });
+    mockBody = { ok: false, error: "Conflict" };
+    const result = await createTask({ title: "Write docs" });
     expect(result).toEqual({ ok: false, message: "Conflict" });
+  });
+
+  test("異常: エラーレスポンスの形が想定外の場合は既定メッセージ", async () => {
+    mockOk = false;
+    mockBody = { unexpected: true };
+    const result = await createTask({ title: "Write docs" });
+    expect(result).toEqual({ ok: false, message: "タスクの作成に失敗しました" });
   });
 });

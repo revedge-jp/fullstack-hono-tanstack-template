@@ -1,55 +1,50 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-mock.module("@tanstack/react-start", () => ({
-  createServerFn: () => ({
-    inputValidator: () => ({
-      handler: (fn: (ctx: { data: { id: string } }) => unknown) => fn,
-    }),
-  }),
-}));
-
-mock.module("@tanstack/react-start/server", () => ({
-  getRequest: () => new Request("http://localhost/", { headers: { cookie: "session=test" } }),
-}));
-
 let mockOk = true;
-let mockErrorBody: unknown = { ok: false, error: "NotFound" };
+let mockBody: unknown = { ok: false, error: "NotFound" };
+let lastParam: unknown;
 
 mock.module("hono/client", () => ({
   hc: () => ({
     api: {
       tasks: {
         ":id": {
-          $patch: mock(() =>
-            Promise.resolve({
-              ok: mockOk,
-              json: async () => mockErrorBody,
-            }),
-          ),
+          $patch: mock((args: { param?: unknown }) => {
+            lastParam = args?.param;
+            return Promise.resolve({ ok: mockOk, json: async () => mockBody });
+          }),
         },
       },
     },
   }),
 }));
 
-const { advanceTaskServerFn } = await import("./advance-task");
+const { advanceTask } = await import("./advance-task");
 
-describe("tasks.advanceTaskServerFn", () => {
+describe("tasks.advanceTask action", () => {
   beforeEach(() => {
     mockOk = true;
-    mockErrorBody = { ok: false, error: "NotFound" };
+    mockBody = { ok: false, error: "NotFound" };
+    lastParam = undefined;
   });
 
-  test("正常: API が成功を返す場合 { ok: true } を返す", async () => {
-    mockOk = true;
-    const result = await advanceTaskServerFn({ data: { id: "task-1" } });
+  test("正常: API が成功を返す場合 { ok: true } を返し、id が渡る", async () => {
+    const result = await advanceTask({ id: "task-1" });
     expect(result).toEqual({ ok: true });
+    expect(lastParam).toEqual({ id: "task-1" });
   });
 
   test("異常: API がエラーを返す場合 { ok: false, message } を返す", async () => {
     mockOk = false;
-    mockErrorBody = { ok: false, error: "AlreadyDone" };
-    const result = await advanceTaskServerFn({ data: { id: "task-1" } });
+    mockBody = { ok: false, error: "AlreadyDone" };
+    const result = await advanceTask({ id: "task-1" });
     expect(result).toEqual({ ok: false, message: "AlreadyDone" });
+  });
+
+  test("異常: エラーレスポンスの形が想定外の場合は既定メッセージ", async () => {
+    mockOk = false;
+    mockBody = "not-json-shape";
+    const result = await advanceTask({ id: "task-1" });
+    expect(result).toEqual({ ok: false, message: "タスクの更新に失敗しました" });
   });
 });

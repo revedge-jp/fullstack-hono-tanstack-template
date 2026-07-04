@@ -172,14 +172,19 @@ Real example: `tasks` → `activity` (`features/tasks/application/ports.ts`,
 
 ```
 features/{feature}/
-├── actions/    # Mutations: createServerFn (POST/PUT/DELETE), invalidate queries
-├── queries/    # Reads: queryOptions (TanStack Query) + createServerFn for SSR reads
+├── actions/    # Mutations: ブラウザから Hono RPC を直接呼ぶ平関数（POST/PATCH/DELETE）
+├── queries/    # Reads: createServerFn（SSR 初回表示用）+ queryOptions（mutation 後の再取得用）
 └── ui/         # React components
 ```
 
 ### Data fetching: SSR vs client-side
 
-基本方針: **データはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。クライアントサイドフェッチはユーザー操作に応じて動的に変わるデータに限定する。
+基本方針: **初回表示のデータはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。mutation 後の再取得はブラウザからの `useQuery` invalidate で行う。
+
+**mutation を `createServerFn` にしてはいけない**: サーバー関数化すると実行がサーバー側になり、
+CF Workers では自オリジンへの HTTP ループバックが不可（ADR-001）。mutation はユーザー操作起点で
+SSR 先読みが不要なので、ブラウザから同一オリジン API を直接呼ぶ（cookie は同送される）。
+実例: `features/tasks/actions/create-task.ts`。
 
 **SSR（推奨）**: `loader` でサーバーサイド取得 → `Route.useLoaderData()` で参照
 

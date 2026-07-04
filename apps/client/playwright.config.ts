@@ -20,6 +20,11 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       fullyParallel: true,
     },
+    {
+      name: "scenario",
+      testMatch: /tasks\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   globalSetup: "./tests/e2e/global-setup.ts",
   globalTeardown: "./tests/e2e/global-teardown.ts",

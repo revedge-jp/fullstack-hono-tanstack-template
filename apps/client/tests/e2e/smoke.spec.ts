@@ -6,10 +6,12 @@ test.describe("Smoke Tests", () => {
     expect(response?.status()).toBe(200);
   });
 
-  test("Demo カードが表示され API+DB が正常に動作している", async ({ page }) => {
+  test("未認証で / にアクセスすると /signin へリダイレクトされ、サインインボタンが表示される", async ({
+    page,
+  }) => {
     await page.goto("/");
-    await expect(page.locator("text=Demo")).toBeVisible();
-    await expect(page.locator("text=Failed to load users.")).not.toBeVisible();
+    await page.waitForURL("**/signin**");
+    await expect(page.getByRole("button", { name: /Google/i })).toBeVisible();
   });
 
   test("存在しないページで404が返る", async ({ page }) => {
