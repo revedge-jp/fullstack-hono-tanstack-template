@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import type { AppType } from "api-service";
 import { hc } from "hono/client";
 import { z } from "zod";
+
 import type { TasksPage } from "./get-tasks";
 
 const apiClient = hc<AppType>("/");

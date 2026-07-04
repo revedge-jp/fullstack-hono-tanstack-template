@@ -1,4 +1,5 @@
 import type { ResultAsync } from "neverthrow";
+
 import type { Task, TaskTitle } from "./models";
 
 export type TasksRepository = {

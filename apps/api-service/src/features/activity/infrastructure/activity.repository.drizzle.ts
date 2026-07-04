@@ -1,6 +1,7 @@
 import { activities, type Database } from "@repo/db";
 import { desc } from "drizzle-orm";
 import { err, ok, ResultAsync } from "neverthrow";
+
 import type { ActivityRepository } from "../domain/activity.repository";
 import { mapDbActivityToDomain } from "./mappers";
 

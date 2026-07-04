@@ -1,4 +1,5 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
+
 import { SignOutButton } from "@/features/auth";
 
 const authenticatedRoute = getRouteApi("/_authenticated");
@@ -13,7 +14,7 @@ function HomePage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
       <main className="flex flex-col items-center gap-4">
-        <h1 className="font-bold text-2xl">{"{{APP_NAME}}"}</h1>
+        <h1 className="text-2xl font-bold">{"{{APP_NAME}}"}</h1>
         <div className="flex flex-col items-center gap-1">
           <p className="font-medium">{user.name}</p>
           <p className="text-sm text-zinc-500">{user.email}</p>

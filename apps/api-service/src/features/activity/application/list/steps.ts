@@ -1,4 +1,5 @@
 import type { ResultAsync } from "neverthrow";
+
 import type { ActivityRepository } from "../../domain/activity.repository";
 import type { Activity } from "../../domain/models";
 

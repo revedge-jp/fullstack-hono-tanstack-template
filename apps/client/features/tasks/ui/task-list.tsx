@@ -2,7 +2,9 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
+
 import { advanceTask } from "../actions/advance-task";
 import { deleteTask } from "../actions/delete-task";
 import type { TaskItem } from "../queries/get-tasks";
@@ -48,7 +50,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
 
   return (
     <div className="flex flex-col gap-2">
-      {message && <p className="text-destructive text-sm">{message}</p>}
+      {message && <p className="text-sm text-destructive">{message}</p>}
       <ul className="flex flex-col gap-2">
         {items.map((task) => (
           <li
@@ -56,7 +58,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
             className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
           >
             <div className="flex flex-col">
-              <span className="font-medium text-sm">{task.title}</span>
+              <span className="text-sm font-medium">{task.title}</span>
               <span className="text-xs text-zinc-500">
                 {STATUS_LABEL[task.status] ?? task.status}
               </span>

@@ -1,4 +1,5 @@
 import { okAsync, type ResultAsync } from "neverthrow";
+
 import type { AuthUser } from "../../domain/models";
 
 type GetSessionError = "Unauthorized" | "Unexpected";

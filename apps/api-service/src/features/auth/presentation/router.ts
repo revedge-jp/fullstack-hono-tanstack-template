@@ -1,5 +1,6 @@
 import { createApp } from "@app/factory";
 import { toHttp } from "@app/shared/http/to-http";
+
 import type { makeGetSession } from "../application/get-session/usecase";
 
 export function createAuthRouter(deps: { getSession: ReturnType<typeof makeGetSession> }) {

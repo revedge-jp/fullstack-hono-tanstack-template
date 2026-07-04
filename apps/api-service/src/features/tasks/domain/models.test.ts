@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { advanceTaskStatus, makeTaskTitle, reconstituteTask, type TaskTitle } from "./models";
 
 function buildTask(status: "todo" | "in_progress" | "done") {

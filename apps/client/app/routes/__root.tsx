@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import type { ReactNode } from "react";
+
 import appCss from "../globals.css?url";
 
 type RouterContext = {
@@ -69,7 +70,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 function NotFoundComponent() {
   return (
     <div className="p-4">
-      <h1 className="font-bold text-2xl">404</h1>
+      <h1 className="text-2xl font-bold">404</h1>
       <p>ページが見つかりませんでした。</p>
     </div>
   );
@@ -78,7 +79,7 @@ function NotFoundComponent() {
 function ErrorComponent({ error }: { error: Error }) {
   return (
     <div className="p-4">
-      <h1 className="font-bold text-2xl text-red-600">エラー</h1>
+      <h1 className="text-2xl font-bold text-red-600">エラー</h1>
       <p>{error.message}</p>
     </div>
   );

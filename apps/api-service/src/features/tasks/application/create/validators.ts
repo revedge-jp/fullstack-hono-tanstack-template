@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+
 import { makeTaskTitle, type TaskTitle } from "../../domain/models";
 
 export type CreateTaskInput = { ownerId: string; title: string };

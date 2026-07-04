@@ -7,7 +7,7 @@
 push 前の統合チェックを一括実行します。
 
 - 実行内容（Lint/Type/Test/Architecture を常時実行。Lint/Type/Test は turbo filter により差分限定）
-  - Lint（oxlint + Biome format check）: `turbo run lint`
+  - Lint（oxlint + oxfmt --check）: `turbo run lint`
   - Typecheck（TypeScript）: `turbo run typecheck`
   - Tests: DB に対して `bun run db:migrate`（drizzle-kit migrate）を行った上で `turbo run test` を実行
   - Architecture: 依存/設計ガードの検査（常時実行）
@@ -36,11 +36,11 @@ CI_MODE=1 bun run check-all
 TURBO_FILTER='...[origin/main]^' bun run check-all
 ```
 
-### bun run lint:fix（各パッケージの oxlint/Biome 修正）
+### bun run lint:fix（各パッケージの oxlint/oxfmt 修正）
 
 コード整形と一部自動修正を行います。ルートでは `turbo run lint:fix` を呼び出し、ワークスペースごとに以下を実行します。
 
-- 各パッケージの定義: `oxlint --fix . && biome check . --write`
+- 各パッケージの定義: `oxlint --fix . && oxfmt .`
 - `turbo.json` で `lint:fix` はキャッシュ無効（毎回実行）
 
 使い方:

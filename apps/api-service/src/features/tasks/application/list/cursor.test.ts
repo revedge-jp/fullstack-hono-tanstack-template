@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { decodeTaskCursor, encodeTaskCursor } from "./cursor";
 
 describe("task cursor codec", () => {
