@@ -125,6 +125,9 @@ export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
 - **`process.env` forbidden** in features and integrations; use `src/config.ts` → DI via container
 - **DI**: `src/container.ts` assembles all deps; `src/app.ts` mounts routers
 - **Error types** defined at top of `usecase.ts`, non-exported
+- **Request-scoped logging**: the `requestLogger` middleware puts a requestId-bound pino child logger
+  on the context — use `c.get("logger")` in presentation handlers instead of `console.*`. Access logs
+  (method/path/status/durationMs + requestId) are emitted automatically for every request
 
 ### Feature-to-feature integration (ports + adapter + DI)
 

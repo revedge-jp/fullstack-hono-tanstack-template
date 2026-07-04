@@ -4,13 +4,13 @@ import { createAuthRouter } from "@app/features/auth/presentation";
 import { createTasksRouter } from "@app/features/tasks/presentation";
 import { stringifyErrorSafe } from "@repo/logging";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
 import { loadConfig } from "./config";
 import { createContainer } from "./container";
+import { requestLogger } from "./middlewares/request-logger";
 import { createHealthRouter } from "./routes/health";
 
 export function createApp(env?: Record<string, string | undefined>) {
@@ -23,7 +23,9 @@ export function createApp(env?: Record<string, string | undefined>) {
       headerName: "x-request-id",
     }),
   );
-  app.use("*", logger());
+  // requestId を束ねた pino 子ロガーによる構造化アクセスログ（hono/logger の置き換え）。
+  // ハンドラからは c.get("logger") でリクエスト相関つきロガーを参照できる。
+  app.use("*", requestLogger(container.logger));
   app.use("*", timing());
   app.use("*", secureHeaders());
   app.use(
@@ -58,12 +60,17 @@ export function createApp(env?: Record<string, string | undefined>) {
       const rid = c.get("requestId");
       const message = stringifyErrorSafe(err);
 
-      console.error("[unhandled]", {
-        requestId: rid,
-        method: c.req.method,
-        path: new URL(c.req.url).pathname,
-        err,
-      });
+      // requestLogger ミドルウェアより前で落ちた場合に備え、container.logger にフォールバック
+      const log = c.get("logger") ?? container.logger;
+      log.error(
+        {
+          requestId: rid,
+          method: c.req.method,
+          path: new URL(c.req.url).pathname,
+          err: message,
+        },
+        "unhandled error",
+      );
 
       if (config.nodeEnv !== "production") {
         const stack = err instanceof Error ? err.stack : undefined;
