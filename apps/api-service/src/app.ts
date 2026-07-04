@@ -1,5 +1,7 @@
 import { createApp as createHonoApp } from "@app/factory";
+import { createActivityRouter } from "@app/features/activity/presentation/router";
 import { createAuthRouter } from "@app/features/auth/presentation/router";
+import { createTasksRouter } from "@app/features/tasks/presentation/router";
 import { stringifyErrorSafe } from "@repo/logging";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -45,6 +47,11 @@ export function createApp(env?: Record<string, string | undefined>) {
   const routes = app
     .route("/api/health", createHealthRouter({ db: container.db }))
     .route("/api", createAuthRouter({ getSession: container.getSession }))
+    .route(
+      "/api/tasks",
+      createTasksRouter({ tasks: container.tasks, getSession: container.getSession }),
+    )
+    .route("/api/activities", createActivityRouter({ activity: container.activity }))
     .get("/", (c) => c.json({ ok: true, message: "Hello Server!" }))
     .notFound((c) => c.json({ ok: false, error: "Not Found" }, 404))
     .onError((err, c) => {
@@ -74,7 +81,7 @@ export function createApp(env?: Record<string, string | undefined>) {
       return c.json({ ok: false, error: "Internal Server Error", requestId: rid }, 500);
     });
 
-  return { app: routes, auth: container.auth, end: container.end };
+  return { app: routes, auth: container.auth, end: container.end, container };
 }
 
 // AppType is the Hono routes type used for RPC client generation.

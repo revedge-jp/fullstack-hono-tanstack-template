@@ -20,9 +20,11 @@
     "apps/api-service": {
       "name": "api-service",
       "dependencies": {
+        "@hono/zod-validator": "^0.8.0",
         "@repo/db": "workspace:*",
         "@repo/logging": "workspace:*",
         "better-auth": "^1.6.10",
+        "drizzle-orm": "^0.45.2",
         "hono": "^4.12.18",
         "neverthrow": "^8.2.0",
         "zod": "^4.4.3",
@@ -49,6 +51,7 @@
         "react-dom": "19.2.6",
         "tailwind-merge": "^3.6.0",
         "vite": "^8.0.12",
+        "zod": "^4.4.3",
       },
       "devDependencies": {
         "@cloudflare/vite-plugin": "^1.36.4",
@@ -284,6 +287,8 @@
     "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.8", "", { "dependencies": { "@floating-ui/dom": "^1.7.6" }, "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-cC52bHwM/n/CxS87FH0yWdngEZrjdtLW/qVruo68qg+prK7ZQ4YGdut2GyDVpoGeAYe/h899rVeOVm6Oi40k2A=="],
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg=="],
+
+    "@hono/zod-validator": ["@hono/zod-validator@0.8.0", "", { "peerDependencies": { "hono": ">=4.10.0", "zod": "^3.25.0 || ^4.0.0" } }, "sha512-5uS4S1/LKtZQYvD4BtpPUFkOv8d1wNxHHrChm26buMiEYc1FrHWvDUaKVBwkiVtvSExHSpLGDvcnpI2Copyj9w=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
