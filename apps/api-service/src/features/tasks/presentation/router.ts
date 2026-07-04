@@ -10,6 +10,13 @@ import type { TasksService } from "../application/service";
 
 const CreateTaskRequestSchema = z.object({ title: z.string().min(1).max(200) });
 
+// cursor の中身（形式・整合性）の検証は application 層の validators が担う。
+// ここでは HTTP クエリとしての形（型・範囲）だけをチェックする。
+const ListTasksQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 // tasks.id は uuid カラムのため、非 UUID 文字列をそのままリポジトリに渡すと
 // PostgreSQL の 22P02（invalid_text_representation）→ "Unexpected"（500）になってしまう。
 // UUID 形式でない id は「存在し得ない ID」なので、DB に触れる前に 404 として扱う。
@@ -45,13 +52,18 @@ export function createTasksRouter(deps: {
       const result = await deps.tasks.createTask({ ownerId: user.id, title: body.title });
       return toHttp(c, result, { Invalid: 400, Conflict: 409, Unexpected: 500 }, 201);
     })
-    .get("/", async (c) => {
+    .get("/", zValidator("query", ListTasksQuerySchema), async (c) => {
       const user = await requireUser(c, deps.getSession);
       if (user instanceof Response) {
         return user;
       }
-      const result = await deps.tasks.listTasks({ ownerId: user.id });
-      return toHttp(c, result, { Unexpected: 500 });
+      const query = c.req.valid("query");
+      const result = await deps.tasks.listTasks({
+        ownerId: user.id,
+        cursor: query.cursor,
+        limit: query.limit,
+      });
+      return toHttp(c, result, { Invalid: 400, Unexpected: 500 });
     })
     .get("/:id", taskIdParam, async (c) => {
       const user = await requireUser(c, deps.getSession);
