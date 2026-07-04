@@ -167,6 +167,17 @@ pino の場合、Node ビルドは stream 引数を渡さない限り内部で S
 
 **解決方法:** `./scripts/init-template.sh <app-name>` で一括置換する（テンプレート初期化時に一度だけ実行）。CI ではビルド前にダミー値へ置換している（`.github/workflows/ci.yml` 参照）。
 
+#### 症状: `main` への push で Deploy ワークフローの build/deploy が skip される
+
+**原因:** `.github/workflows/deploy.yml` は、`wrangler.jsonc` に `{{APP_NAME}}` が残っているか、
+`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `DATABASE_URL` の secrets が未設定の場合、
+build/migrate/deploy の各 step を自動的に skip する（テンプレート原本のままでは実デプロイが
+構造的に成立しないため、赤い失敗にせず静かに skip する設計）。
+
+**解決方法:** `./scripts/init-template.sh <app-name>` を実行し、GitHub リポジトリ（または
+`staging`/`production` environment）に上記 secrets を設定すれば、次回 push から自動的に
+デプロイが実行されるようになる。ワークフロー自体の編集は不要。
+
 ---
 
 ## 認証

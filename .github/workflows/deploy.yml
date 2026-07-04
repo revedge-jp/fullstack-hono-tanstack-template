@@ -14,32 +14,56 @@ jobs:
     environment: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
+
+      # テンプレート原本リポジトリ（scripts/init-template.sh 未実行 = wrangler.jsonc が
+      # {{APP_NAME}} のまま、かつ Cloudflare/DB の secrets 未設定）では、この先の
+      # build/migrate/deploy が構造的に必ず失敗する。実プロジェクト化 + secrets 設定が
+      # 揃うまでは赤い失敗にせず、後続 step を skip する。
+      - name: Check deploy readiness
+        id: readiness
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if grep -q '{{APP_NAME}}' apps/client/wrangler.jsonc; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/client/wrangler.jsonc still has the {{APP_NAME}} placeholder. Run scripts/init-template.sh <app-name> to enable deployment. Skipping deploy."
+          elif [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$DATABASE_URL" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / DATABASE_URL is not fully configured. Skipping deploy."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: ./.github/actions/setup-workspace
+        if: steps.readiness.outputs.ready == 'true'
 
       - name: Build
+        if: steps.readiness.outputs.ready == 'true'
         run: bun run build
 
       - name: Migrate DB (staging)
-        if: github.ref == 'refs/heads/main'
+        if: steps.readiness.outputs.ready == 'true' && github.ref == 'refs/heads/main'
         run: cd packages/database && bun run db:migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy (staging)
-        if: github.ref == 'refs/heads/main'
+        if: steps.readiness.outputs.ready == 'true' && github.ref == 'refs/heads/main'
         run: cd apps/client && bunx wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Migrate DB (production)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.readiness.outputs.ready == 'true' && startsWith(github.ref, 'refs/tags/v')
         run: cd packages/database && bun run db:migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy (production)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.readiness.outputs.ready == 'true' && startsWith(github.ref, 'refs/tags/v')
         run: cd apps/client && bunx wrangler deploy --env production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
