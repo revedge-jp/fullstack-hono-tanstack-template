@@ -32,7 +32,7 @@ describe("tasks.list usecase", () => {
   test("正常: オーナーのタスク一覧を返す（次ページなしなら nextCursor は null）", async () => {
     let receivedLimit: number | undefined;
     const tasksRepository = buildRepo({
-      list: ({ ownerId, limit }) => {
+      list: ({ limit }) => {
         receivedLimit = limit;
         return okAsync({
           items: [buildTask("task-1", new Date("2026-07-04T09:00:00Z"))],

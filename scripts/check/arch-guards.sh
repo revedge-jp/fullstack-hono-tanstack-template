@@ -20,6 +20,22 @@ if [ -n "$EXPORT_VIOL" ]; then
 fi
 echo "OK"
 
+echo "[guard] window.location.href への代入禁止（router.push() を使用）"
+# 旧 Biome GritQL プラグイン (no-window-location-href.grit) からの移設
+LOCATION_VIOL=$(find apps packages \
+  \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/.output/*' \) -prune -o \
+  -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+  xargs -0 grep -nE 'window\.location\.href\s*=[^=]' -- || true)
+if [ -z "$LOCATION_VIOL" ]; then
+  echo "OK"
+else
+  echo "違反: window.location.href への代入は禁止されています。router.push() を使用してください"
+  echo "$LOCATION_VIOL" | while IFS= read -r line; do
+    echo "  • $line"
+  done
+  exit 1
+fi
+
 echo "[guard] api-service の throw 禁止（middlewares・起動時 config 検証・テストは除外）"
 # 除外対象を先に -prune し、ファイルのみを -type f で絞り込む
 # config.ts は起動時（リクエスト処理の外）の fail-fast 検証であり、ROP フローの対象外のため除外する

@@ -42,7 +42,9 @@ for (const feature of features) {
   const base = join(FEATURES_DIR, feature);
 
   // domain
-  if (!isFile(join(base, "domain/models.ts"))) add(feature, "domain/models.ts がありません");
+  if (!isFile(join(base, "domain/models.ts"))) {
+    add(feature, "domain/models.ts がありません");
+  }
   // リポジトリ抽象は、永続化を自前で持つ feature のみ必須（auth のように第三者 SDK が
   // 永続化を担う wrapper feature では該当しない）。存在する場合のみ実装を要求する。
   const repoIface = join(base, `domain/${feature}.repository.ts`);
@@ -54,10 +56,12 @@ for (const feature of features) {
   const actionDirs = isDir(appDir) ? readdirSync(appDir).filter((n) => isDir(join(appDir, n))) : [];
   const isMultiAction = actionDirs.length >= 2;
   if (isMultiAction) {
-    if (!isFile(join(base, "application/service.ts")))
+    if (!isFile(join(base, "application/service.ts"))) {
       add(feature, "application/service.ts がありません（action が複数あるため集約が必要）");
-    if (!isFile(join(base, "application/index.ts")))
+    }
+    if (!isFile(join(base, "application/index.ts"))) {
       add(feature, "application/index.ts がありません（action が複数あるため集約が必要）");
+    }
   }
 
   // infrastructure: リポジトリ抽象があれば実装が必要
@@ -71,10 +75,12 @@ for (const feature of features) {
   }
 
   // presentation
-  if (!isFile(join(base, "presentation/router.ts")))
+  if (!isFile(join(base, "presentation/router.ts"))) {
     add(feature, "presentation/router.ts がありません");
-  if (!isFile(join(base, "presentation/index.ts")))
+  }
+  if (!isFile(join(base, "presentation/index.ts"))) {
     add(feature, "presentation/index.ts がありません");
+  }
 
   // 各 action の usecase.ts には co-located usecase.test.ts が必須（ネスト構造も再帰的に検出）
   if (isDir(appDir)) {
@@ -82,12 +88,16 @@ for (const feature of features) {
       const result = [dir];
       for (const name of readdirSync(dir)) {
         const child = join(dir, name);
-        if (isDir(child)) result.push(...walkDirs(child));
+        if (isDir(child)) {
+          result.push(...walkDirs(child));
+        }
       }
       return result;
     };
     for (const actionDir of walkDirs(appDir)) {
-      if (!isDir(actionDir)) continue;
+      if (!isDir(actionDir)) {
+        continue;
+      }
       if (isFile(join(actionDir, "usecase.ts")) && !isFile(join(actionDir, "usecase.test.ts"))) {
         const rel = relative(appDir, actionDir);
         add(
@@ -130,5 +140,7 @@ if (violations.length === 0) {
 }
 
 console.log("違反: feature 構造が不完全です（必須の層・テスト・配線が欠落）");
-for (const v of violations) console.log(`  • ${v}`);
+for (const v of violations) {
+  console.log(`  • ${v}`);
+}
 process.exit(1);

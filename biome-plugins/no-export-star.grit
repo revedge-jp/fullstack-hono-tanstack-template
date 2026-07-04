@@ -1,3 +1,0 @@
-`export * from $src` where {
-  register_diagnostic(span=$src, message="export * は禁止されています。名前付きエクスポートを使用してください。")
-}

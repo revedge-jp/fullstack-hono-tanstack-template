@@ -1,5 +1,5 @@
 #!/bin/bash
-# .ts / .tsx ファイルが編集されたら biome で自動修正する
+# .ts / .tsx ファイルが編集されたら oxlint + biome で自動修正する
 
 INPUT=$(cat)
 
@@ -14,6 +14,9 @@ except Exception:
 
 case "$FILE_PATH" in
   *.ts|*.tsx)
+    if ! (cd "$CLAUDE_PROJECT_DIR" && ./node_modules/.bin/oxlint --fix "$FILE_PATH"); then
+      echo "oxlint の自動修正に失敗しました: $FILE_PATH" >&2
+    fi
     if ! (cd "$CLAUDE_PROJECT_DIR" && ./node_modules/.bin/biome check --write "$FILE_PATH"); then
       echo "biome の自動修正に失敗しました: $FILE_PATH" >&2
     fi

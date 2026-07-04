@@ -50,6 +50,11 @@ D="apps/api-service/src/features/tasks"
 
 echo "=== arch-guards 自己テスト ==="
 
+expect_guard "window.location.href 代入禁止" \
+  "apps/client/features/__selftest/ui/selftest-location.tsx" \
+  'export function selftestLocation() { window.location.href = "/foo"; }' \
+  "window.location.href への代入は禁止"
+
 expect_guard "throw 禁止" \
   "$D/application/__selftest_throw.ts" \
   'export function selftestThrow() { throw new Error("x"); }' \
