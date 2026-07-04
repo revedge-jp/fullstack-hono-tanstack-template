@@ -21,6 +21,7 @@
     "dep:graph": "madge app --ts-config tsconfig.json --extensions ts,tsx --image ../../docs/client-deps.svg --exclude 'node_modules|.output|dist'"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "^1.170.17",
     "@tanstack/react-router-with-query": "^1.130.17",
@@ -29,7 +30,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "^4.12.27",
-    "radix-ui": "^1.6.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tailwind-merge": "^3.6.0",
