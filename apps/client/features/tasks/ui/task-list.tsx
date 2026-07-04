@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { advanceTaskServerFn } from "../actions/advance-task";
-import { deleteTaskServerFn } from "../actions/delete-task";
+import { advanceTask } from "../actions/advance-task";
+import { deleteTask } from "../actions/delete-task";
 import type { TaskItem } from "../queries/get-tasks";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -14,32 +14,32 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function TaskList({ items }: { items: TaskItem[] }) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function handleAdvance(id: string) {
     setPendingId(id);
     setMessage(null);
-    const result = await advanceTaskServerFn({ data: { id } });
+    const result = await advanceTask({ id });
     setPendingId(null);
     if (!result.ok) {
       setMessage(result.message);
       return;
     }
-    await router.invalidate();
+    await queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 
   async function handleDelete(id: string) {
     setPendingId(id);
     setMessage(null);
-    const result = await deleteTaskServerFn({ data: { id } });
+    const result = await deleteTask({ id });
     setPendingId(null);
     if (!result.ok) {
       setMessage(result.message);
       return;
     }
-    await router.invalidate();
+    await queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 
   if (items.length === 0) {

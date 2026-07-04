@@ -1,6 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
-import { CreateTaskForm, getTasksServerFn, TaskList } from "@/features/tasks";
+import { CreateTaskForm, getTasksServerFn, TaskList, tasksQueryOptions } from "@/features/tasks";
 
 // ページ位置を URL の search param（?cursor=...）で表現する。
 // URL がページ状態の単一ソースになるため、SSR・リロード・共有・戻る操作すべてで位置が保たれる。
@@ -8,6 +9,9 @@ const TasksSearchSchema = z.object({
   cursor: z.string().optional(),
 });
 
+// データ取得の役割分担（CLAUDE.md の「SSR vs クライアントサイド」パターン）:
+// - 初回表示: loader + createServerFn によるサーバーサイド取得（ローディング状態なし）
+// - mutation 後の更新: tasksQueryOptions の invalidate によるブラウザからの再取得
 export const Route = createFileRoute("/_authenticated/tasks")({
   validateSearch: TasksSearchSchema,
   loaderDeps: ({ search }) => ({ cursor: search.cursor }),
@@ -19,8 +23,9 @@ export const Route = createFileRoute("/_authenticated/tasks")({
 });
 
 function TasksPage() {
-  const { tasks } = Route.useLoaderData();
+  const { tasks: initialTasks } = Route.useLoaderData();
   const { cursor } = Route.useSearch();
+  const { data: tasks } = useQuery({ ...tasksQueryOptions(cursor), initialData: initialTasks });
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
