@@ -28,7 +28,7 @@ apps/client/
 │   └── server.ts           # Worker の fetch ハンドラー（api-service をバンドル）
 ├── features/               # 機能単位のスライス
 │   └── tasks/              # 正典実装（参照用）
-│       ├── actions/        # createServerFn による mutation + co-located test
+│       ├── actions/        # mutation: ブラウザから Hono RPC を直接呼ぶ平関数 + co-located test
 │       ├── queries/        # データ取得（SSR loader 用）+ co-located test
 │       ├── ui/             # UI コンポーネント
 │       └── index.ts        # パブリック API

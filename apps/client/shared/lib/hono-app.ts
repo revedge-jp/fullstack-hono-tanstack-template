@@ -27,14 +27,3 @@ export function initHonoApp(cfEnv: CFBindings) {
   const env = buildEnv(cfEnv);
   return createApp(env);
 }
-
-// server.ts を経由しない実行環境（素の vite / node）向けの /api/$ キャッチオールルート用。
-// serverFn の HTTP ループバックフォールバック（api-client.ts 参照）の受け口でもある。
-// process.env（.env の DATABASE_URL）を使用。CF Workers 本番環境では使用しない。
-let _devInstance: ReturnType<typeof createApp> | undefined;
-export function getHonoApp() {
-  if (!_devInstance) {
-    _devInstance = createApp();
-  }
-  return _devInstance.app;
-}

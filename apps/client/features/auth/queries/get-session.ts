@@ -8,7 +8,7 @@ export const getSessionServerFn = createServerFn().handler(
   async (): Promise<SessionUser | null> => {
     const request = getRequest();
     const cookie = request.headers.get("cookie") ?? "";
-    const res = await getApiClient(request).api.me.$get({}, { init: { headers: { cookie } } });
+    const res = await getApiClient().api.me.$get({}, { init: { headers: { cookie } } });
     if (!res.ok) {
       return null;
     }

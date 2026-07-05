@@ -8,7 +8,9 @@ type ListActivitiesError = "Unexpected";
 
 export function makeListActivities(deps: { activityRepository: ActivityRepository }) {
   const fetchActivitiesStep = makeFetchActivitiesStep(deps);
-  return function listActivities(): ResultAsync<{ items: Activity[] }, ListActivitiesError> {
-    return okAsync(undefined).andThen(fetchActivitiesStep);
+  return function listActivities(input: {
+    ownerId: string;
+  }): ResultAsync<{ items: Activity[] }, ListActivitiesError> {
+    return okAsync(input).andThen(fetchActivitiesStep);
   };
 }

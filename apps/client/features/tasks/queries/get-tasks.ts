@@ -28,7 +28,7 @@ export const getTasksServerFn = createServerFn()
   .handler(async ({ data }): Promise<TasksPage> => {
     const request = getRequest();
     const cookie = request.headers.get("cookie") ?? "";
-    const res = await getApiClient(request).api.tasks.$get(
+    const res = await getApiClient().api.tasks.$get(
       { query: data.cursor ? { cursor: data.cursor } : {} },
       { init: { headers: { cookie } } },
     );
