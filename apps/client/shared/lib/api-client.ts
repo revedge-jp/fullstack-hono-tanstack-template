@@ -34,8 +34,17 @@ export function runWithApiClient<T>(client: ApiClient, fn: () => Promise<T>): Pr
   return storage.run(client, fn);
 }
 
-// ALS 未設定の環境（server.ts を経由しない素の vite / node 実行）では、
-// /api/$ キャッチオールルート経由の同一オリジン HTTP ループバックにフォールバックする。
-export function getApiClient(request: Request): ApiClient {
-  return storage.getStore() ?? hc<AppType>(new URL(request.url).origin);
+// SSR は全実行モード（vite dev / vite preview / wrangler / 本番）で server.ts が worker
+// エントリとして動くため、ALS は常に設定される（プローブ計測で /api/$ フォールバックが
+// どのモードでも発火しないことを確認済み）。未設定はアーキテクチャ違反（server.ts を
+// 経由しない実行経路の混入）なので、静かに壊れる HTTP ループバックに落とすのではなく
+// ここで明示的に失敗させる。
+export function getApiClient(): ApiClient {
+  const client = storage.getStore();
+  if (!client) {
+    throw new Error(
+      "API client is not injected. SSR must go through app/server.ts (runWithApiClient).",
+    );
+  }
+  return client;
 }
