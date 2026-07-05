@@ -93,4 +93,4 @@ echo "  2. README.md のタイトル・説明を自分のプロジェクト用�
 echo "  3. .env を作成する（README のクイックスタート参照）"
 echo "  4. GitHub リポジトリの保護設定・Renovate を有効化: ./scripts/setup-github.sh"
 echo "  5. CI/CD デプロイ用の GitHub Environments（Secrets / Variables）を設定する"
-echo "     手順: docs/deploy/cloudflare-workers.md の「GitHub Environments の設定」"
+echo "     bash scripts/setup-deploy-env.sh staging（対話式。詳細: docs/deploy/cloudflare-workers.md）"

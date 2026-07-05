@@ -33,6 +33,11 @@
 
 ## ローカルからの実行
 
+> **原則**: 通常運用のデプロイは CI が担う（secrets は GitHub Environments —
+> `bash scripts/setup-deploy-env.sh <stage>` で対話式セットアップ、ローカルには保存しない）。
+> ローカル実行は初期検証・緊急時用で、資格情報はその場限りの export か
+> 一時的な `.env` 記入で渡し、恒常的に残さないこと。
+
 1. **Cloudflare 認証** — `.env` に `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`
    - API トークンの権限: **Workers Scripts: Edit** + **Hyperdrive: Edit**（Account スコープ）
    - CI（GitHub secrets）と同じトークンを使い回せる。`wrangler login` の OAuth は Alchemy からは参照されない
