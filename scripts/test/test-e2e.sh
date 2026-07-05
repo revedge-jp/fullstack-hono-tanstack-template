@@ -54,24 +54,37 @@ fi
 
 if [ "$PROD_SHAPE" = "1" ]; then
   export E2E_PROD_SHAPE=1
+  E2E_PORT=3100
+  echo "==> Mode: prod-shape (built worker on workerd, port $E2E_PORT)"
+else
+  E2E_PORT=3200
+  echo "==> Mode: dev (vite dev server, port $E2E_PORT)"
+fi
 
-  # Worker（と E2E ヘルパー）が読む .dev.vars を test DB 向けに一時差し替える。
-  # CI の "Create .dev.vars for E2E" ステップと同じ内容（ローカルでの自己完結用）。
-  echo "==> Writing temporary .dev.vars pointing at the test database..."
-  rm -f "$DEV_VARS"
-  cat > "$DEV_VARS" <<VARS
+# E2E 専用ポートに前回実行の孤児プロセスが残っていると reuseExistingServer: false でも
+# 起動に失敗する（bunx 経由の子プロセスが Playwright の kill を生き残ることがある）。
+# 専用ポートなので残骸は E2E のものと断定でき、安全に掃除できる。
+ORPHAN_PIDS=$(lsof -ti "tcp:$E2E_PORT" -sTCP:LISTEN 2>/dev/null || true)
+if [ -n "$ORPHAN_PIDS" ]; then
+  echo "==> Killing orphaned E2E server on port $E2E_PORT (pid: $ORPHAN_PIDS)..."
+  kill $ORPHAN_PIDS 2>/dev/null || true
+  sleep 1
+fi
+
+# Worker（と E2E ヘルパー）が読む .dev.vars を test DB 向けに一時差し替える。
+# CI の "Create .dev.vars for E2E" ステップと同じ内容（ローカルでの自己完結用）。
+# dev モードもこれを使うことで、E2E が開発用 DB（.env の DATABASE_URL）に触れないようにする。
+echo "==> Writing temporary .dev.vars pointing at the test database..."
+rm -f "$DEV_VARS"
+cat > "$DEV_VARS" <<VARS
 DATABASE_URL=$TEST_DATABASE_URL
 BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-dummy-secret-for-e2e}
-BETTER_AUTH_URL=http://localhost:3100
+BETTER_AUTH_URL=http://localhost:$E2E_PORT
 GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-dummy-client-id}
 GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-dummy-client-secret}
 VARS
-  DEV_VARS_REPLACED=1
+DEV_VARS_REPLACED=1
 
-  echo "==> Running Playwright E2E tests (prod-shape: built worker on workerd)..."
-else
-  echo "==> Running Playwright E2E tests (dev servers)..."
-fi
-
+echo "==> Running Playwright E2E tests..."
 cd "$ROOT_DIR/apps/client"
 npx playwright test ${ARGS+"${ARGS[@]}"}

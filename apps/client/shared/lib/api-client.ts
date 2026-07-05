@@ -26,8 +26,13 @@ type HonoAppLike = {
 
 const storage = new AsyncLocalStorage<ApiClient>();
 
-export function createInProcessApiClient(app: HonoAppLike): ApiClient {
-  return hc<AppType>("http://internal", { fetch: app.request.bind(app) });
+export function createInProcessApiClient(app: HonoAppLike, requestId?: string): ApiClient {
+  return hc<AppType>("http://internal", {
+    fetch: app.request.bind(app),
+    // SSR 起点の API 呼び出しを outer リクエストと同じ requestId で相関させる
+    // （api-service の requestId ミドルウェアは既存の x-request-id ヘッダーを尊重する）
+    headers: requestId ? { "x-request-id": requestId } : undefined,
+  });
 }
 
 export function runWithApiClient<T>(client: ApiClient, fn: () => Promise<T>): Promise<T> {

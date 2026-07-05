@@ -309,8 +309,8 @@ jobs:
 
       - name: Create .dev.vars for E2E
         run: |
-          # prod-shape は 3100 で起動する（playwright.config.ts と揃える）
-          PORT=3000
+          # ポートは playwright.config.ts と揃える（dev: 3200 / prod-shape: 3100）
+          PORT=3200
           if [ "${{ matrix.mode }}" = "prod-shape" ]; then PORT=3100; fi
           cat > apps/client/.dev.vars << VARS
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_db

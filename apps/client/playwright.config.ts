@@ -15,8 +15,11 @@ export default defineConfig({
   workers: isCI ? 2 : 1,
   reporter: "html",
   use: {
-    // prod-shape は 3100 を使う（開発サーバーが 3000 を掴んでいても共存できるように）
-    baseURL: isProdShape ? "http://localhost:3100" : "http://localhost:3000",
+    // E2E は専用ポート（dev: 3200 / prod-shape: 3100）を使い、開発サーバー（3000）とは共存させる。
+    // 既存サーバーの再利用はしない（reuseExistingServer: false）— 別の env/DB を向いた
+    // 開発サーバーや前回実行の残骸を拾うと、テストが「静かに間違った対象」を検証してしまうため。
+    // 専用ポートに残った孤児プロセスは scripts/test/test-e2e.sh が起動前に掃除する。
+    baseURL: isProdShape ? "http://localhost:3100" : "http://localhost:3200",
     trace: "on-first-retry",
   },
   projects: [
@@ -46,28 +49,12 @@ export default defineConfig({
         },
       ]
     : [
+        // API は client Worker（server.ts が /api/* を in-process の Hono へディスパッチ）に
+        // 同居しているため、vite dev サーバー1本で SSR も API も賄える。
         {
-          command: "bun run --hot src/index.ts",
-          cwd: "../../apps/api-service",
-          url: "http://localhost:8080/api/health",
-          reuseExistingServer: !isCI,
-          env: {
-            DATABASE_URL:
-              process.env.TEST_DATABASE_URL ??
-              "postgresql://postgres:postgres@localhost:5433/app_db",
-            NODE_ENV: "test",
-            API_PORT: "8080",
-            LOG_PRETTY: "false",
-            BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? "dummy-secret-for-e2e",
-            GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ?? "dummy-client-id",
-            GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? "dummy-client-secret",
-          },
-          timeout: 30_000,
-        },
-        {
-          command: "bunx vite --port 3000",
-          url: "http://localhost:3000",
-          reuseExistingServer: !isCI,
+          command: "bunx vite --port 3200 --strictPort",
+          url: "http://localhost:3200",
+          reuseExistingServer: false,
           timeout: 60_000,
         },
       ],

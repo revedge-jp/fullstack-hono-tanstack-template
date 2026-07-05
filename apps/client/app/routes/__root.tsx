@@ -81,7 +81,10 @@ function ErrorComponent({ error }: { error: Error }) {
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold text-red-600">エラー</h1>
-      <p>{error.message}</p>
+      <p>問題が発生しました。時間をおいて再度お試しください。</p>
+      {/* 生のエラーメッセージは内部情報を含みうるため開発時のみ表示する。
+          サーバー側には requestId 付きの構造化ログが残る（app/server.ts / requestLogger） */}
+      {import.meta.env.DEV ? <p className="mt-2 text-sm opacity-70">{error.message}</p> : null}
     </div>
   );
 }

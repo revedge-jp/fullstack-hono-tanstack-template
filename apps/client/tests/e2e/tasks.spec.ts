@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { closeAuthPool, type SeededUser, seedSignedInUser } from "./helpers/auth";
+import { type SeededUser, seedSignedInUser } from "./helpers/auth";
 
 // tasks 正典 feature の一気通貫シナリオ:
 // ログイン済み状態（DB シード + 署名済み cookie）で 作成 → 進行 → 完了 → 削除 を辿る。
@@ -12,9 +12,9 @@ test.describe("tasks シナリオ", () => {
     user = await seedSignedInUser("tasks-scenario");
   });
 
+  // auth pool のクローズは global-teardown に集約（spec ごとの閉じ忘れを防ぐ）
   test.afterAll(async () => {
     await user.cleanup();
-    await closeAuthPool();
   });
 
   test("タスクを作成 → 進行 → 完了 → 削除できる", async ({ context, page }) => {

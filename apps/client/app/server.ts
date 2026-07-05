@@ -39,7 +39,7 @@ type CFBindings = Record<string, string | { connectionString: string } | undefin
 
 // SSR（非 /api/*）レスポンス用のセキュリティヘッダー。/api/* は Hono 側の secureHeaders() が担う。
 // 静的アセット（CF assets バインディング直配信）には付かないが、CSP が意味を持つのは HTML なので十分。
-function withSecurityHeaders(response: Response, isProd: boolean): Response {
+function withSecurityHeaders(response: Response, isProd: boolean, requestId?: string): Response {
   const csp = [
     "default-src 'self'",
     // TanStack Start がハイドレーションデータをインラインスクリプトで注入するため 'unsafe-inline' が必要。
@@ -67,6 +67,10 @@ function withSecurityHeaders(response: Response, isProd: boolean): Response {
   if (isProd) {
     headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
+  if (requestId) {
+    // ユーザー報告・ブラウザ devtools からログを引けるように SSR レスポンスにも露出する
+    headers.set("x-request-id", requestId);
+  }
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -84,6 +88,9 @@ export default {
     const cleanup = () => end().catch(() => undefined);
     const waitUntil = (p: Promise<unknown>) => ctx?.waitUntil(p) ?? void p;
     const isProd = env?.NODE_ENV === "production";
+    // SSR とそこから発生する API 呼び出しを1つの requestId で相関させる
+    // （api-service 側の requestId ミドルウェア・アクセスログと同じ ID になる）。
+    const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
 
     try {
       const url = new URL(request.url);
@@ -98,18 +105,27 @@ export default {
       // SSR の loader/createServerFn が api-service をインプロセスで呼べるよう、
       // Hono RPC クライアントを AsyncLocalStorage で注入する（背景と設計意図は
       // shared/lib/api-client.ts を参照）。
-      const response = await runWithApiClient(createInProcessApiClient(honoApp), () =>
+      const response = await runWithApiClient(createInProcessApiClient(honoApp, requestId), () =>
         Promise.resolve(handler(request)),
       );
       waitUntil(cleanup());
-      return withSecurityHeaders(response, isProd);
+      return withSecurityHeaders(response, isProd, requestId);
     } catch (e) {
       waitUntil(cleanup());
-      console.error("[server] Error:", e);
+      // API 側の pino ログと突き合わせられるよう、requestId 付きの構造化ログで出力する
+      console.error(
+        JSON.stringify({
+          level: "error",
+          msg: "ssr unhandled error",
+          requestId,
+          err: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }),
+      );
       const body = isProd
-        ? "Internal Server Error"
+        ? `Internal Server Error (requestId: ${requestId})`
         : `Error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}`;
-      return withSecurityHeaders(new Response(body, { status: 500 }), isProd);
+      return withSecurityHeaders(new Response(body, { status: 500 }), isProd, requestId);
     }
   },
 };
