@@ -102,21 +102,18 @@ Browser → CF Worker (server.ts)
     () => handler(request))
       → /_authenticated loader
           → getSessionServerFn()
-              → getApiClient(request)     # AsyncLocalStorage から取得
+              → getApiClient()            # AsyncLocalStorage から取得
               → .api.me.$get({ cookie })  # app.request 直呼び（ネットワークなし）
                   → requestLogger / requireAuth 等の middleware を通過
                   → auth feature の usecase
 ```
 
-### データフロー（フォールバック: server.ts を経由しない実行環境）
-
-```
-Browser → TanStack Start dev server
-  getSessionServerFn()
-    → getApiClient(request)              # ALS 未設定 → hc<AppType>(origin) を生成
-    → .api.me.$get({ cookie })           # HTTP ループバック
-        → /api/$ ルート → getHonoApp().fetch()
-```
+この経路は **全実行モードで唯一**である。vite dev / vite preview / wrangler dev / 本番の
+いずれも `@cloudflare/vite-plugin` により `server.ts` が worker エントリとして動くため、
+ALS は常に設定される（各モードでプローブ計測し、旧 `/api/$` キャッチオール経由の
+HTTP ループバックフォールバックがどのモードでも発火しないことを確認済み — 2026-07-05）。
+このため旧フォールバック（`/api/$` ルート + `getHonoApp()`）は削除し、`getApiClient()` は
+ALS 未設定時に明示的にエラーを投げる。
 
 ### ファイル構成
 

@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "ln -sf ../../.env .dev.vars && sh -c 'vite --port ${CLIENT_PORT:-3000}'",
     "build": "vite build",
-    "start": "node .output/server/index.mjs",
     "preview": "wrangler dev",
     "deploy:staging": "vite build && node scripts/prepare-deploy.mjs staging && wrangler deploy --config dist/server/wrangler.json",
     "deploy:production": "vite build && node scripts/prepare-deploy.mjs production && wrangler deploy --config dist/server/wrangler.json",
