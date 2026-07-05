@@ -1,19 +1,27 @@
 name: Deploy
 
+# CI Pipeline (ci.yml) の完了を待って、成功した場合のみ deploy する。
+# workflow_run はタグ push でトリガーされた実行でも head_branch にタグ名(refs/tags/ 抜き)が
+# 入る仕様のため、ブランチ判定とタグ判定はどちらも head_branch を見れば区別できる。
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
 
 jobs:
   deploy:
     name: Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
-    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      (github.event.workflow_run.head_branch == 'main' || startsWith(github.event.workflow_run.head_branch, 'v'))
+    environment: ${{ startsWith(github.event.workflow_run.head_branch, 'v') && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       # テンプレート原本リポジトリ（scripts/init-template.sh 未実行 = wrangler.jsonc が
       # {{APP_NAME}} のまま、かつ Cloudflare/DB の secrets 未設定）では、この先の
@@ -44,26 +52,26 @@ jobs:
         run: bun run build
 
       - name: Migrate DB (staging)
-        if: steps.readiness.outputs.ready == 'true' && github.ref == 'refs/heads/main'
+        if: steps.readiness.outputs.ready == 'true' && github.event.workflow_run.head_branch == 'main'
         run: cd packages/database && bun run db:migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy (staging)
-        if: steps.readiness.outputs.ready == 'true' && github.ref == 'refs/heads/main'
+        if: steps.readiness.outputs.ready == 'true' && github.event.workflow_run.head_branch == 'main'
         run: cd apps/client && bunx wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Migrate DB (production)
-        if: steps.readiness.outputs.ready == 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: steps.readiness.outputs.ready == 'true' && startsWith(github.event.workflow_run.head_branch, 'v')
         run: cd packages/database && bun run db:migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy (production)
-        if: steps.readiness.outputs.ready == 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: steps.readiness.outputs.ready == 'true' && startsWith(github.event.workflow_run.head_branch, 'v')
         run: cd apps/client && bunx wrangler deploy --env production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
