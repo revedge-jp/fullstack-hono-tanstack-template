@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      actions: read # environments の GET は fine-grained では Actions (read) にマップされる
     outputs:
       exists: ${{ steps.check.outputs.exists }}
     steps:
