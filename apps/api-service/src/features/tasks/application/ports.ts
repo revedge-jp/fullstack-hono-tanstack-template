@@ -6,5 +6,9 @@ import type { ResultAsync } from "neverthrow";
  * 実装(アダプタ)は integrations/composition に置き、container.ts が注入する。
  */
 export type ActivityRecorder = {
-  recordTaskCreated(task: { id: string; title: string }): ResultAsync<void, "Unexpected">;
+  recordTaskCreated(task: {
+    id: string;
+    title: string;
+    ownerId: string;
+  }): ResultAsync<void, "Unexpected">;
 };

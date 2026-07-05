@@ -10,6 +10,7 @@ export function createActivityRecorder(deps: { activity: ActivityService }): Act
     recordTaskCreated: (task) =>
       deps.activity
         .recordActivity({
+          ownerId: task.ownerId,
           kind: "task_created",
           message: `Task "${task.title}" (${task.id}) created`,
         })

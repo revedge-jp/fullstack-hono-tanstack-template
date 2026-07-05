@@ -23,7 +23,7 @@ export function makeCreateTaskStep(deps: {
         // 不整合が起きる。副次的な記録の失敗で主処理を失敗扱いにしない。
         // （両方を不可分にしたい場合は同一 DB トランザクションで包む設計が必要）
         deps.activityRecorder
-          .recordTaskCreated({ id: task.id, title: task.title })
+          .recordTaskCreated({ id: task.id, title: task.title, ownerId: task.ownerId })
           .orElse((e) => {
             deps.logger.warn({ err: e, taskId: task.id }, "activity の記録に失敗しました");
             return okAsync(undefined);
