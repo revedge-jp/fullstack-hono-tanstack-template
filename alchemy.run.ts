@@ -69,7 +69,10 @@ if (isPreview) {
     organization: planetscaleOrg,
     isProduction: false,
     adopt: true,
-    // delete はデフォルト true: destroy でブランチごと消える（使い捨て前提）
+    // 必ず明示する: JSDoc は「デフォルト true」と言うが実装は `props.delete ?? false`
+    // （alchemy 0.93 のドキュメント齟齬）。明示しないと destroy で state から外れるだけで
+    // ブランチ実体が残り、PS-DEV の課金が続く
+    delete: true,
   });
   dbRole = await Role("db-role", {
     database: `${appName}-staging`,
