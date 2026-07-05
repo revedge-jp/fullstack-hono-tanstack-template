@@ -156,6 +156,21 @@ module.exports = {
       from: { path: "^apps/api-service/src/middlewares/" },
       to: { path: "^apps/api-service/src/integrations/" },
     },
+    // server: middlewares は feature の application（と domain の型）のみ参照可。
+    // infrastructure / presentation への依存は横断層の役割を逸脱する
+    {
+      name: "server-middlewares-no-infra-or-presentation",
+      severity: "error",
+      from: { path: "^apps/api-service/src/middlewares/" },
+      to: { path: "^apps/api-service/src/features/[^/]+/(infrastructure|presentation)/" },
+    },
+    // server: shared（横断ヘルパ）は feature 非依存に保つ
+    {
+      name: "server-shared-no-features",
+      severity: "error",
+      from: { path: "^apps/api-service/src/shared/" },
+      to: { path: "^apps/api-service/src/features/" },
+    },
     // server: integrations/external（外部SDKラッパー）は features に依存不可
     {
       name: "server-integrations-external-no-features",
