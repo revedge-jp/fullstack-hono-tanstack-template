@@ -77,3 +77,5 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 - [Cloudflare Workers デプロイガイド](./cloudflare-workers.md)
 - [wrangler rollback](https://developers.cloudflare.com/workers/wrangler/commands/#rollback)
 - [Cloudflare Notifications](https://developers.cloudflare.com/notifications/)
+
+<!-- preview stale-cleanup drill marker (temporary, PR は close 予定) -->
