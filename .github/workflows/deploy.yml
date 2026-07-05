@@ -10,14 +10,34 @@ on:
       - completed
 
 jobs:
+  detect-target:
+    name: Detect deploy target
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    outputs:
+      target: ${{ steps.detect.outputs.target }}
+    steps:
+      # ci.yml の push トリガー(branches: [main], tags: 'v*.*.*')に対応する正規表現でのみ
+      # staging/production を判定する。それ以外の head_branch では deploy しない。
+      - name: Detect target from head_branch
+        id: detect
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if [ "$HEAD_BRANCH" = "main" ]; then
+            echo "target=staging" >> "$GITHUB_OUTPUT"
+          elif [[ "$HEAD_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "target=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=none" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
     name: Deploy to Cloudflare Workers
+    needs: detect-target
+    if: needs.detect-target.outputs.target != 'none'
     runs-on: ubuntu-latest
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      (github.event.workflow_run.head_branch == 'main' || startsWith(github.event.workflow_run.head_branch, 'v'))
-    environment: ${{ startsWith(github.event.workflow_run.head_branch, 'v') && 'production' || 'staging' }}
+    environment: ${{ needs.detect-target.outputs.target }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,26 +72,26 @@ jobs:
         run: bun run build
 
       - name: Migrate DB (staging)
-        if: steps.readiness.outputs.ready == 'true' && github.event.workflow_run.head_branch == 'main'
+        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'staging'
         run: cd packages/database && bun run db:migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy (staging)
-        if: steps.readiness.outputs.ready == 'true' && github.event.workflow_run.head_branch == 'main'
+        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'staging'
         run: cd apps/client && bunx wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Migrate DB (production)
-        if: steps.readiness.outputs.ready == 'true' && startsWith(github.event.workflow_run.head_branch, 'v')
+        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'production'
         run: cd packages/database && bun run db:migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy (production)
-        if: steps.readiness.outputs.ready == 'true' && startsWith(github.event.workflow_run.head_branch, 'v')
+        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'production'
         run: cd apps/client && bunx wrangler deploy --env production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
