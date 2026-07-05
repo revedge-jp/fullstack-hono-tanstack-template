@@ -70,8 +70,8 @@ bunx wrangler secret put DATABASE_URL --env staging        # Hyperdrive binding 
 ```jsonc
 {
   "name": "{{APP_NAME}}",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat_v2"],
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
   "main": "dist/server/server.js",
   "assets": {
     "directory": "dist/client"
@@ -93,6 +93,34 @@ bunx wrangler secret put DATABASE_URL --env staging        # Hyperdrive binding 
     }
   }
 }
+```
+
+### 6. GitHub Secrets / Environments の設定（CI/CD デプロイ用）
+
+`.github/workflows/deploy.yml` は main への push で staging、`v*.*.*` タグで production に
+自動デプロイする。以下をリポジトリに設定する。
+
+**Repository Secrets**（Settings > Secrets and variables > Actions）:
+
+| Secret | 用途 |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | `wrangler deploy`（Workers 編集権限が必要） |
+| `CLOUDFLARE_ACCOUNT_ID` | 同上 |
+| `DATABASE_URL` | デプロイ前の `drizzle-kit migrate` |
+
+**Environment Variables**（Settings > Environments > `staging` / `production` > Variables）:
+
+| Variable | 用途 |
+|---|---|
+| `SMOKE_BASE_URL` | デプロイ直後の smoke チェック先 URL（例: `https://{{APP_NAME}}-staging.[account].workers.dev`）。`/api/health`（Hyperdrive 経由の DB 疎通）と `/`（SSR）を検証し、失敗するとデプロイジョブが赤になる。**未設定の場合 smoke チェックは skip される**（notice が出るだけでジョブは成功扱い） |
+
+```bash
+# gh CLI で設定する場合
+gh secret set CLOUDFLARE_API_TOKEN
+gh secret set CLOUDFLARE_ACCOUNT_ID
+gh secret set DATABASE_URL
+gh variable set SMOKE_BASE_URL --env staging --body "https://<app>-staging.<account>.workers.dev"
+gh variable set SMOKE_BASE_URL --env production --body "https://<your-domain>"
 ```
 
 ---
