@@ -12,39 +12,6 @@
   "assets": {
     "directory": "dist/client",
   },
-  "env": {
-    "staging": {
-      "name": "{{APP_NAME}}-staging",
-      "vars": {
-        "NODE_ENV": "production",
-        // TODO: staging の Workers URL に更新する
-        "CORS_ORIGIN": "https://{{APP_NAME}}-staging.example.workers.dev",
-        "BETTER_AUTH_URL": "https://{{APP_NAME}}-staging.example.workers.dev",
-      },
-      // TODO: `wrangler hyperdrive create {{APP_NAME}}-staging --connection-string "..."` で取得
-      "hyperdrive": [
-        {
-          "binding": "HYPERDRIVE",
-          "id": "TODO",
-        },
-      ],
-    },
-    "production": {
-      "name": "{{APP_NAME}}",
-      "vars": {
-        "NODE_ENV": "production",
-        // TODO: 本番ドメインが決まったら更新する
-        "CORS_ORIGIN": "https://{{APP_NAME}}.example.com",
-        "BETTER_AUTH_URL": "https://{{APP_NAME}}.example.com",
-      },
-      // TODO: 本番 Hyperdrive binding を作成して id を設定する
-      // `wrangler hyperdrive create {{APP_NAME}}-production --connection-string "..."` で取得
-      "hyperdrive": [
-        {
-          "binding": "HYPERDRIVE",
-          "id": "TODO",
-        },
-      ],
-    },
-  },
+  // staging / production のデプロイは Alchemy（alchemy.run.ts）が担うため、この設定は
+  // ローカル dev（vite / wrangler dev）専用。env セクションは持たない。
 }

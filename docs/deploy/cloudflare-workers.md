@@ -4,139 +4,97 @@
 
 ```
 Browser
-  └─ Cloudflare Workers ({{APP_NAME}}-staging / {{APP_NAME}}-prod)
+  └─ Cloudflare Workers ({{APP_NAME}}-staging / {{APP_NAME}})
        ├─ /api/*     → Hono (api-service)
-       │                └─ Hyperdrive → Supabase (PostgreSQL)
+       │                └─ Hyperdrive → PlanetScale (PostgreSQL)
        └─ /*         → TanStack Start SSR
             └─ Static Assets (dist/client)
 ```
 
+デプロイは **Alchemy**（`alchemy.run.ts`）が担う。PlanetScale の DB / Role、Cloudflare の
+Hyperdrive / Worker を IaC として作成・reconcile するため、**DB やHyperdrive をダッシュボードで
+手動作成する工程はない**。仕組みの詳細は [Alchemy IaC ガイド](../dev/alchemy-iac.md)、
+接続設定の背景は [ADR-002](../architecture/adr-002-hyperdrive-config.md) を参照。
+
+`.github/workflows/deploy.yml` が main への push で staging、`v*.*.*` タグで production に
+自動デプロイする。マイグレーション順序を守るため 2 段実行になっている:
+
+```
+① alchemy deploy（SKIP_WORKER=1）  # DB / Role / Hyperdrive を provision
+② drizzle-kit migrate              # 新コードが動く前にスキーマを揃える
+③ alchemy deploy                   # Worker をデプロイ
+④ smoke check                      # 失敗したら wrangler rollback で自動巻き戻し
+```
+
 ## 前提
 
-- Cloudflare アカウント・ダッシュボードへのアクセス権
-- Supabase プロジェクト（PostgreSQL）
-- Google Cloud Console でのOAuth クライアント設定
+- Cloudflare アカウント（Workers 編集権限の API トークン）
+- PlanetScale 組織 + サービストークン（Organization settings → Service tokens で発行。DB 作成権限付き）
+- Google Cloud Console での OAuth クライアント設定
 
 ---
 
 ## 初回セットアップ
 
-### 1. Supabase の準備
-
-1. Supabase ダッシュボードでプロジェクトを作成
-2. **Session Pooler の接続文字列を使用する**（Transaction Pooler は使わない）
-   - `Project Settings → Database → Connection pooling`
-   - Mode: **Session** / Port: **5432**
-   - `postgresql://postgres.[ref]:[password]@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres`
-3. DB マイグレーションを実行:
-   ```bash
-   DATABASE_URL="<supabase-session-pooler-url>" bun run db:migrate
-   ```
-
-> **重要**: Transaction Pooler (port 6543) を Hyperdrive と組み合わせると、Hyperdrive 内部ノード間の調整エラーが発生する。必ず Session Pooler (port 5432) を使用すること。
-> 詳細は [ADR-002](../architecture/adr-002-hyperdrive-config.md) を参照。
-
-### 2. Cloudflare Hyperdrive の設定
-
-1. Cloudflare ダッシュボード → **Workers & Pages → Hyperdrive → Create**
-2. 接続設定:
-   - Host: `aws-1-ap-northeast-1.pooler.supabase.com`
-   - Port: `5432`（Session Mode）
-   - Database: `postgres`
-   - User: `postgres.[your-ref]`
-   - Password: Supabase のパスワード
-3. 作成後、`wrangler.jsonc` の `hyperdrive.id` に Hyperdrive の ID を設定
-
-### 3. Google OAuth の設定
+### 1. Google OAuth の設定
 
 Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client:
 - Authorized JavaScript origins: `https://{{APP_NAME}}-staging.[account].workers.dev`
 - Authorized redirect URIs: `https://{{APP_NAME}}-staging.[account].workers.dev/api/auth/callback/google`
 
-### 4. Cloudflare Workers Secrets の設定
+### 2. GitHub Environments の設定
 
-```bash
-cd apps/client
+Settings > Environments で `staging` / `production` を作成し、それぞれに以下を設定する。
 
-# 必須シークレット
-bunx wrangler secret put BETTER_AUTH_SECRET --env staging  # ランダムな文字列
-bunx wrangler secret put GOOGLE_CLIENT_ID --env staging
-bunx wrangler secret put GOOGLE_CLIENT_SECRET --env staging
-bunx wrangler secret put DATABASE_URL --env staging        # Hyperdrive binding がない場合のフォールバック用
-```
-
-### 5. `wrangler.jsonc` の設定
-
-```jsonc
-{
-  "name": "{{APP_NAME}}",
-  "compatibility_date": "2026-06-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "main": "dist/server/server.js",
-  "assets": {
-    "directory": "dist/client"
-  },
-  "env": {
-    "staging": {
-      "name": "{{APP_NAME}}-staging",
-      "vars": {
-        "NODE_ENV": "production",
-        "CORS_ORIGIN": "https://{{APP_NAME}}-staging.[account].workers.dev",
-        "BETTER_AUTH_URL": "https://{{APP_NAME}}-staging.[account].workers.dev"
-      },
-      "hyperdrive": [
-        {
-          "binding": "HYPERDRIVE",
-          "id": "<hyperdrive-id>"
-        }
-      ]
-    }
-  }
-}
-```
-
-### 6. GitHub Secrets / Environments の設定（CI/CD デプロイ用）
-
-`.github/workflows/deploy.yml` は main への push で staging、`v*.*.*` タグで production に
-自動デプロイする。以下をリポジトリに設定する。
-
-**Repository Secrets**（Settings > Secrets and variables > Actions）:
+**Secrets**:
 
 | Secret | 用途 |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | `wrangler deploy`（Workers 編集権限が必要） |
+| `CLOUDFLARE_API_TOKEN` | Hyperdrive / Worker の作成・デプロイ（Workers 編集権限が必要） |
 | `CLOUDFLARE_ACCOUNT_ID` | 同上 |
-| `DATABASE_URL` | デプロイ前の `drizzle-kit migrate` |
+| `PLANETSCALE_SERVICE_TOKEN_ID` | PlanetScale DB / Role の作成 |
+| `PLANETSCALE_SERVICE_TOKEN` | 同上 |
+| `ALCHEMY_PASSWORD` | Alchemy state 内 secrets の暗号化パスワード（任意の強い文字列） |
+| `ALCHEMY_STATE_TOKEN` | Alchemy state store（CF 上の Durable Object）の認証トークン（任意の強い文字列。**全環境・ローカルで同一の値**にすること） |
+| `BETTER_AUTH_SECRET` | Better Auth のセッション署名鍵（`openssl rand -base64 32`） |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
 
-**Environment Variables**（Settings > Environments > `staging` / `production` > Variables）:
+**Variables**:
 
 | Variable | 用途 |
 |---|---|
-| `SMOKE_BASE_URL` | デプロイ直後の smoke チェック先 URL（例: `https://{{APP_NAME}}-staging.[account].workers.dev`）。`/api/health`（Hyperdrive 経由の DB 疎通）と `/`（SSR）を検証し、失敗するとデプロイジョブが赤になる。**未設定の場合 smoke チェックは skip される**（notice が出るだけでジョブは成功扱い） |
+| `APP_NAME` | Worker / Hyperdrive / DB の命名ベース（init-template.sh のアプリ名と同じ値） |
+| `PLANETSCALE_ORGANIZATION` | PlanetScale の組織名 |
+| `APP_ORIGIN` または `WORKERS_SUBDOMAIN` | 公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN` に使用）。`WORKERS_SUBDOMAIN` 指定時は `https://{worker名}.{subdomain}.workers.dev` を自動組み立て |
+| `SMOKE_BASE_URL` | デプロイ直後の smoke チェック先 URL。`/api/health`（Hyperdrive 経由の DB 疎通）と `/`（SSR）を検証し、失敗するとデプロイジョブが赤になる。**未設定の場合 smoke チェックは skip される**（notice が出るだけでジョブは成功扱い） |
 
 ```bash
-# gh CLI で設定する場合
-gh secret set CLOUDFLARE_API_TOKEN
-gh secret set CLOUDFLARE_ACCOUNT_ID
-gh secret set DATABASE_URL
+# gh CLI で設定する場合（staging の例）
+gh secret set CLOUDFLARE_API_TOKEN --env staging
+gh secret set CLOUDFLARE_ACCOUNT_ID --env staging
+gh secret set PLANETSCALE_SERVICE_TOKEN_ID --env staging
+gh secret set PLANETSCALE_SERVICE_TOKEN --env staging
+gh secret set ALCHEMY_PASSWORD --env staging
+gh secret set ALCHEMY_STATE_TOKEN --env staging
+gh secret set BETTER_AUTH_SECRET --env staging
+gh secret set GOOGLE_CLIENT_ID --env staging
+gh secret set GOOGLE_CLIENT_SECRET --env staging
+gh variable set APP_NAME --env staging --body "<app-name>"
+gh variable set PLANETSCALE_ORGANIZATION --env staging --body "<org>"
+gh variable set WORKERS_SUBDOMAIN --env staging --body "<account-subdomain>"
 gh variable set SMOKE_BASE_URL --env staging --body "https://<app>-staging.<account>.workers.dev"
-gh variable set SMOKE_BASE_URL --env production --body "https://<your-domain>"
 ```
 
----
+secrets / vars が未設定のうちは deploy job は notice を出して skip する（テンプレート原本や
+セットアップ途中のリポジトリが赤くならないため）。
 
-## デプロイ手順
+### 3. 初回デプロイ
+
+main に push するだけでよい（DB がなければ Alchemy が作る）。手動でやる場合:
 
 ```bash
-# 1. ビルド
-bun run build
-
-# 2. staging デプロイ
-cd apps/client
-bunx wrangler deploy --env staging
-
-# 3. 動作確認
-# ブラウザで https://{{APP_NAME}}-staging.[account].workers.dev にアクセス
+# .env に Infra セクション（.env.example 参照）を設定した上で
+bun run infra:deploy:staging
 ```
 
 ---
@@ -164,12 +122,13 @@ OAuth コールバック後に Better Auth が未 await のバックグラウン
 
 ### ログインができない（session check で 401）
 
-→ Supabase ダッシュボードで `auth_sessions` テーブルにレコードが作成されているか確認。
+→ PlanetScale ダッシュボード（Console タブ）で `auth_sessions` テーブルにレコードが作成されているか確認。
 ある場合は Hyperdrive のキャッシュが原因の可能性。Cloudflare ダッシュボードで Hyperdrive のキャッシュを一時的に無効化して確認。
 
 ### `Timed out while waiting for a message from another Hyperdrive node`
 
-→ Hyperdrive が Transaction Mode (port 6543) に接続している。Session Mode (port 5432) に変更すること。
+→ Hyperdrive の origin がプーラー（PlanetScale の pooled 接続 port 6432 等）になっている。直接続 (port 5432) に変更すること（ADR-002）。
+Alchemy 管理下では構造的に直接続になるため、手動で Hyperdrive を触った場合のみ起こりうる。
 
 ### `/api/*` が 404
 

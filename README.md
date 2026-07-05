@@ -84,7 +84,7 @@ gh auth login          # 未認証の場合
 ### デプロイ向け
 
 - [Cloudflare Workers デプロイガイド](docs/deploy/cloudflare-workers.md) - デプロイの概要とセットアップ
-- [Alchemy IaC ガイド](docs/dev/alchemy-iac.md) - Infrastructure as TypeScript（Hyperdrive + Worker、検証中）
+- [Alchemy IaC ガイド](docs/dev/alchemy-iac.md) - Infrastructure as TypeScript（PlanetScale DB + Hyperdrive + Worker。deploy.yml のデプロイ本体）
 - [GitHub ルールセット設定](docs/deploy/github-ruleset.md) - ブランチ保護の設定
 
 ## よく使うコマンド
@@ -114,10 +114,10 @@ bun run db:generate   # マイグレーションファイル生成（drizzle-kit
 bun run db:migrate    # マイグレーション適用（drizzle-kit migrate）
 ```
 
-### インフラ（Alchemy — 検証中）
+### インフラ（Alchemy）
 
 ```sh
-bun run infra:deploy:staging      # client をビルドして staging をデプロイ（Hyperdrive + Worker）
+bun run infra:deploy:staging      # client をビルドして staging をデプロイ（PlanetScale DB + Hyperdrive + Worker）
 bun run infra:deploy:production   # production をデプロイ
 bun run infra:destroy:staging     # staging のリソースを削除
 ```

@@ -8,7 +8,15 @@ function buildEnv(cfEnv: CFBindings): Record<string, string | undefined> {
   for (const [key, val] of Object.entries(cfEnv)) {
     if (typeof val === "string") {
       env[key] = val;
-    } else if (val !== null && typeof val === "object" && "connectionString" in val) {
+    } else if (
+      val !== null &&
+      typeof val === "object" &&
+      "connectionString" in val &&
+      // ASSETS 等の Fetcher/RPC プロキシは任意のプロパティ名の `in` に true を返すため、
+      // 実際に string であることまで確認しないと Hyperdrive の URL がプロキシの
+      // スタブ値で上書きされる（named assets binding を持つ Alchemy デプロイで顕在化）
+      typeof val.connectionString === "string"
+    ) {
       hyperdriveUrl = val.connectionString;
     }
   }
