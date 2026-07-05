@@ -44,6 +44,9 @@ jobs:
     if: needs.detect-target.outputs.target != 'none'
     runs-on: ubuntu-latest
     environment: ${{ needs.detect-target.outputs.target }}
+    permissions:
+      contents: read
+      actions: write # LAST_GOOD_SHA_* 変数の記録（rollback 用）
     env:
       # Alchemy（alchemy.run.ts）が参照する環境変数。
       # APP_NAME / WORKERS_SUBDOMAIN / APP_ORIGIN は Environment Variables、それ以外は Environment Secrets。
@@ -131,16 +134,35 @@ jobs:
         if: steps.readiness.outputs.ready == 'true'
         run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
 
-      # smoke 失敗時は直前のバージョンへ自動ロールバックする（壊れた版を出しっぱなしにしない）。
-      # ロールバック後もジョブは赤のまま残る（失敗の可視化のため）。手動手順は docs/deploy/operations.md。
-      # Worker 名は wrangler.jsonc の env 規則と同一（staging: -staging サフィックス、production: 素の名前）。
+      # smoke まで通った commit を「既知の正常版」として記録する（rollback の戻り先）。
+      # Alchemy のデプロイは上書き型で CF 側にバージョン履歴が残らないため、
+      # `wrangler rollback` は使えない — git ref ベースで戻す（実地訓練で確認済み）。
+      - name: Record last good deploy
+        if: steps.readiness.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: gh variable set "LAST_GOOD_SHA_${DEPLOY_TARGET}" --body "$HEAD_SHA" -R "$GITHUB_REPOSITORY"
+
+      # smoke 失敗時は「最後に smoke を通過した commit」を再ビルドして再デプロイする
+      # （壊れた版を出しっぱなしにしない）。ロールバック後もジョブは赤のまま残る（失敗の可視化のため）。
+      # DB スキーマは戻さない — expand/contract 規律（docs/deploy/operations.md）が
+      # 「旧コード + 新スキーマ」の安全性を担保する。
       - name: Rollback on smoke failure
         if: failure() && steps.smoke.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$DEPLOY_TARGET" = "production" ]; then
-            worker_name="$APP_NAME"
-          else
-            worker_name="$APP_NAME-$DEPLOY_TARGET"
+          good_sha=$(gh variable get "LAST_GOOD_SHA_${DEPLOY_TARGET}" -R "$GITHUB_REPOSITORY" 2>/dev/null || true)
+          if [ -z "$good_sha" ]; then
+            echo "::error::LAST_GOOD_SHA_${DEPLOY_TARGET} が未記録のためロールバックできません（初回デプロイの失敗）。手動対応してください: docs/deploy/operations.md"
+            exit 1
           fi
-          cd apps/client && bunx wrangler rollback --name "$worker_name" --yes \
-            --message "auto rollback: post-deploy smoke check failed"
+          echo "==> Rolling back to $good_sha ..."
+          git fetch --depth 1 origin "$good_sha"
+          git checkout --force "$good_sha"
+          bun install --frozen-lockfile
+          perl -pi -e 's/\{\{APP_NAME\}\}/$ENV{APP_NAME}/g' apps/client/wrangler.jsonc
+          bun run build
+          bunx alchemy deploy --stage "$DEPLOY_TARGET"
+          echo "==> Rollback deploy 完了（$good_sha）。このジョブは失敗のまま残します。"
