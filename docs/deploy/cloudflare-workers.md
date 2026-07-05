@@ -44,7 +44,19 @@ Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client:
 
 ### 2. GitHub Environments の設定
 
-Settings > Environments で `staging` / `production` を作成し、それぞれに以下を設定する。
+対話式スクリプトで設定する（推奨）:
+
+```bash
+bash scripts/setup-deploy-env.sh staging
+bash scripts/setup-deploy-env.sh production
+```
+
+各項目の説明を表示しながら 1 つずつ入力を求め、そのまま GitHub に登録する。
+**値はローカルのファイルに保存されない**（1Password 等の秘密管理ツールからその場で
+ペーストする運用。デプロイ資格情報を開発マシンに永続させないこと）。
+空 Enter でスキップでき、後から `gh secret set <NAME> --env <stage>` で追加できる。
+
+設定される項目の一覧（スクリプトが扱うのと同じもの）:
 
 **Secrets**:
 
@@ -68,25 +80,9 @@ Settings > Environments で `staging` / `production` を作成し、それぞれ
 | `APP_ORIGIN` または `WORKERS_SUBDOMAIN` | 公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN` に使用）。`WORKERS_SUBDOMAIN` 指定時は `https://{worker名}.{subdomain}.workers.dev` を自動組み立て |
 | `SMOKE_BASE_URL` | デプロイ直後の smoke チェック先 URL。`/api/health`（Hyperdrive 経由の DB 疎通）と `/`（SSR）を検証し、失敗するとデプロイジョブが赤になる。**未設定の場合 smoke チェックは skip される**（notice が出るだけでジョブは成功扱い） |
 
-```bash
-# gh CLI で設定する場合（staging の例）
-gh secret set CLOUDFLARE_API_TOKEN --env staging
-gh secret set CLOUDFLARE_ACCOUNT_ID --env staging
-gh secret set PLANETSCALE_SERVICE_TOKEN_ID --env staging
-gh secret set PLANETSCALE_SERVICE_TOKEN --env staging
-gh secret set ALCHEMY_PASSWORD --env staging
-gh secret set ALCHEMY_STATE_TOKEN --env staging
-gh secret set BETTER_AUTH_SECRET --env staging
-gh secret set GOOGLE_CLIENT_ID --env staging
-gh secret set GOOGLE_CLIENT_SECRET --env staging
-gh variable set APP_NAME --env staging --body "<app-name>"
-gh variable set PLANETSCALE_ORGANIZATION --env staging --body "<org>"
-gh variable set WORKERS_SUBDOMAIN --env staging --body "<account-subdomain>"
-gh variable set SMOKE_BASE_URL --env staging --body "https://<app>-staging.<account>.workers.dev"
-```
-
 secrets / vars が未設定のうちは deploy job は notice を出して skip する（テンプレート原本や
-セットアップ途中のリポジトリが赤くならないため）。
+セットアップ途中のリポジトリが赤くならないため）。個別に追加・修正する場合は
+`gh secret set <NAME> --env <stage>` / `gh variable set <NAME> --env <stage> --body "<値>"`。
 
 ### 3. 初回デプロイ
 
