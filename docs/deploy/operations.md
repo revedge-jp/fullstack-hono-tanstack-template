@@ -9,9 +9,9 @@
 
 ### 自動ロールバック（smoke 失敗時）
 
-`.github/workflows/deploy.yml` は smoke 通過のたびに commit SHA を
-`LAST_GOOD_SHA_<stage>`（リポジトリ変数）へ記録し、smoke チェック
-（`/api/health` + `/`）が失敗すると **その「既知の正常 commit」を再ビルドして再デプロイ**する。
+`.github/workflows/deploy.yml` は smoke チェック（`/api/health` + `/`）が失敗すると、
+GitHub の Deployment レコード（environment 付きジョブごとに自動記録される）から
+**「最後に成功した Deployment の commit」を解決し、再ビルドして再デプロイ**する。
 ロールバック後もジョブは赤のまま残るので、原因を修正するまで
 次のデプロイ（main への push / タグ作成）は行わないこと。
 

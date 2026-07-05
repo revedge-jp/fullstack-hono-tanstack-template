@@ -46,7 +46,7 @@ jobs:
     environment: ${{ needs.detect-target.outputs.target }}
     permissions:
       contents: read
-      actions: write # LAST_GOOD_SHA_* 変数の記録（rollback 用）
+      deployments: read # rollback の戻り先解決（過去の成功 Deployment の commit を参照）
     env:
       # Alchemy（alchemy.run.ts）が参照する環境変数。
       # APP_NAME / WORKERS_SUBDOMAIN / APP_ORIGIN は Environment Variables、それ以外は Environment Secrets。
@@ -134,18 +134,14 @@ jobs:
         if: steps.readiness.outputs.ready == 'true'
         run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
 
-      # smoke まで通った commit を「既知の正常版」として記録する（rollback の戻り先）。
-      # Alchemy のデプロイは上書き型で CF 側にバージョン履歴が残らないため、
-      # `wrangler rollback` は使えない — git ref ベースで戻す（実地訓練で確認済み）。
-      - name: Record last good deploy
-        if: steps.readiness.outputs.ready == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: gh variable set "LAST_GOOD_SHA_${DEPLOY_TARGET}" --body "$HEAD_SHA" -R "$GITHUB_REPOSITORY"
-
       # smoke 失敗時は「最後に smoke を通過した commit」を再ビルドして再デプロイする
       # （壊れた版を出しっぱなしにしない）。ロールバック後もジョブは赤のまま残る（失敗の可視化のため）。
+      #
+      # 戻り先は GitHub が environment 付きジョブごとに自動記録する Deployment レコードから
+      # 「success ステータスを持つ最新の Deployment の commit」を解決する（今回の失敗 run の
+      # Deployment には success が付かないため自然に除外される）。
+      # `wrangler rollback` は使えない — Alchemy のデプロイは上書き型で CF 側にバージョン
+      # 履歴が残らない（実地訓練で確認済み）。
       # DB スキーマは戻さない — expand/contract 規律（docs/deploy/operations.md）が
       # 「旧コード + 新スキーマ」の安全性を担保する。
       - name: Rollback on smoke failure
@@ -153,9 +149,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          good_sha=$(gh variable get "LAST_GOOD_SHA_${DEPLOY_TARGET}" -R "$GITHUB_REPOSITORY" 2>/dev/null || true)
+          good_sha=""
+          for id_sha in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$DEPLOY_TARGET&per_page=30" --jq '.[] | "\(.id):\(.sha)"'); do
+            id="${id_sha%%:*}"
+            sha="${id_sha##*:}"
+            if gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" --jq '.[].state' | grep -qx "success"; then
+              good_sha="$sha"
+              break
+            fi
+          done
           if [ -z "$good_sha" ]; then
-            echo "::error::LAST_GOOD_SHA_${DEPLOY_TARGET} が未記録のためロールバックできません（初回デプロイの失敗）。手動対応してください: docs/deploy/operations.md"
+            echo "::error::この environment に成功した Deployment がなくロールバックできません（初回デプロイの失敗）。手動対応してください: docs/deploy/operations.md"
             exit 1
           fi
           echo "==> Rolling back to $good_sha ..."
