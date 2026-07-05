@@ -101,7 +101,10 @@ jobs:
       # ロールバック後もジョブは赤のまま残る（失敗の可視化のため）。手動手順は docs/deploy/operations.md。
       - name: Rollback (staging) on smoke failure
         if: failure() && steps.smoke_staging.outcome == 'failure'
-        run: cd apps/client && bunx wrangler rollback --env staging --yes --message "auto rollback: post-deploy smoke check failed"
+        # メッセージ内の「: 」は YAML plain scalar として不正のため folded scalar で書く
+        run: >-
+          cd apps/client && bunx wrangler rollback --env staging --yes
+          --message "auto rollback: post-deploy smoke check failed"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -127,7 +130,9 @@ jobs:
 
       - name: Rollback (production) on smoke failure
         if: failure() && steps.smoke_production.outcome == 'failure'
-        run: cd apps/client && bunx wrangler rollback --env production --yes --message "auto rollback: post-deploy smoke check failed"
+        run: >-
+          cd apps/client && bunx wrangler rollback --env production --yes
+          --message "auto rollback: post-deploy smoke check failed"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
