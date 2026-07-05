@@ -37,6 +37,43 @@ if (typeof globalThis.addEventListener === "function") {
 type CFContext = { waitUntil: (p: Promise<unknown>) => void } | undefined;
 type CFBindings = Record<string, string | { connectionString: string } | undefined>;
 
+// SSR（非 /api/*）レスポンス用のセキュリティヘッダー。/api/* は Hono 側の secureHeaders() が担う。
+// 静的アセット（CF assets バインディング直配信）には付かないが、CSP が意味を持つのは HTML なので十分。
+function withSecurityHeaders(response: Response, isProd: boolean): Response {
+  const csp = [
+    "default-src 'self'",
+    // TanStack Start がハイドレーションデータをインラインスクリプトで注入するため 'unsafe-inline' が必要。
+    // dev では vite の変換で 'unsafe-eval' も要る。
+    isProd
+      ? "script-src 'self' 'unsafe-inline'"
+      : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // Google Fonts（__root.tsx）を許可。セルフホスト化したらこの2行から外部オリジンを外すこと。
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    // dev は vite HMR の WebSocket を許可
+    isProd ? "connect-src 'self'" : "connect-src 'self' ws: wss:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+
+  const headers = new Headers(response.headers);
+  headers.set("Content-Security-Policy", csp);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  if (isProd) {
+    headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request: Request, env: CFBindings, ctx: CFContext) {
     // リクエストごとに新しい Hono アプリ（および postgres.js クライアント）を生成する。
@@ -46,6 +83,7 @@ export default {
     const { app: honoApp, end } = initHonoApp(env ?? {});
     const cleanup = () => end().catch(() => undefined);
     const waitUntil = (p: Promise<unknown>) => ctx?.waitUntil(p) ?? void p;
+    const isProd = env?.NODE_ENV === "production";
 
     try {
       const url = new URL(request.url);
@@ -64,15 +102,14 @@ export default {
         Promise.resolve(handler(request)),
       );
       waitUntil(cleanup());
-      return response;
+      return withSecurityHeaders(response, isProd);
     } catch (e) {
       waitUntil(cleanup());
       console.error("[server] Error:", e);
-      const isProd = env.NODE_ENV === "production";
       const body = isProd
         ? "Internal Server Error"
         : `Error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}`;
-      return new Response(body, { status: 500 });
+      return withSecurityHeaders(new Response(body, { status: 500 }), isProd);
     }
   },
 };
