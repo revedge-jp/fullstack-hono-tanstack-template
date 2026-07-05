@@ -57,6 +57,11 @@ jobs:
           if grep -q '{{APP_NAME}}' apps/client/wrangler.jsonc; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::notice::apps/client/wrangler.jsonc still has the {{APP_NAME}} placeholder. Run scripts/init-template.sh <app-name> to enable deployment. Skipping deploy."
+          elif grep -qE 'example\.workers\.dev|example\.com|"id": "TODO"' apps/client/wrangler.jsonc; then
+            # init-template.sh 後もダミー URL / Hyperdrive id が残っていると、デプロイ自体は成功するのに
+            # OAuth リダイレクト・CORS・DB 接続がサイレントに壊れる。ここで検出して skip する。
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/client/wrangler.jsonc still contains placeholder values (example.workers.dev / example.com / Hyperdrive id TODO). Update CORS_ORIGIN / BETTER_AUTH_URL / hyperdrive.id for this environment. Skipping deploy."
           elif [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$DATABASE_URL" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / DATABASE_URL is not fully configured. Skipping deploy."
@@ -88,8 +93,18 @@ jobs:
       # （production はタグ push で別途デプロイされるため、ここが赤のうちはタグを切らないこと）。
       # SMOKE_BASE_URL は GitHub Environment (staging) の Variables に設定する。
       - name: Smoke check (staging)
+        id: smoke_staging
         if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'staging'
         run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
+
+      # smoke 失敗時は直前のバージョンへ自動ロールバックする（壊れた版を出しっぱなしにしない）。
+      # ロールバック後もジョブは赤のまま残る（失敗の可視化のため）。手動手順は docs/deploy/operations.md。
+      - name: Rollback (staging) on smoke failure
+        if: failure() && steps.smoke_staging.outcome == 'failure'
+        run: cd apps/client && bunx wrangler rollback --env staging --yes --message "auto rollback: post-deploy smoke check failed"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Migrate DB (production)
         if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'production'
@@ -106,5 +121,13 @@ jobs:
 
       # SMOKE_BASE_URL は GitHub Environment (production) の Variables に設定する。
       - name: Smoke check (production)
+        id: smoke_production
         if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'production'
         run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
+
+      - name: Rollback (production) on smoke failure
+        if: failure() && steps.smoke_production.outcome == 'failure'
+        run: cd apps/client && bunx wrangler rollback --env production --yes --message "auto rollback: post-deploy smoke check failed"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

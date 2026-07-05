@@ -180,3 +180,9 @@ OAuth コールバック後に Better Auth が未 await のバックグラウン
 ```bash
 openssl rand -base64 32
 ```
+
+---
+
+## 運用（ロールバック・マイグレーション規律・通知・レート制限）
+
+デプロイ後の運用ルールは [運用ガイド](./operations.md) を参照。
