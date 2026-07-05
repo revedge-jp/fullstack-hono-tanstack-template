@@ -106,7 +106,7 @@ jobs:
       GIT_SHA: ${{ github.event.workflow_run.head_sha }}
       APP_VERSION: ${{ github.event.workflow_run.head_branch }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           # git push はしない。rollback の fetch は下で明示的にトークン付き URL を使う。

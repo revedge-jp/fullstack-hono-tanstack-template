@@ -89,7 +89,7 @@ jobs:
       GIT_SHA: ${{ github.event.pull_request.head.sha }}
       APP_VERSION: pr-${{ github.event.number }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
@@ -190,7 +190,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       # destroy は state から逆順削除するだけなのでビルド不要（alchemy CLI と認証情報だけ要る）
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
