@@ -60,6 +60,17 @@ SHOW_DATABASE_URL=1 bun run infra:deploy:staging
 1 つ作成される。同名の既存リソースがあれば `adopt: true` で引き継ぐ（ダッシュボードで手動作成済みの
 DB / Hyperdrive からもそのまま移行できる）。
 
+### pr-* stage（PR プレビュー環境）
+
+`--stage pr-<番号>` は PR プレビュー用の特殊 stage（通常は `preview.yml` が管理し、手で叩くことはない）。
+staging / production との違い:
+
+- DB は `Database` を新規作成せず、**staging DB（`{APP_NAME}-staging`）の `Branch`** を作る
+  （PS-DEV インスタンス、存在時間分の按分課金、スキーマ・データは複製されない）
+- Branch の `delete` はデフォルト **true**: `alchemy destroy --stage pr-N` で DB ブランチごと消える
+  （staging / production の DB が destroy で消えないのとは逆。使い捨て前提のため）
+- `APP_ORIGIN` は無視され、URL は常に `{APP_NAME}-pr-N.{WORKERS_SUBDOMAIN}.workers.dev`
+
 ## 仕組み
 
 - PlanetScale: `Database`（Postgres / PS_5 / Tokyo / arm / `replicas: 0` = シングルノード $5/月）→

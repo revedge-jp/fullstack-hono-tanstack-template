@@ -97,6 +97,35 @@ main に push するだけでよい（DB がなければ Alchemy が作る）。
 bun run infra:deploy:staging
 ```
 
+### 4. preview ラベルの作成（PR プレビュー環境を使う場合）
+
+```bash
+gh label create preview --color 1D76DB --description "この PR に使い捨てプレビュー環境を立てる"
+```
+
+---
+
+## PR プレビュー環境（opt-in）
+
+`.github/workflows/preview.yml` が、**`preview` ラベルを付けた PR にだけ**使い捨ての
+プレビュー環境を立てる:
+
+| 操作 | 動作 |
+|---|---|
+| `preview` ラベルを付ける | Worker（`{APP_NAME}-pr-N.workers.dev`）+ DB（staging DB のブランチ、空の状態から migration 適用）を作成し、PR に URL をコメント |
+| ラベル付きのまま push | 再デプロイ（DB ブランチは使い回し、migration は差分適用） |
+| ラベルを外す / PR クローズ・マージ | 環境を丸ごと削除（DB ブランチも消える） |
+| 7日間更新なしで放置 | `preview-cleanup.yml` が自動削除しラベルを外す（毎日 06:00 JST） |
+
+**コスト**: DB ブランチ（PS-DEV）は存在している時間の按分課金（$5/月相当）。オートスリープは
+ないため「ラベルを付けている間だけ課金」と理解すること。レビューが数日で終わる PR なら数十円。
+
+**注意**:
+- DB は**空**（本番・staging のデータは複製されない）。デモデータが必要なら seed を流すこと
+- fork からの PR では動かない（GitHub の仕様で secrets が渡らない）。同一リポジトリのブランチ専用
+- ビルドは PR のコードを secrets が見える環境で実行するため、**信頼できる PR にだけラベルを付ける**こと
+- staging DB が存在していることが前提（プレビューの DB はそのブランチとして作られる）
+
 ---
 
 ## アーキテクチャ上の注意点
