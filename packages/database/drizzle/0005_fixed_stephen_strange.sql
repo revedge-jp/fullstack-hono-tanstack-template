@@ -1,0 +1,2 @@
+CREATE INDEX "activities_owner_occurred_idx" ON "activities" USING btree ("owner_id","occurred_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "tasks_owner_created_id_idx" ON "tasks" USING btree ("owner_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);
