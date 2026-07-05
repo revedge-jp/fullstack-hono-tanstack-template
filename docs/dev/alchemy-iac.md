@@ -35,7 +35,7 @@ bun run infra:deploy:production   # production をデプロイ
 bun run infra:destroy:staging     # staging のリソースを削除
 ```
 
-命名は wrangler.jsonc の env 規則と同一（staging: `{APP_NAME}-staging`、production: `{APP_NAME}`）。既存 Worker があれば `adopt: true` で引き継ぐ。
+命名は wrangler.jsonc の env 規則と同一（staging: `{APP_NAME}-staging`、production: `{APP_NAME}`）。同名の既存 Worker / Hyperdrive があれば `adopt: true` で引き継ぐ（`wrangler hyperdrive create` で手動作成済みの環境からもそのまま移行できる）。
 
 ## 仕組み
 

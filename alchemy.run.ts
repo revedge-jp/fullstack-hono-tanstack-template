@@ -50,6 +50,7 @@ if (originPort !== 5432) {
 
 const hyperdrive = await Hyperdrive("hyperdrive", {
   name: `${appName}-${stage}`,
+  adopt: true,
   origin: {
     host: origin.hostname,
     port: originPort,
