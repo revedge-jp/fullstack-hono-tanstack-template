@@ -108,7 +108,7 @@ sequenceDiagram
         Hono-->>User: JSON レスポンス
     else ページリクエスト
         Worker->>Worker: TanStack Start SSR
-        Note over Worker,Hono: loader からは AsyncLocalStorage の<br/>container 経由で service を直接呼ぶ<br/>(HTTPループバック不可のため)
+        Note over Worker,Hono: loader からは AsyncLocalStorage で注入された<br/>in-process Hono RPC クライアントで /api/* を呼ぶ<br/>(HTTPループバック不可のため。ADR-001)
         Worker-->>User: HTML レスポンス
     end
 ```

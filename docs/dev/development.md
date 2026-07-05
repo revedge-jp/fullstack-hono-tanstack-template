@@ -29,7 +29,7 @@ apps/client/
 │   └── server.ts           # Worker の fetch ハンドラー（api-service をバンドル）
 ├── features/               # 機能単位のスライス
 │   ├── tasks/
-│   │   ├── actions/        # createServerFn による mutation
+│   │   ├── actions/        # mutation: ブラウザから Hono RPC を直接呼ぶ平関数
 │   │   ├── queries/        # データ取得（SSR loader 用 createServerFn / queryOptions）
 │   │   ├── ui/             # UI コンポーネント
 │   │   └── index.ts        # パブリック API
@@ -115,10 +115,10 @@ Hono を使用した REST API サーバー。クリーンアーキテクチャ�
 Hono は軽量で高速な Web フレームワークです。
 
 - ルーティング: `features/*/presentation/` 配下（共通ルートは `routes/`）
-- バリデーション: `sValidator`（`@hono/standard-validator`）で Zod スキーマを使用
-- ミドルウェア: `middlewares/` 配下で定義（cors, logging など）
+- バリデーション: `zValidator`（`@hono/zod-validator`）で Zod スキーマを使用
+- ミドルウェア: 共通ミドルウェア（requestId・requestLogger・secureHeaders・cors・bodyLimit 1MiB 等）は `app.ts` で適用。横断ミドルウェア（requireAuth・requestLogger）は `src/middlewares/` 配下
 - ルータ: RegExpRouter を採用
-- 観測ログ: `pinoLogger`（hono-pino）が requestId / method / path / status / durationMs を構造化 JSON で出力。本番では `@google-cloud/pino-logging-gcp-config` により Cloud Logging 準拠形式で出力
+- 観測ログ: 自作の `requestLogger` ミドルウェア（`src/middlewares/request-logger.ts`）が requestId を束ねた pino 子ロガーを context に載せ、method / path / status / durationMs を構造化 JSON で出力（`c.get("logger")` で参照）
 
 ### DDD/クリーンアーキテクチャ
 
@@ -488,7 +488,7 @@ bunx hono search middleware --pretty
 
 オプション（各アプリケーション）:
 - Server: `PORT`（既定: 8080）, `NODE_ENV`, `CORS_ORIGIN`, `LOG_PRETTY`
-- Client: `API_BASE_URL`（既定: `http://localhost:8080`）
+- Client: なし（API はインプロセス呼び出しのためベース URL 不要）
 
 ### 本番環境
 
