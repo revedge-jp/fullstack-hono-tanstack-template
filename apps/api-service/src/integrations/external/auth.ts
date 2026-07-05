@@ -9,6 +9,16 @@ export function createAuth(config: AppConfig["auth"], nodeEnv: AppConfig["nodeEn
     secret: config.secret,
     baseURL: config.baseURL,
     trustedOrigins: config.trustedOrigins,
+    session: {
+      cookieCache: {
+        // 署名付き cookie にセッションを最大5分キャッシュし、getSession ごとの
+        // auth_sessions への DB 往復（CF Workers では Hyperdrive 経由のネットワーク往復）を省く。
+        // トレードオフ: サインアウト・セッション失効の反映が cookie 期限まで（最大5分）遅れる。
+        // 即時失効が必要な要件では enabled: false にするか maxAge を短くすること。
+        enabled: true,
+        maxAge: 5 * 60,
+      },
+    },
     advanced: {
       ipAddress: {
         ipAddressHeaders: ["CF-Connecting-IP"],

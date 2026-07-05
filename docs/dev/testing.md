@@ -1,7 +1,8 @@
 # テストガイド
 
 新機能追加時に「どこに何のテストを書くか」の基準を定めたガイドです。
-全部が毎回必須ではなく、**層ごとに判断**します。
+全部が毎回必須ではなく、**層ごとに判断**します。正典実装は `tasks` feature — 迷ったら
+tasks の同種テストを開いてパターンを踏襲してください。
 
 ---
 
@@ -21,8 +22,8 @@ client:
 【追加（ロジックが増えたら）】
   domain/models.test.ts                            ← ドメイン振る舞いがある場合
   application/{op}/validators.test.ts              ← バリデータがある場合
-  __tests__/scenario/{f}.scenario.test.ts          ← 複数ステップシナリオがある場合
-  __tests__/integration/app.int.test.ts            ← 実 DB 確認が必要な場合
+  __tests__/integration/{f}.int.test.ts            ← 実 DB 確認が必要な場合
+  tests/e2e/*.spec.ts (client)                     ← ブラウザ通しのシナリオ
 ```
 
 ---
@@ -34,23 +35,21 @@ client:
 | ファイル | 場所 | 内容 |
 |---------|------|------|
 | `usecase.test.ts` | `application/{op}/` co-located | 正常系×1、異常系（Invalid / NotFound / Conflict / Unexpected）×複数 |
-| `contract/{f}.contract.test.ts` | `__tests__/contract/` | レスポンスの**スキーマ形状**を Zod で検証。既存ファイルに追記 or 新ファイル |
-| `inmemory.repository.test.ts` | `test-helpers/` | repo に新メソッドを追加した場合は追記 |
+| `contract/{f}.contract.test.ts` | `__tests__/contract/` | ステータスコードとレスポンス形状を検証（認証必須なら 401 ケースも）。既存ファイルに追記 or 新ファイル |
 
 ### ロジックがある場合のみ
 
 | ファイル | 条件 |
 |---------|------|
 | `domain/models.test.ts` | ドメインオブジェクトに振る舞い（バリデーション・操作）がある場合 |
-| `validators.test.ts` | `application/{op}/validators.ts` を作った場合 |
+| `validators.test.ts` | `application/{op}/validators.ts` に非自明なロジックがある場合 |
 
 ### 既存ファイルに追記する（新ファイルは作らない）
 
 | ファイル | 追記のタイミング |
 |---------|---------------|
 | `__tests__/unit/router.validation.test.ts` | 新エンドポイントのバリデーション（400 系） |
-| `__tests__/scenario/{f}.scenario.test.ts` | 複数ステップにまたがるフロー（create → update → get など） |
-| `__tests__/integration/app.int.test.ts` | 実 DB での動作確認が必要な場合（`TEST_DATABASE_URL` 依存） |
+| `__tests__/integration/{f}.int.test.ts` | 実 DB での動作確認（制約・オーナースコープ等。`TEST_DATABASE_URL` 依存） |
 
 ---
 
@@ -60,36 +59,24 @@ client:
 
 | ファイル | 場所 | 内容 |
 |---------|------|------|
-| `{action}.test.ts` | `actions/` co-located | `process{Op}` を直接呼ぶ。`createFakeApp` + `hc` で DI |
-| `{query}.test.ts` | `queries/` co-located | query 関数を直接呼ぶ。同上 |
+| `{action}.test.ts` | `actions/` co-located | action 関数を直接呼ぶ。`mock.module` で `hono/client` を差し替え |
+| `{query}.test.ts` | `queries/` co-located | serverFn を直接呼ぶ。`mock.module` で `@/shared/lib/api-client` 等を差し替え |
 
 ### 不要
 
 - **UI コンポーネント**（`ui/` 配下）のテストは書かない
-  - RSC のレンダリング単体テストはコストに見合わない
+  - サーバーレンダリングの単体テストはコストに見合わない
   - データ取得は query テストが、表示は E2E（Playwright）がカバー
 
 ---
 
 ## テストヘルパーの使い方
 
-### createFakeApp
+### createFakeApp（api-service/test-helpers）
 
-DB 接続不要のテスト用 Hono アプリを生成します。
-api-service・client のどちらのテストでも共通で使います。
-
-```typescript
-import { createFakeApp, createInMemoryUsersRepository, reconstituteUser } from "api-service/test-helpers";
-
-// 空の状態で起動
-const app = createFakeApp();
-
-// 初期データを注入
-const repo = createInMemoryUsersRepository([
-  reconstituteUser({ id: "550e8400-...", email: "alice@example.com", name: "Alice" }),
-]);
-const app = createFakeApp({ usersRepository: repo });
-```
+DB 接続不要のテスト用 Hono アプリを生成します。ルーターのテストでは、
+service / getSession をフェイクで注入した app を組むのが基本形です
+（実例: `__tests__/contract/tasks.contract.test.ts`）。
 
 ### Hono RPC クライアントの DI
 
@@ -104,161 +91,109 @@ const client = hc<AppType>("http://localhost", {
 
 ---
 
-## コードパターン集
+## コードパターン集（すべて実在するテストの抜粋）
 
-### api-service: usecase.test.ts
+### api-service: usecase.test.ts（実例: `features/activity/application/record/usecase.test.ts`）
+
+リポジトリをフェイクで注入し、Result の Ok / Err を検証します。
 
 ```typescript
 import { describe, expect, test } from "bun:test";
 import { errAsync, okAsync } from "neverthrow";
-import { reconstituteUser, type User } from "../../domain/models";
-import type { UsersRepository } from "../../domain/users.repository";
-import { makeCreateUser } from "./usecase";
+import type { ActivityRepository } from "../../domain/activity.repository";
+import { reconstituteActivity } from "../../domain/models";
+import { makeRecordActivity } from "./usecase";
 
-const ID_1 = "550e8400-e29b-41d4-a716-446655440001";
-
-describe("users.create ユースケース", () => {
-  test("正常: 有効な入力でユーザーを作成する", async () => {
-    const usersRepository: UsersRepository = {
+describe("activity.record usecase", () => {
+  test("正常: 有効な入力で活動ログを記録する", async () => {
+    const activityRepository: ActivityRepository = {
+      record: () => okAsync(reconstituteActivity({ /* ... */ })),
       list: () => okAsync({ items: [] }),
-      create: () => okAsync(reconstituteUser({ id: ID_1, email: "test@example.com", name: "Test" })),
-      getById: () => okAsync(null),
-      update: (user) => okAsync(user),
     };
-    const usecase = makeCreateUser({ usersRepository });
-    const r = await usecase({ email: "test@example.com", name: "Test User" });
+    const usecase = makeRecordActivity({ activityRepository });
+    const r = await usecase({ ownerId: "user-1", kind: "task_created", message: "..." });
     expect(r.isOk()).toBe(true);
-    if (r.isOk()) {
-      expect(r.value.item.id).toBe(ID_1);
-    }
   });
 
-  test("異常: バリデーション失敗で Invalid を返す", async () => {
-    const usersRepository: UsersRepository = { /* ... */ } as UsersRepository;
-    const usecase = makeCreateUser({ usersRepository });
-    const r = await usecase({ email: "invalid-email", name: "User" });
+  test("異常: リポジトリが失敗した場合 Unexpected を返す", async () => {
+    const activityRepository: ActivityRepository = {
+      record: () => errAsync("Unexpected" as const),
+      list: () => okAsync({ items: [] }),
+    };
+    const usecase = makeRecordActivity({ activityRepository });
+    const r = await usecase({ ownerId: "user-1", kind: "task_created", message: "..." });
     expect(r.isErr()).toBe(true);
-    if (r.isErr()) expect(r.error).toBe("Invalid");
-  });
-
-  test("異常: メール重複で Conflict を返す", async () => {
-    const usersRepository: UsersRepository = {
-      // ...
-      create: () => errAsync("Conflict"),
-    } as UsersRepository;
-    const usecase = makeCreateUser({ usersRepository });
-    const r = await usecase({ email: "dup@example.com", name: "User" });
-    expect(r.isErr()).toBe(true);
-    if (r.isErr()) expect(r.error).toBe("Conflict");
+    if (r.isErr()) expect(r.error).toBe("Unexpected");
   });
 });
 ```
 
-### api-service: contract test への追記
+### api-service: contract test（実例: `__tests__/contract/tasks.contract.test.ts`）
+
+service と getSession をフェイクにしたルーターへ HTTP リクエストを投げ、
+ステータス + レスポンス形状（認証 401 含む）を検証します。
 
 ```typescript
-// __tests__/contract/users.contract.test.ts に追記
-test("DELETE /api/users/:id → 204 を返す", async () => {
-  const app = createFakeApp();
-  // まず create して id を取得
-  const createRes = await app.request("/api/users", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "del@example.com", name: "Del" }),
-  });
-  const { item } = (await createRes.json()) as { item: { id: string } };
+function createTestApp(overrides: MockTasks = {}) {
+  const tasks = { /* 各ユースケースを okAsync/errAsync のフェイクで */ };
+  return new Hono().route(
+    "/api/tasks",
+    createTasksRouter({ tasks, getSession: overrides.getSession ?? (() => okAsync(mockUser)) }),
+  );
+}
 
-  const res = await app.request(`/api/users/${item.id}`, { method: "DELETE" });
-  expect(res.status).toBe(204);
+test("未認証: 401", async () => {
+  const app = createTestApp({ getSession: () => errAsync("Unauthorized" as const) });
+  const res = await app.request("/api/tasks");
+  expect(res.status).toBe(401);
 });
 ```
 
-### api-service: router.validation.test.ts への追記
+### client: action test（実例: `features/tasks/actions/create-task.test.ts`）
 
-```typescript
-// __tests__/unit/router.validation.test.ts に追記
-test("DELETE /users/:id: 不正な UUID で 400 または 404 を返す", async () => {
-  const app = createFakeApp();
-  const res = await app.request("/api/users/not-a-uuid", { method: "DELETE" });
-  expect([400, 404]).toContain(res.status);
-});
-```
-
-### client: action.test.ts
+`mock.module` で `hono/client` を差し替え、action 関数の入出力を検証します。
 
 ```typescript
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import type { AppType } from "api-service";
-import { createFakeApp, type createInMemoryUsersRepository } from "api-service/test-helpers";
-import { hc } from "hono/client";
-import { processCreateUser } from "./create";
 
-mock.module("next/cache", () => ({ updateTag: mock() }));
-mock.module("@/shared/lib/api", () => ({ apiClient: null }));
+let mockOk = true;
+let mockBody: unknown = { ok: false, error: "Invalid" };
 
-function makeFakeApiClient(repo?: ReturnType<typeof createInMemoryUsersRepository>) {
-  const app = createFakeApp(repo ? { usersRepository: repo } : {});
-  return hc<AppType>("http://localhost", { fetch: app.request.bind(app) });
-}
+mock.module("hono/client", () => ({
+  hc: () => ({
+    api: { tasks: { $post: mock(() => Promise.resolve({ ok: mockOk, json: async () => mockBody })) } },
+  }),
+}));
 
-describe("processCreateUser", () => {
-  let client: ReturnType<typeof makeFakeApiClient>;
+const { createTask } = await import("./create-task");
 
-  beforeEach(() => {
-    client = makeFakeApiClient();
-  });
-
-  test("正常: 有効な入力でユーザーを作成する", async () => {
-    const fd = new FormData();
-    fd.append("email", "alice@example.com");
-    fd.append("name", "Alice");
-    const result = await processCreateUser(fd, client);
-    expect(result.ok).toBe(true);
-  });
-
-  test("異常: 不正なメールアドレスはバリデーションエラーを返す", async () => {
-    const fd = new FormData();
-    fd.append("email", "not-an-email");
-    fd.append("name", "Alice");
-    const result = await processCreateUser(fd, client);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toBeTruthy();
-  });
+test("正常: API が成功を返す場合 { ok: true } を返す", async () => {
+  const result = await createTask({ title: "Write docs" });
+  expect(result).toEqual({ ok: true });
 });
 ```
 
-### client: query.test.ts
+### client: query（serverFn）test（実例: `features/tasks/queries/get-tasks.test.ts`）
+
+serverFn は `@tanstack/react-start` と `@/shared/lib/api-client` を `mock.module` で
+差し替えてプレーン関数として呼び出します。
 
 ```typescript
-import { describe, expect, test } from "bun:test";
-import type { AppType } from "api-service";
-import { createFakeApp, createInMemoryUsersRepository, reconstituteUser } from "api-service/test-helpers";
-import { hc } from "hono/client";
-import { getUsers } from "./get-users";
-
-const ID_1 = "550e8400-e29b-41d4-a716-446655440001";
-
-function makeFakeApiClient(repo?: ReturnType<typeof createInMemoryUsersRepository>) {
-  const app = createFakeApp(repo ? { usersRepository: repo } : {});
-  return hc<AppType>("http://localhost", { fetch: app.request.bind(app) });
-}
-
-describe("getUsers", () => {
-  test("正常: フェイクアプリからユーザー一覧を返す", async () => {
-    const repo = createInMemoryUsersRepository([
-      reconstituteUser({ id: ID_1, email: "alice@example.com", name: "Alice" }),
-    ]);
-    const users = await getUsers({ apiClient: makeFakeApiClient(repo) });
-    expect(users).toHaveLength(1);
-    expect(users[0]?.email).toBe("alice@example.com");
-  });
-
-  test("正常: ユーザーが存在しない場合は空配列を返す", async () => {
-    const users = await getUsers({ apiClient: makeFakeApiClient() });
-    expect(users).toHaveLength(0);
-  });
-});
+mock.module("@/shared/lib/api-client", () => ({
+  getApiClient: () => ({
+    api: { tasks: { $get: mock(() => Promise.resolve({ ok: true, status: 200, json: async () => mockBody })) } },
+  }),
+}));
+mock.module("@tanstack/react-start", () => ({
+  createServerFn: () => ({ validator: () => ({ handler: (fn) => fn }) }),
+}));
 ```
+
+### E2E（実例: `apps/client/tests/e2e/tasks.spec.ts`）
+
+ログイン済み状態は DB シード + 署名済み cookie 注入で作ります（Google OAuth を経由しない。
+`tests/e2e/helpers/auth.ts`）。dev / prod-shape の両モードは
+`bun run test:e2e` / `bun run test:e2e -- --prod-shape` で実行します。
 
 ---
 
@@ -271,9 +206,16 @@ bun run test
 # ユニットテストのみ（DB 不要）
 bun run test:unit
 
+# 統合テスト（test DB 必要: bun run db:up:test）
+bun run test:integration
+
+# E2E（dev モード / prod-shape モード）
+bun run test:e2e
+bun run test:e2e -- --prod-shape
+
 # 単一ファイル（api-service）
-cd apps/api-service && bun test src/features/users/application/create/usecase.test.ts
+cd apps/api-service && bun test src/features/tasks/application/create/usecase.test.ts
 
 # 単一ファイル（client）
-cd apps/client && bun test features/users/actions/create.test.ts
+cd apps/client && bun test features/tasks/actions/create-task.test.ts
 ```

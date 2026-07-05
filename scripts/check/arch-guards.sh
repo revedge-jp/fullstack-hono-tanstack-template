@@ -272,5 +272,30 @@ else
   exit 1
 fi
 
+echo "[guard] createAuthedApp を使う router は requireAuth を必ず適用する"
+# createAuthedApp は c.get("user") を non-null に型付けするが、認証自体は
+# .use(requireAuth(...)) を登録した場合にのみ有効。付け忘れてもコンパイルは通り、
+# 未認証エンドポイント化（または実行時 undefined）になるため機械的に検出する。
+AUTHED_FILES=$(grep -rlE '\bcreateAuthedApp\(' apps/api-service/src --include='*.ts' 2>/dev/null | \
+  grep -vE '(\.test\.ts$|/factory\.ts$|/__tests__/)' || true)
+AUTHED_VIOL=""
+if [ -n "$AUTHED_FILES" ]; then
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    if ! grep -qE '\.use\(requireAuth\(' "$f"; then
+      AUTHED_VIOL+="$f\n"
+    fi
+  done <<< "$AUTHED_FILES"
+fi
+if [ -z "$AUTHED_VIOL" ]; then
+  echo "OK"
+else
+  echo "違反: createAuthedApp() を使うファイルには .use(requireAuth(...)) の登録が必要です"
+  echo -e "$AUTHED_VIOL" | while IFS= read -r line; do
+    [ -n "$line" ] && echo "  • $line"
+  done
+  exit 1
+fi
+
 echo "[guard] feature 構造の完全性（必須の層・co-located テスト・配線）"
 node scripts/check/feature-structure.mjs

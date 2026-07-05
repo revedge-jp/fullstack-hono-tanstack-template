@@ -158,6 +158,14 @@ expect_guard "ports.ts は application/ 直下のみ" \
   'export type SelftestPort = { x(): void };' \
   "ports.ts は features/<feature>/application/ports.ts にのみ配置してください"
 
+expect_guard "createAuthedApp は requireAuth 必須" \
+  "$D/presentation/__selftest_authed_router.ts" \
+  'import { createAuthedApp } from "@app/factory";
+export function createSelftestAuthedRouter() {
+  return createAuthedApp().get("/", (c) => c.json({ ok: true }));
+}' \
+  "createAuthedApp() を使うファイルには .use(requireAuth(...)) の登録が必要です"
+
 SELFTEST_ACTION_DIR="$D/application/__selftest_action"
 mkdir -p "$SELFTEST_ACTION_DIR"
 # 有効な usecase.ts（先行ガードを通過する）を置くが usecase.test.ts は作らない
