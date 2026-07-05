@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { check, index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 import { authUsers } from "./auth";
 
@@ -22,6 +22,10 @@ export const tasks = pgTable(
   },
   (table) => [
     unique("tasks_owner_id_title_unique").on(table.ownerId, table.title),
+    // 一覧のホットパス WHERE owner_id = ? ORDER BY created_at DESC, id DESC LIMIT n
+    // （keyset ページネーション）を index 順走査にするための複合インデックス。
+    // unique(owner_id, title) は owner の等価絞り込みにしか効かず、毎ページ sort が発生していた。
+    index("tasks_owner_created_id_idx").on(table.ownerId, table.createdAt.desc(), table.id.desc()),
     // domain の TaskStatus 不変条件を DB でも強制する。
     // infrastructure の reconstituteTask は「DB の値は信頼できる」前提で as キャストしており
     // （ADR-004）、この CHECK 制約がその前提を実際に担保する。
