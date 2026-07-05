@@ -20,7 +20,11 @@
   },
   "vulnerabilityAlerts": {
     "labels": ["security"],
-    "automerge": false
+    "automerge": false,
+    "schedule": ["at any time"],
+    "minimumReleaseAge": "0 days",
+    "prCreation": "immediate",
+    "prPriority": 10
   },
   "packageRules": [
     {

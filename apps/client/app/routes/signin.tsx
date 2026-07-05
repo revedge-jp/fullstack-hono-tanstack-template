@@ -3,6 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { DevSignInButton, GoogleSignInButton, getSessionServerFn } from "@/features/auth";
 
 export const Route = createFileRoute("/signin")({
+  head: () => ({ meta: [{ title: "サインイン | {{APP_NAME}}" }] }),
   beforeLoad: async () => {
     const user = await getSessionServerFn();
     if (user) {

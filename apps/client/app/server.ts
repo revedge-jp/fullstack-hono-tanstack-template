@@ -64,6 +64,10 @@ function withSecurityHeaders(response: Response, isProd: boolean, requestId?: st
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  // SSR HTML には認証ユーザーの氏名・メール等が埋め込まれるため、共有・ブラウザキャッシュを禁止する。
+  // 静的アセットは CF assets バインディングが直配信しこの関数を通らない（/api/* も早期 return 済み）ので、
+  // ここで no-store になるのは SSR ドキュメント／serverFn レスポンスに限られる。
+  headers.set("Cache-Control", "private, no-store");
   if (isProd) {
     headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }

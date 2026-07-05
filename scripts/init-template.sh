@@ -84,13 +84,38 @@ for f in "${TARGETS[@]}"; do
   APP_NAME="$APP_NAME" PLACEHOLDER="$PLACEHOLDER" perl -pi -e 's/\Q$ENV{PLACEHOLDER}\E/$ENV{APP_NAME}/g' "$f"
 done
 
+# ルート package.json の name フィールドをアプリ名に置換する。
+# ※ apps/*/package.json（api-service / client）と packages/*（@repo/db 等）の name は
+#    import されるワークスペース名なので置換しない。ここでは root の package.json のみを対象にし、
+#    先頭の "name" フィールド（= ルートパッケージ名）1件だけを書き換える。
+if [ -f package.json ]; then
+  echo "  • package.json (root name)"
+  APP_NAME="$APP_NAME" perl -0pi -e 's/("name":\s*)"[^"]*"/$1 . "\"" . $ENV{APP_NAME} . "\""/e' package.json
+fi
+
 echo ""
 echo "✅ 初期化が完了しました。"
+
+# 旧プロジェクト名の残存チェック（安全網）。
+# ※ このスクリプト自身は grep パターン文字列を含むため除外。
+# ※ bun.lock はルート名を旧名でキャッシュしている場合があるが、次回 `bun install` で
+#    package.json の name に追従して自動更新されるため除外する。
+echo ""
+echo "🔍 旧プロジェクト名（ax_saas / ax-saas / kikagaku）の残存チェック..."
+STALE="$(git grep -n -i -e ax_saas -e ax-saas -e kikagaku -- \
+  ':(exclude)scripts/init-template.sh' ':(exclude)bun.lock' 2>/dev/null || true)"
+if [ -n "$STALE" ]; then
+  echo "⚠️  旧プロジェクト名の参照が残っています。手動で確認してください:" >&2
+  echo "$STALE" >&2
+else
+  echo "✅ 旧プロジェクト名の残存はありません。"
+fi
 echo ""
 echo "次のステップ:"
-echo "  1. 変更内容を確認してコミット: git diff && git add -A && git commit -m 'chore: initialize template as $APP_NAME'"
-echo "  2. README.md のタイトル・説明を自分のプロジェクト用に書き換える"
-echo "  3. .env を作成する（README のクイックスタート参照）"
-echo "  4. GitHub リポジトリの保護設定・Renovate を有効化: ./scripts/setup-github.sh"
-echo "  5. CI/CD デプロイ用の GitHub Environments（Secrets / Variables）を設定する"
+echo "  1. bun install で依存を入れる（bun.lock のルート名も $APP_NAME に更新される）"
+echo "  2. 変更内容を確認してコミット: git diff && git add -A && git commit -m 'chore: initialize template as $APP_NAME'"
+echo "  3. README.md のタイトル・説明を自分のプロジェクト用に書き換える"
+echo "  4. .env を作成する: cp .env.example .env（README のクイックスタート参照）"
+echo "  5. GitHub リポジトリの保護設定・Renovate を有効化: ./scripts/setup-github.sh"
+echo "  6. CI/CD デプロイ用の GitHub Environments（Secrets / Variables）を設定する"
 echo "     bash scripts/setup-deploy-env.sh staging（対話式。詳細: docs/deploy/cloudflare-workers.md）"

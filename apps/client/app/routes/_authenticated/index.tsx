@@ -1,10 +1,12 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SignOutButton } from "@/features/auth";
 
 const authenticatedRoute = getRouteApi("/_authenticated");
 
 export const Route = createFileRoute("/_authenticated/")({
+  head: () => ({ meta: [{ title: "ホーム | {{APP_NAME}}" }] }),
   component: HomePage,
 });
 
@@ -28,7 +30,10 @@ function HomePage() {
             about
           </Link>
         </div>
-        <SignOutButton />
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <SignOutButton />
+        </div>
       </main>
     </div>
   );

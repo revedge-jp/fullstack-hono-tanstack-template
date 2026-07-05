@@ -17,9 +17,9 @@ git worktree を使用すると、同じリポジトリの複数のブランチ�
 
 ```
 ~/dev/
-├── ax-saas-template/               # メインの worktree（main ブランチ）
-├── ax-saas-template-feat-xxx/      # feature/xxx ブランチ用 worktree
-├── ax-saas-template-fix-yyy/       # fix/yyy ブランチ用 worktree
+├── fullstack-hono-tanstack-template/               # メインの worktree（main ブランチ）
+├── fullstack-hono-tanstack-template-feat-xxx/      # feature/xxx ブランチ用 worktree
+├── fullstack-hono-tanstack-template-fix-yyy/       # fix/yyy ブランチ用 worktree
 └── ...
 ```
 
@@ -53,13 +53,13 @@ bun run worktree help
 
 ```bash
 # worktree 追加（新規ブランチ）
-git worktree add -b feat/xxx ../ax-saas-template-feat-xxx
+git worktree add -b feat/xxx ../fullstack-hono-tanstack-template-feat-xxx
 
 # worktree 追加（既存ブランチ）
-git worktree add ../ax-saas-template-feat-xxx feat/xxx
+git worktree add ../fullstack-hono-tanstack-template-feat-xxx feat/xxx
 
 # worktree 削除
-git worktree remove ../ax-saas-template-feat-xxx
+git worktree remove ../fullstack-hono-tanstack-template-feat-xxx
 
 # 一覧表示
 git worktree list
@@ -77,7 +77,7 @@ git worktree prune
 
 ```bash
 # メインの .env をコピー（自動実行される）
-cp ../ax-saas-template/.env .env
+cp ../fullstack-hono-tanstack-template/.env .env
 
 # ポート設定は自動追加される（CLIENT_PORT, API_PORT, DATABASE_URL 等）
 ```
@@ -123,8 +123,8 @@ DATABASE_PORT=5434
 TEST_DATABASE_PORT=5435
 DATABASE_URL="postgresql://postgres:postgres@localhost:5434/app_db?schema=public"
 TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5435/app_db?schema=public"
-POSTGRES_CONTAINER_NAME="ax_saas_postgres_slot1"
-POSTGRES_TEST_CONTAINER_NAME="ax_saas_postgres_test_slot1"
+POSTGRES_CONTAINER_NAME="app_postgres_slot1"
+POSTGRES_TEST_CONTAINER_NAME="app_postgres_test_slot1"
 POSTGRES_VOLUME_NAME="postgres-data_slot1"
 POSTGRES_TEST_VOLUME_NAME="postgres-test-data_slot1"
 ```
@@ -145,8 +145,8 @@ bun run worktree add dev-1
 bun run worktree add dev-2
 
 # 各ウィンドウで別々の worktree を開く
-# Cursor ウィンドウ1: ~/dev/ax-saas-template-dev-1
-# Cursor ウィンドウ2: ~/dev/ax-saas-template-dev-2
+# Cursor ウィンドウ1: ~/dev/fullstack-hono-tanstack-template-dev-1
+# Cursor ウィンドウ2: ~/dev/fullstack-hono-tanstack-template-dev-2
 ```
 
 ### 2. worktree の用途を明確にする
@@ -171,9 +171,9 @@ bun run db:migrate
 
 | worktree | 開発 DB ポート | テスト DB ポート | コンテナ名 |
 |----------|----------------|------------------|------------|
-| main | 5432 | 5433 | ax_saas_postgres |
-| dev-1 | 5434 | 5435 | ax_saas_postgres_slot1 |
-| dev-2 | 5436 | 5437 | ax_saas_postgres_slot2 |
+| main | 5432 | 5433 | app_postgres |
+| dev-1 | 5434 | 5435 | app_postgres_slot1 |
+| dev-2 | 5436 | 5437 | app_postgres_slot2 |
 
 **メリット**:
 - マイグレーションの競合なし
@@ -214,10 +214,10 @@ git log origin/main
 
 ```bash
 # 強制削除
-git worktree remove --force ../ax-saas-template-feat-xxx
+git worktree remove --force ../fullstack-hono-tanstack-template-feat-xxx
 
 # それでも失敗する場合
-rm -rf ../ax-saas-template-feat-xxx
+rm -rf ../fullstack-hono-tanstack-template-feat-xxx
 git worktree prune
 ```
 

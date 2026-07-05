@@ -3,6 +3,7 @@
 #
 #   bash scripts/setup-deploy-env.sh staging
 #   bash scripts/setup-deploy-env.sh production
+#   bash scripts/setup-deploy-env.sh preview    # PR プレビュー環境（preview.yml が参照）
 #
 # 設計方針: デプロイ資格情報をローカルのファイルに保存しない。
 # 値は 1Password 等の秘密管理ツールからその場でペーストし、このスクリプトは
@@ -13,8 +14,8 @@
 set -euo pipefail
 
 STAGE="${1:-}"
-if [ "$STAGE" != "staging" ] && [ "$STAGE" != "production" ]; then
-  echo "使い方: bash scripts/setup-deploy-env.sh <staging|production>" >&2
+if [ "$STAGE" != "staging" ] && [ "$STAGE" != "production" ] && [ "$STAGE" != "preview" ]; then
+  echo "使い方: bash scripts/setup-deploy-env.sh <staging|production|preview>" >&2
   exit 1
 fi
 
@@ -73,6 +74,12 @@ skipped_items=""
 # アイテムリストは fd 3 から読む（stdin はユーザー入力用に空けておく）
 while IFS='|' read -r name kind desc <&3; do
   [ -z "$name" ] && continue
+  # preview 環境では不要な項目を飛ばす（URL は PR ごとに動的、カスタムドメインなし）
+  if [ "$STAGE" = "preview" ]; then
+    case "$name" in
+      APP_ORIGIN | SMOKE_BASE_URL) continue ;;
+    esac
+  fi
   echo ""
   # ${} 必須: bash 3.2 は $name の直後の全角文字を変数名の一部として解釈してしまう
   echo "── ${name}（${kind}）"
@@ -126,6 +133,9 @@ echo ""
 if [ "$STAGE" = "staging" ]; then
   echo "次: main への push で staging が自動デプロイされます（DB も自動作成）。"
   echo "    production も使う場合: bash scripts/setup-deploy-env.sh production"
+  echo "    PR プレビューも使う場合: bash scripts/setup-deploy-env.sh preview"
+elif [ "$STAGE" = "preview" ]; then
+  echo "次: PR に preview ラベルを付けると PR ごとのプレビュー環境がデプロイされます。"
 else
   echo "次: v*.*.* タグの push で production が自動デプロイされます。"
 fi

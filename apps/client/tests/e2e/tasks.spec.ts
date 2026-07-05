@@ -31,7 +31,7 @@ test.describe("tasks シナリオ", () => {
     // hydration 完了後のリトライで必ず値の変化（"" → title）が起きるようにする。
     const title = `E2E タスク ${Date.now()}`;
     const addButton = page.getByRole("button", { name: "追加" });
-    const titleInput = page.getByPlaceholder("タスクのタイトル");
+    const titleInput = page.getByLabel("タスクのタイトル");
     await expect(async () => {
       await titleInput.fill("");
       await titleInput.fill(title);

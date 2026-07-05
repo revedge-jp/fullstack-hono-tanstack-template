@@ -1,6 +1,6 @@
 # コーディング規約
 
-ax-saas-template のコーディング規約です。
+fullstack-hono-tanstack-template のコーディング規約です。
 
 ## 基本方針
 

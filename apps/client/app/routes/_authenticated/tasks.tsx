@@ -14,6 +14,7 @@ const TasksSearchSchema = z.object({
 // - 初回表示: loader + createServerFn によるサーバーサイド取得（ローディング状態なし）
 // - mutation 後の更新: tasksQueryOptions の invalidate によるブラウザからの再取得
 export const Route = createFileRoute("/_authenticated/tasks")({
+  head: () => ({ meta: [{ title: "タスク | {{APP_NAME}}" }] }),
   validateSearch: TasksSearchSchema,
   loaderDeps: ({ search }) => ({ cursor: search.cursor }),
   loader: async ({ deps }) => {

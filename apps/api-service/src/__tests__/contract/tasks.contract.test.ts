@@ -2,8 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuthUser } from "@app/features/auth/domain/models";
 import { reconstituteTask } from "@app/features/tasks/domain/models";
-import { createTasksRouter } from "@app/features/tasks/presentation/router";
-import { Hono } from "hono";
+import { createFakeApp } from "api-service/test-helpers";
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 
 const mockUser: AuthUser = {
@@ -36,6 +35,9 @@ type MockTasks = {
   getSession?: () => ResultAsync<AuthUser, "Unauthorized" | "Unexpected">;
 };
 
+// createFakeApp に tasks service（メソッド単位で差し替え）と getSession を注入する。
+// これで本物のミドルウェアスタック（requestId / logger / cors / bodyLimit / onError 等）を
+// 通した状態でコントラクトを検証できる。
 function createTestApp(overrides: MockTasks = {}) {
   const tasks = {
     createTask: overrides.createTask ?? (() => okAsync({ item: { id: mockTask.id } })),
@@ -44,10 +46,11 @@ function createTestApp(overrides: MockTasks = {}) {
     advanceTask: overrides.advanceTask ?? (() => okAsync(mockTask)),
     deleteTask: overrides.deleteTask ?? (() => okAsync(undefined)),
   };
-  return new Hono().route(
-    "/api/tasks",
-    createTasksRouter({ tasks, getSession: overrides.getSession ?? (() => okAsync(mockUser)) }),
-  );
+  return createFakeApp({
+    user: mockUser,
+    tasks,
+    getSession: overrides.getSession ?? (() => okAsync(mockUser)),
+  });
 }
 
 describe("POST /api/tasks — contract", () => {

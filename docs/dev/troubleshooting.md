@@ -44,7 +44,7 @@ cat .env | grep DATABASE_URL
 
 ```bash
 # DBを作成
-docker exec -it ax_saas_postgres psql -U postgres -c "CREATE DATABASE app_db;"
+docker exec -it app_postgres psql -U postgres -c "CREATE DATABASE app_db;"
 ```
 
 ---

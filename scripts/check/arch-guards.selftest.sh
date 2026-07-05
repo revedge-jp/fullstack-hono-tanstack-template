@@ -65,6 +65,17 @@ expect_guard "class 禁止" \
   'export class SelftestFoo {}' \
   "class の使用が禁止"
 
+# 以前の regex `^\s*(export\s+)?class\b` が見逃していた形を回帰テストする
+expect_guard "abstract class 禁止" \
+  "$D/application/__selftest_abstract_class.ts" \
+  'abstract class SelftestAbstract {}' \
+  "class の使用が禁止"
+
+expect_guard "export default class 禁止" \
+  "$D/application/__selftest_default_class.ts" \
+  'export default class SelftestDefault {}' \
+  "class の使用が禁止"
+
 expect_guard "interface 禁止" \
   "$D/application/__selftest_interface.ts" \
   'export interface SelftestBar { x: number }' \
@@ -130,6 +141,25 @@ expect_guard "usecase.ts の async 禁止" \
 }' \
   "usecase.ts で async は禁止です"
 
+# 以前の regex `\basync\s+function\b|\basync\s*\(` が見逃していた形を回帰テストする
+expect_guard "usecase.ts の async 括弧なしアロー禁止" \
+  "$D/application/__selftest_usecase_async_arrow/usecase.ts" \
+  'import { okAsync } from "neverthrow";
+export function makeSelftestAsyncArrow() {
+  return async req => okAsync(req);
+}' \
+  "usecase.ts で async は禁止です"
+
+expect_guard "usecase.ts の async メソッド短縮記法禁止" \
+  "$D/application/__selftest_usecase_async_method/usecase.ts" \
+  'import { okAsync } from "neverthrow";
+export const selftestAsyncMethod = {
+  async run() {
+    return okAsync(null);
+  },
+};' \
+  "usecase.ts で async は禁止です"
+
 expect_guard "usecase.ts の try/catch 禁止" \
   "$D/application/__selftest_usecase_try/usecase.ts" \
   'import { okAsync } from "neverthrow";
@@ -165,6 +195,38 @@ export function createSelftestAuthedRouter() {
   return createAuthedApp().get("/", (c) => c.json({ ok: true }));
 }' \
   "createAuthedApp() を使うファイルには .use(requireAuth(...)) の登録が必要です"
+
+# 1 ファイルに 2 ルーター。片方だけ requireAuth を付け忘れたケース（以前は「どこかに 1 つでも
+# requireAuth があれば OK」だったため見逃していた）を回帰テストする。
+expect_guard "createAuthedApp 複数ルーターで片方が requireAuth 欠落" \
+  "$D/presentation/__selftest_two_routers.ts" \
+  'import { createAuthedApp } from "@app/factory";
+export function createGuarded(deps) {
+  return createAuthedApp().use(requireAuth(deps.getSession)).get("/", (c) => c.json({ ok: true }));
+}
+export function createUnguarded() {
+  return createAuthedApp().get("/", (c) => c.json({ ok: true }));
+}' \
+  "createAuthedApp() を使うファイルには .use(requireAuth(...)) の登録が必要です"
+
+# kebab-case: camelCase の（テストでない）ファイルは違反として検出される
+expect_guard "kebab-case: camelCase ファイル名は違反" \
+  "$D/application/selftestCamelName.ts" \
+  'export const selftestCamel = 1;' \
+  "ファイル名は kebab-case にしてください"
+
+# kebab-case: camelCase でも .test.ts は除外される（除外規則が実際に到達・機能する回帰テスト）。
+# expect_guard は「違反を検出する」検証なので、除外（＝違反にならない）はここで個別に検証する。
+KEBAB_NEG="apps/api-service/src/shared/__selftest/fooBarBaz.test.ts"
+mkfix "$KEBAB_NEG" 'export const x = 1;'
+kebab_out=$(bash scripts/check/arch-guards.sh 2>&1)
+if printf '%s' "$kebab_out" | grep -qF "fooBarBaz.test.ts"; then
+  echo "❌ kebab-case 除外（.test.ts）: camelCase なテストファイルが誤検出された"
+  FAIL=1
+else
+  echo "✅ kebab-case 除外（.test.ts は camelCase でも許容）"
+fi
+rm -f "$KEBAB_NEG"
 
 SELFTEST_ACTION_DIR="$D/application/__selftest_action"
 mkdir -p "$SELFTEST_ACTION_DIR"

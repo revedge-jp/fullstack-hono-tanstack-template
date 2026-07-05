@@ -26,7 +26,11 @@ export function GoogleSignInButton() {
       <Button onClick={handleClick} variant="outline" disabled={isPending}>
         {isPending ? "リダイレクト中..." : "Google でサインイン"}
       </Button>
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-500">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

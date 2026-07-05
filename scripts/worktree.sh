@@ -179,10 +179,9 @@ setup_worktree() {
     echo "TEST_DATABASE_PORT=$TEST_DATABASE_PORT" >> .env
     echo "DATABASE_URL=\"postgresql://postgres:postgres@localhost:$DATABASE_PORT/app_db?schema=public\"" >> .env
     echo "TEST_DATABASE_URL=\"postgresql://postgres:postgres@localhost:$TEST_DATABASE_PORT/app_db?schema=public\"" >> .env
-    echo "POSTGRES_CONTAINER_NAME=\"ax_saas_postgres${suffix}\"" >> .env
-    echo "POSTGRES_TEST_CONTAINER_NAME=\"ax_saas_postgres_test${suffix}\"" >> .env
-    echo "POSTGRES_VOLUME_NAME=\"postgres-data${suffix}\"" >> .env
-    echo "POSTGRES_TEST_VOLUME_NAME=\"postgres-test-data${suffix}\"" >> .env
+    echo "POSTGRES_CONTAINER_NAME=\"app_postgres${suffix}\"" >> .env
+    echo "POSTGRES_TEST_CONTAINER_NAME=\"app_postgres_test${suffix}\"" >> .env
+    echo "POSTGRES_VOLUME_NAME=\"app-postgres-data${suffix}\"" >> .env
     echo -e "${GREEN}  ルート .env のポート設定を更新しました${NC}"
   fi
   

@@ -1,17 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { AppType } from "api-service";
 import { hc } from "hono/client";
-import { z } from "zod";
 
-import type { TasksPage } from "./get-tasks";
+import { type TasksPage, TasksListResponseSchema } from "./schemas";
 
 const apiClient = hc<AppType>("/");
-
-const TaskItemSchema = z.object({ id: z.string(), title: z.string(), status: z.string() });
-const TasksListResponseSchema = z.object({
-  ok: z.literal(true),
-  data: z.object({ items: z.array(TaskItemSchema), nextCursor: z.string().nullable() }),
-});
 
 // クライアントサイドの再取得用 useQuery 定義。
 // 初回表示は SSR（loader + getTasksServerFn）で行い、mutation 後の更新は
@@ -29,7 +22,7 @@ export function tasksQueryOptions(cursor?: string) {
         throw new Error("タスク一覧の取得に失敗しました");
       }
       const parsed = TasksListResponseSchema.safeParse(await res.json());
-      if (!parsed.success) {
+      if (!parsed.success || !parsed.data.ok) {
         throw new Error("タスク一覧のレスポンスが不正です");
       }
       return parsed.data.data;

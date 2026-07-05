@@ -249,7 +249,7 @@ export function xxxQueryOptions() {
 - **認証ガード**: `_authenticated.tsx` (レイアウトルート) の `loader` で `getSessionServerFn` を呼び、未認証なら `/signin` にリダイレクト
 - **ユーザー情報**: 親ルートの `loader` が `user` を返し、子ルートは `getRouteApi("/_authenticated").useLoaderData()` で参照
 - **サインイン**: `authClient.signIn.social({ provider: "google" })` — クライアントサイドのみ
-- **サインアウト**: `authClient.signOut()` 後に `queryClient.removeQueries({ queryKey: ["auth"] })`
+- **サインアウト**: `authClient.signOut()` 後に `queryClient.clear()`（前ユーザーの react-query キャッシュを破棄）してから `/signin` へ遷移
 
 ### Hono RPC
 
@@ -278,14 +278,42 @@ const res = await getApiClient().api.xxx.$get({}, {
 ## Testing Conventions
 
 ### Test helpers
-- `createFakeApp(overrides?)` — in-memory Hono app, no DB required
-- Exported from `api-service/test-helpers`
+- `createFakeApp(overrides?)` — 本物のミドルウェアスタック（`app.ts` の `buildApp`: requestId /
+  requestLogger / timing / timeout / secureHeaders / CORS / bodyLimit / rate-limit / onError /
+  notFound）を、DB 不要の fake 依存で組み立てたテスト用アプリを返す。DB は使わず、tasks /
+  activity は **in-memory リポジトリ上の本物のサービス**、セッションは既定で「認証済み」。
+  返り値は Hono アプリそのものなので `app.request(...)` で直接叩けるし、`hc<AppType>` に
+  `fetch: app.request.bind(app)` で注入もできる。
+- Exported from `api-service/test-helpers`（`src/test-helpers/create-fake-app.ts`）
+
+`overrides`（すべて任意、zero-config で動く）:
+- `nodeEnv`（既定 `"test"`）/ `corsOrigin` / `requestTimeoutMs` / `rateLimit` / `version` — config 相当。
+  `onError` の本番マスキングや rate-limit / timeout の挙動を検証するときに差し替える。
+- `user`（既定の認証ユーザーを差し替え）/ `getSession`（セッション解決を丸ごと差し替え。
+  未認証や例外を検証するときに使う）。
+- `tasks` / `activity` — feature のサービスを丸ごと差し替え（メソッド単位の Result を注入）。
+- `seedTasks` / `seedActivities` — 既定の in-memory リポジトリに初期データを投入。
+- `db`（health の `execute` を差し替え）/ `auth`（Better Auth ハンドラの代替）/ `logger`。
 
 ### Test patterns
 ```typescript
-// api-service: inject fake app into hono client
+import { createFakeApp } from "api-service/test-helpers";
+
+// zero-config: 認証済み・in-memory tasks/activity で本物のミドルウェアを通す
 const app = createFakeApp();
+const res = await app.request("/api/tasks");
+
+// hono client に注入する場合
 const client = hc<AppType>("http://localhost", { fetch: app.request.bind(app) });
+
+// サービスやセッションを差し替える（コントラクトテスト等）
+const app2 = createFakeApp({
+  tasks: { createTask: () => errAsync("Conflict" as const), /* ... */ },
+  getSession: () => errAsync("Unauthorized" as const), // 未認証を検証
+});
+
+// onError の本番マスキングを検証する
+const prodApp = createFakeApp({ nodeEnv: "production", getSession: () => { throw new Error("boom"); } });
 
 // Result type guard (neverthrow) — never `result.value` on the err side, it's `result.error`
 if (result.isOk()) { /* result.value */ }
