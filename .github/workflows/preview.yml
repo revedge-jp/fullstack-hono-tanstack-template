@@ -29,7 +29,9 @@ jobs:
       (github.event.action == 'labeled' && github.event.label.name == 'preview') ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview'))
     runs-on: ubuntu-latest
-    environment: staging
+    # preview 専用 environment。staging を使うと preview デプロイの GitHub Deployment
+    # レコードが staging 履歴を汚し、deploy.yml の rollback 戻り先解決が誤動作する。
+    environment: preview
     permissions:
       contents: read
       pull-requests: write
@@ -48,10 +50,14 @@ jobs:
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       PREVIEW_STAGE: pr-${{ github.event.number }}
       GH_TOKEN: ${{ github.token }}
+      # /api/health が返すビルド情報（alchemy.run.ts が Worker にバインドする）
+      GIT_SHA: ${{ github.event.pull_request.head.sha }}
+      APP_VERSION: pr-${{ github.event.number }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       # secrets/vars 未設定のリポジトリでは notice を出して skip（deploy.yml と同じ方針）。
       # preview は workers.dev URL 前提のため WORKERS_SUBDOMAIN が必須（APP_ORIGIN は不可）。
@@ -128,7 +134,8 @@ jobs:
       (github.event.action == 'unlabeled' && github.event.label.name == 'preview') ||
       (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview'))
     runs-on: ubuntu-latest
-    environment: staging
+    # deploy と同じ preview 専用 environment（destroy も同じ secrets を参照する）。
+    environment: preview
     permissions:
       contents: read
       pull-requests: write
@@ -145,7 +152,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       # destroy は state から逆順削除するだけなのでビルド不要（alchemy CLI と認証情報だけ要る）
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Check destroy readiness
         id: readiness

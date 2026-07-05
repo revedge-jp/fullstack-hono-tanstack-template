@@ -86,7 +86,7 @@ Servers > local > Databases > app_db > Schemas > public > Tables
 ```yaml
 pgadmin:
   image: dpage/pgadmin4:latest
-  container_name: ax_saas_pgadmin
+  container_name: ${PGADMIN_CONTAINER_NAME:-app_pgadmin}
   restart: unless-stopped
   environment:
     PGADMIN_DEFAULT_EMAIL: admin@example.com
@@ -112,11 +112,11 @@ pgadmin:
 ### pgAdmin にアクセスできない
 
 ```bash
-# コンテナの状態を確認
-docker ps --filter name=ax_saas_pgadmin
+# コンテナの状態を確認（コンテナ名の既定は app_pgadmin。PGADMIN_CONTAINER_NAME で上書き可）
+docker ps --filter name=app_pgadmin
 
 # ログを確認
-docker logs ax_saas_pgadmin
+docker logs app_pgadmin
 ```
 
 postgres が起動完了していない場合、pgAdmin も起動しません。まず postgres の状態を確認してください。
@@ -136,5 +136,7 @@ docker compose exec postgres pg_isready -U postgres
 pgAdmin の設定（サーバー登録情報など）をリセットするには:
 
 ```bash
-docker volume rm kikagaku-saas-template_pgadmin-data
+# ボリューム名は docker-compose.yml で明示指定している（既定 app-pgadmin-data、
+# PGADMIN_VOLUME_NAME で上書き可）
+docker volume rm app-pgadmin-data
 ```

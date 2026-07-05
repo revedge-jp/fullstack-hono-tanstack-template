@@ -54,10 +54,12 @@ else
 fi
 
 echo "[guard] class/interface 禁止"
+# `export class` / `class` に加え、`abstract class` / `export default class` /
+# `export default abstract class` も検出する。
 CLASS_VIOL=$(find apps packages \
   \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
   -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
-  xargs -0 grep -nE '^\s*(export\s+)?class\b' || true)
+  xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(abstract\s+)?class\b' || true)
 INTF_VIOL=$(find apps packages \
   \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
   -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
@@ -170,8 +172,28 @@ else
 fi
 
 echo "[guard] kebab-case ファイル名"
-BAD=$(find apps/client/features apps/client/shared apps/api-service/src -regex '.*/[a-z]*[A-Z][a-zA-Z]*\.tsx\?$' | grep -Ev '\\.test\.|\\.spec\.|\\.d\\.ts|generated|/index\.ts$' || true)
-[ -z "$BAD" ] && echo "OK" || { echo "$BAD"; exit 1; }
+# camelCase / PascalCase のファイル名（basename に大文字を含む .ts/.tsx）を検出する。
+# 以前は find -regex に頼っていたが、`\.tsx\?$` の `\?` の解釈が BSD find(macOS)と
+# GNU find(CI/Linux)で異なり、macOS では何もマッチしない dead guard だった。
+# 移植性のため find は単純な列挙に留め、パターン判定と除外は grep -E で行う。
+# 除外（.test. / .spec. / .d.ts / generated / index.ts）は「シングルクォート内では
+# バックスラッシュ 1 個」で正しくエスケープする（以前は `\\.test\.` = バックスラッシュ+任意文字
+# となり、ファイル名にバックスラッシュが無いため除外が効いていなかった）。
+# basename の先頭コンポーネント（最初の `.` より前）に大文字を含むもの（camelCase/PascalCase）を
+# 検出する。`foo.test.ts` のような複合拡張子でも「foo」ではなく先頭コンポーネントを見るので、
+# camelCase なテストファイル（fooBar.test.ts）も一旦マッチし、その後 .test. 除外で落とす
+# ＝除外規則が実際に到達・機能する。
+BAD=$(find apps/client/features apps/client/shared apps/api-service/src \
+  -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null |
+  grep -E '/[A-Za-z0-9]*[A-Z][A-Za-z0-9]*\.' |
+  grep -Ev '\.test\.|\.spec\.|\.d\.ts|generated|/index\.ts$' || true)
+if [ -z "$BAD" ]; then
+  echo "OK"
+else
+  echo "違反: ファイル名は kebab-case にしてください（camelCase/PascalCase を検出）"
+  echo "$BAD" | while IFS= read -r line; do echo "  • $line"; done
+  exit 1
+fi
 
 echo "[guard] routes 配下の直置きファイル（index.ts 以外）"
 if [ -d apps/api-service/src/routes ]; then
@@ -241,7 +263,12 @@ fi
 echo "[guard] usecase.ts は async/try-catch を禁止し okAsync/ResultAsync チェーンを使う"
 USECASE_FILES=$(find apps/api-service/src/features -type f -name 'usecase.ts' 2>/dev/null || true)
 if [ -n "$USECASE_FILES" ]; then
-  USECASE_ASYNC_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\basync\s+function\b|\basync\s*\(' -- || true)
+  # async の検出形（実コードの形状に合わせる。コメント・文字列は誤検出し得るがガードとして許容）:
+  #   - `async function ...`（関数宣言/式）
+  #   - `async (...)`（括弧つきアロー: async () => / async (x) =>）
+  #   - `async foo(`（オブジェクト/クラスのメソッド短縮記法）
+  #   - `async x =>`（括弧なしアロー）
+  USECASE_ASYNC_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\basync\s+function\b|\basync\s*\(|\basync\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(\(|=>)' -- || true)
   USECASE_TRY_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\btry\s*\{' -- || true)
   USECASE_NO_CHAIN=$(echo "$USECASE_FILES" | xargs grep -LE '\b(okAsync|ResultAsync)\b' -- || true)
   if [ -n "$USECASE_ASYNC_VIOL" ]; then
@@ -276,14 +303,25 @@ echo "[guard] createAuthedApp を使う router は requireAuth を必ず適用�
 # createAuthedApp は c.get("user") を non-null に型付けするが、認証自体は
 # .use(requireAuth(...)) を登録した場合にのみ有効。付け忘れてもコンパイルは通り、
 # 未認証エンドポイント化（または実行時 undefined）になるため機械的に検出する。
+# 判定: 1 ファイル内の createAuthedApp() の出現数と .use(requireAuth(...)) の出現数を数え、
+# 前者 > 後者なら「requireAuth を付け忘れた createAuthedApp ルーターがある」と見なす。
+# 以前は「ファイル内のどこかに .use(requireAuth( があれば OK」だったため、1 ファイルに
+# 複数ルーターがあり片方だけ requireAuth を付け忘れたケースを見逃していた。
+# 限界: 同一ルーターに requireAuth を 2 回書くと別ルーターの欠落と相殺され得る（稀）。
+#       ルーターと requireAuth の厳密な対応付けは grep では表現しづらいため、
+#       実用上重要な「付け忘れ（欠落）」の検出に振ったヒューリスティック。
 AUTHED_FILES=$(grep -rlE '\bcreateAuthedApp\(' apps/api-service/src --include='*.ts' 2>/dev/null | \
   grep -vE '(\.test\.ts$|/factory\.ts$|/__tests__/)' || true)
 AUTHED_VIOL=""
 if [ -n "$AUTHED_FILES" ]; then
   while IFS= read -r f; do
     [ -z "$f" ] && continue
-    if ! grep -qE '\.use\(requireAuth\(' "$f"; then
-      AUTHED_VIOL+="$f\n"
+    # `|| true`: マッチ 0 件で grep が exit 1 を返し、pipefail + set -e でスクリプトが
+    # ここで落ちてしまう（=違反メッセージを出さず終了）のを防ぐ。0 件は正当な入力。
+    authed_count=$(grep -oE '\bcreateAuthedApp\(' "$f" | wc -l | tr -d ' ' || true)
+    guard_count=$(grep -oE '\.use\(requireAuth\(' "$f" | wc -l | tr -d ' ' || true)
+    if [ "$authed_count" -gt "$guard_count" ]; then
+      AUTHED_VIOL+="$f (createAuthedApp×$authed_count / requireAuth×$guard_count)\n"
     fi
   done <<< "$AUTHED_FILES"
 fi

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "kikagaku-saas-template",
+      "name": "fullstack-hono-tanstack-template",
       "devDependencies": {
         "@feature-sliced/steiger-plugin": "^0.5.8",
         "alchemy": "^0.93.12",

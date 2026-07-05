@@ -15,11 +15,17 @@ on:
     types:
       - completed
 
+# デフォルトは権限なし。必要な権限は各ジョブで最小限だけ付与する。
+permissions: {}
+
 jobs:
   detect-target:
     name: Detect deploy target
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    # head_branch を判定するだけで API 呼び出しはしないため権限不要。
+    permissions: {}
+    timeout-minutes: 5
     outputs:
       target: ${{ steps.detect.outputs.target }}
     steps:
@@ -43,6 +49,14 @@ jobs:
     needs: detect-target
     if: needs.detect-target.outputs.target != 'none'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # デプロイターゲット（staging / production）ごとに直列化し、同一 stage への
+    # 並行デプロイが Alchemy state を奪い合う（reconcile 競走）のを防ぐ。
+    # 別 stage は並行してよいので group にターゲットを含める。ジョブレベル concurrency は
+    # needs コンテキストを参照できる（ワークフローレベルは github.* しか使えない）。
+    concurrency:
+      group: deploy-${{ needs.detect-target.outputs.target }}
+      cancel-in-progress: false
     environment: ${{ needs.detect-target.outputs.target }}
     permissions:
       contents: read
@@ -64,10 +78,16 @@ jobs:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       DEPLOY_TARGET: ${{ needs.detect-target.outputs.target }}
+      # /api/health が返すビルド情報（alchemy.run.ts が Worker にバインドする）。
+      # head_branch はタグ push なら "vX.Y.Z"、main push なら "main"。
+      GIT_SHA: ${{ github.event.workflow_run.head_sha }}
+      APP_VERSION: ${{ github.event.workflow_run.head_branch }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          # git push はしない。rollback の fetch は下で明示的にトークン付き URL を使う。
+          persist-credentials: false
 
       # テンプレート原本リポジトリ（secrets/vars 未設定）では build/deploy が構造的に必ず
       # 失敗する。実プロジェクト化 + 設定が揃うまでは赤い失敗にせず、後続 step を skip する。
@@ -148,9 +168,13 @@ jobs:
         if: failure() && steps.smoke.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
+          # 戻り先候補を絞り込む防御。workflow_run 由来の正規デプロイは Deployment レコードの
+          # ref が既定ブランチ（= github.ref_name）になる。preview 等が誤って同じ environment に
+          # 記録した PR ブランチ ref のレコードを候補から除外し、無関係な commit へ戻さない。
+          DEPLOY_REF: ${{ github.ref_name }}
         run: |
           good_sha=""
-          for id_sha in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$DEPLOY_TARGET&per_page=30" --jq '.[] | "\(.id):\(.sha)"'); do
+          for id_sha in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$DEPLOY_TARGET&ref=$DEPLOY_REF&per_page=30" --jq '.[] | "\(.id):\(.sha)"'); do
             id="${id_sha%%:*}"
             sha="${id_sha##*:}"
             if gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" --jq '.[].state' | grep -qx "success"; then
@@ -163,10 +187,22 @@ jobs:
             exit 1
           fi
           echo "==> Rolling back to $good_sha ..."
-          git fetch --depth 1 origin "$good_sha"
+          # checkout は persist-credentials: false のため origin に認証情報が残っていない。
+          # トークン付き URL で該当 commit だけを明示的に fetch する。
+          git fetch --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$good_sha"
           git checkout --force "$good_sha"
           bun install --frozen-lockfile
           perl -pi -e 's/\{\{APP_NAME\}\}/$ENV{APP_NAME}/g' apps/client/wrangler.jsonc
           bun run build
+          # /api/health のビルド情報をロールバック先の commit に合わせる
+          export GIT_SHA="$good_sha"
+          export APP_VERSION="rollback-${good_sha}"
           bunx alchemy deploy --stage "$DEPLOY_TARGET"
-          echo "==> Rollback deploy 完了（$good_sha）。このジョブは失敗のまま残します。"
+          echo "==> Rollback deploy 完了（$good_sha）。ロールバック版の稼働を再確認します。"
+          # ロールバック版が実際に healthy かを smoke で再検証する（壊れた版へ戻していないか確認）。
+          # 元のデプロイ失敗を隠さないため、結果に関わらずこのジョブは失敗のまま残す。
+          if bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"; then
+            echo "::notice::ロールバック版（$good_sha）は smoke 通過。ただし元デプロイが失敗したためジョブは赤のままにします。"
+          else
+            echo "::error::ロールバック版（$good_sha）の smoke も失敗しました。手動対応が必要です: docs/deploy/operations.md"
+          fi

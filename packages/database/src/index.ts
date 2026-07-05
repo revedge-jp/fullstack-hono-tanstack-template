@@ -1,10 +1,11 @@
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import * as schema from "./schema";
 
 export { sql };
+export type { SQL };
 
 export function createDb(connectionString: string) {
   // CF Workers / Hyperdrive 前提の設定（経緯と実測は ADR-002 を参照）:

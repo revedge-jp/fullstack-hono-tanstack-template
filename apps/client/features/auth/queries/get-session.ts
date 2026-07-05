@@ -9,8 +9,14 @@ export const getSessionServerFn = createServerFn().handler(
     const request = getRequest();
     const cookie = request.headers.get("cookie") ?? "";
     const res = await getApiClient().api.me.$get({}, { init: { headers: { cookie } } });
-    if (!res.ok) {
+    // 未認証（401/403）は「サインインしていない」= null として扱い、_authenticated
+    // ガードのリダイレクトに委ねる。それ以外の非 2xx（500 等）はバックエンド障害なので
+    // throw してルートの errorComponent に委譲する（未認証と混同してサインインへ飛ばさない）。
+    if (res.status === 401 || res.status === 403) {
       return null;
+    }
+    if (!res.ok) {
+      throw new Error("セッションの取得に失敗しました");
     }
     const json = await res.json();
     if (!json.ok) {

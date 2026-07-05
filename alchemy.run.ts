@@ -165,6 +165,9 @@ if (process.env.SKIP_WORKER !== "1") {
       NODE_ENV: "production",
       CORS_ORIGIN: appOrigin,
       BETTER_AUTH_URL: appOrigin,
+      // /api/health が返すビルド情報。CI（deploy.yml / preview.yml）が環境変数で渡す。
+      APP_VERSION: process.env.APP_VERSION || "dev",
+      GIT_SHA: process.env.GIT_SHA || "dev",
       BETTER_AUTH_SECRET: alchemy.secret(requireEnv("BETTER_AUTH_SECRET")),
       GOOGLE_CLIENT_ID: alchemy.secret(requireEnv("GOOGLE_CLIENT_ID")),
       GOOGLE_CLIENT_SECRET: alchemy.secret(requireEnv("GOOGLE_CLIENT_SECRET")),

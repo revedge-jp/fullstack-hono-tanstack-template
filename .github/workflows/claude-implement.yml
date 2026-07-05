@@ -12,6 +12,11 @@ permissions:
   issues: write
   pull-requests: write
 
+# 同一 issue / PR に @claude が連投されたら古い実行をキャンセルし、最新の指示だけを走らせる。
+concurrency:
+  group: claude-implement-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-implement:
     name: Claude Implementation
@@ -22,7 +27,8 @@ jobs:
       (github.event.comment.author_association == 'MEMBER' ||
        github.event.comment.author_association == 'OWNER')
     steps:
-      - uses: actions/checkout@v4
+      # このワークフローは実装をコミット/プッシュするため persist-credentials は既定（true）のまま。
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - uses: anthropics/claude-code-action@26ec041249acb0a944c0a47b6c0c13f05dbc5b44 # v1
         with:

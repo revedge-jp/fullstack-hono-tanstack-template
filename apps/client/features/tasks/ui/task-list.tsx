@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 
 import { advanceTask } from "../actions/advance-task";
 import { deleteTask } from "../actions/delete-task";
-import type { TaskItem } from "../queries/get-tasks";
+import type { TaskItem } from "../queries/schemas";
 
 const STATUS_LABEL: Record<string, string> = {
   todo: "未着手",
@@ -50,7 +50,11 @@ export function TaskList({ items }: { items: TaskItem[] }) {
 
   return (
     <div className="flex flex-col gap-2">
-      {message && <p className="text-sm text-destructive">{message}</p>}
+      {message && (
+        <p role="alert" className="text-sm text-destructive">
+          {message}
+        </p>
+      )}
       <ul className="flex flex-col gap-2">
         {items.map((task) => (
           <li

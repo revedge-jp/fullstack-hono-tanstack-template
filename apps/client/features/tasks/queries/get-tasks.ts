@@ -4,17 +4,7 @@ import { z } from "zod";
 
 import { getApiClient } from "@/shared/lib/api-client";
 
-export type TaskItem = { id: string; title: string; status: string };
-export type TasksPage = { items: TaskItem[]; nextCursor: string | null };
-
-const TaskItemSchema = z.object({ id: z.string(), title: z.string(), status: z.string() });
-const TasksListResponseSchema = z.union([
-  z.object({
-    ok: z.literal(true),
-    data: z.object({ items: z.array(TaskItemSchema), nextCursor: z.string().nullable() }),
-  }),
-  z.object({ ok: z.literal(false), error: z.string() }),
-]);
+import { type TasksPage, TasksListResponseSchema } from "./schemas";
 
 const GetTasksInputSchema = z.object({ cursor: z.string().optional() });
 

@@ -12,15 +12,21 @@ permissions:
   contents: read
   pull-requests: write
 
+# 同一 PR で push が連続したら古いレビューをキャンセルして最新の diff だけをレビューする。
+concurrency:
+  group: codex-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   codex-review:
     name: Codex Code Review
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: openai/codex-action@94bb7a052e529936e5260a35838e61b190855739 # v1
         with:

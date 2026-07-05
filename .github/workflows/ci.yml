@@ -32,8 +32,10 @@ jobs:
       deps: ${{ steps.filter.outputs.deps }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         id: filter
         with:
           filters: |
@@ -63,9 +65,10 @@ jobs:
     if: needs.changes.outputs.workflows == 'true'
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 1
+          persist-credentials: false
       # SC2086 は意図的な word splitting（$FILTERS 展開等）への info 警告のため除外。
       # docker:// アクションはシェルを介さず args を渡すため、クォートは付けない（リテラルになる）
       - name: actionlint
@@ -78,11 +81,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     timeout-minutes: 20
-    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true'
+    # deps（ルートの package.json / bun.lock）変更時も必ず走らせる。ここを外すと
+    # Renovate の devDeps 自動マージがビルド/テストを素通りする。
+    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true' || needs.changes.outputs.deps == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-workspace
         with:
@@ -90,11 +96,16 @@ jobs:
 
       - name: Restore Turbo cache
         id: turbo-cache-ci
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}
+          # key に github.sha を含めて run ごとに一意にする（save 側と揃える）。
+          # Turbo のタスクハッシュキャッシュは ref が同じでも中身が更新されるため、
+          # 不変キーのままだと最初の run 以降 save がスキップされ続けキャッシュが陳腐化する。
+          # restore は restore-keys の prefix フォールバックで直近のキャッシュを取得する。
+          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}-
             ${{ runner.os }}-turbo-${{ github.ref }}-
             ${{ runner.os }}-turbo-refs/heads/main-
             ${{ runner.os }}-turbo-
@@ -192,7 +203,7 @@ jobs:
       - name: Post Knip result as PR comment
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const fs = require('fs');
@@ -223,7 +234,7 @@ jobs:
 
       - name: Upload unit test coverage (api-service)
         if: needs.changes.outputs.api-service == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-unit-api-service
           path: apps/api-service/coverage
@@ -258,10 +269,13 @@ jobs:
 
       - name: Save Turbo cache after build
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}
+          # restore と同じ run 一意キー。github.sha を含めることで毎 run 新しいキャッシュが
+          # 保存され（不変キーだと GitHub Actions Cache は上書き不可のため save が no-op になる）、
+          # 更新された Turbo キャッシュが次 run 以降に引き継がれる。
+          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}-${{ github.sha }}
 
   e2e-tests:
     # dev: 開発サーバー（vite dev）に対して実行 — 失敗時のデバッグが容易。
@@ -292,13 +306,14 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Restore Playwright browser cache
         id: playwright-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('**/bun.lock') }}
@@ -313,7 +328,7 @@ jobs:
 
       - name: Save Playwright browser cache
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('**/bun.lock') }}
@@ -354,7 +369,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-${{ matrix.mode }}
           path: apps/client/playwright-report
@@ -381,9 +396,10 @@ jobs:
         ports:
           - 15432:5432
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-workspace
         with:
@@ -402,7 +418,7 @@ jobs:
         run: bun run coverage:integration
 
       - name: Upload integration test coverage (api-service)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-integration-api-service
           path: apps/api-service/coverage
@@ -419,27 +435,27 @@ jobs:
     steps:
       - name: Check CI status
         run: |
-          echo "CI result: ${{ needs.ci.result }}"
-          echo "Integration tests result: ${{ needs.api-service-integration-tests.result }}"
-          echo "E2E tests result: ${{ needs.e2e-tests.result }}"
-          echo "Workflow lint result: ${{ needs.workflow-lint.result }}"
+          # failure だけでなく cancelled / timed_out も失敗として扱う。
+          # cancelled を pass 扱いにすると、必須チェックをキャンセルすればゲートを
+          # 素通りできてしまう（success / skipped のみ通過を許可する）。
+          fail=0
+          for entry in \
+            "Workflow lint:${{ needs.workflow-lint.result }}" \
+            "CI checks:${{ needs.ci.result }}" \
+            "Integration tests:${{ needs.api-service-integration-tests.result }}" \
+            "E2E tests:${{ needs.e2e-tests.result }}"; do
+            name="${entry%%:*}"
+            result="${entry##*:}"
+            echo "$name result: $result"
+            case "$result" in
+              failure | cancelled | timed_out)
+                echo "::error::$name did not pass (result: $result)"
+                fail=1
+                ;;
+            esac
+          done
 
-          if [[ "${{ needs.workflow-lint.result }}" == "failure" ]]; then
-            echo "Workflow lint failed"
-            exit 1
-          fi
-
-          # failure があれば失敗
-          if [[ "${{ needs.ci.result }}" == "failure" ]]; then
-            echo "CI checks failed"
-            exit 1
-          fi
-          if [[ "${{ needs.api-service-integration-tests.result }}" == "failure" ]]; then
-            echo "Integration tests failed"
-            exit 1
-          fi
-          if [[ "${{ needs.e2e-tests.result }}" == "failure" ]]; then
-            echo "E2E tests failed"
+          if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi
 

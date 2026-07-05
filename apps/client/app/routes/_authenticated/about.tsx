@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/about")({
+  head: () => ({ meta: [{ title: "about | {{APP_NAME}}" }] }),
   component: AboutPage,
 });
 

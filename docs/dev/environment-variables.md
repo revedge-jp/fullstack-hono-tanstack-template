@@ -13,41 +13,59 @@
 
 ## 既存の環境変数一覧
 
-### 必須（開発環境）
+出典は `apps/api-service/src/config.ts`（Zod で起動時に検証）と `.env.example`。
+`.env.example` はいずれもダミー値で埋めてあるため、`cp .env.example .env` で dev サーバーは起動する。
+
+### 必須（`config.ts` が `min(1)` で要求。未設定だと起動失敗）
 
 | 変数名 | 説明 | 例 |
 |--------|------|-----|
-| `DATABASE_URL` | 本番/開発用データベース接続 URL | `postgresql://postgres:postgres@localhost:5432/app_db?schema=public` |
-| `TEST_DATABASE_URL` | テスト用データベース接続 URL | `postgresql://postgres:postgres@localhost:5433/app_db` |
+| `DATABASE_URL` | 本番/開発用データベース接続 URL | `postgresql://postgres:postgres@localhost:5432/app_db` |
+| `BETTER_AUTH_SECRET` | Better Auth のセッション署名鍵（本番はランダムな強い値） | `your-secret-here`（ダミー可） |
+| `GOOGLE_CLIENT_ID` | Google OAuth クライアント ID | `your-google-client-id`（ダミー可） |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット | `your-google-client-secret`（ダミー可） |
+
+> 認証系の 3 変数はダミー値でもバリデーションを通過し dev サーバーは起動する。開発時は
+> 「Dev サインイン」ボタン（`/api/dev/login`、`import.meta.env.DEV` 時のみ表示）で Google を
+> 介さずログインできる。実際の Google サインインを使うときのみ本物の OAuth 値を設定する。
+
+`TEST_DATABASE_URL`（`postgresql://postgres:postgres@localhost:5433/app_db`）は `config.ts` の
+必須スキーマ対象ではないが、テスト実行時に必要。
 
 ### Server（api-service）
 
 | 変数名 | 説明 | 既定値 |
 |--------|------|--------|
-| `NODE_ENV` | 環境 | `development` |
-| `PORT` | サーバーポート | `8080` |
+| `NODE_ENV` | 環境（development/test/production） | `development` |
+| `API_PORT` | API サーバーのポート（`PORT` も後方互換で受理） | `8080` |
 | `CORS_ORIGIN` | CORS 許可オリジン | 本番必須。開発/テスト時は未設定時 `http://localhost:3000` |
-| `LOG_PRETTY` | ログ整形出力 | （未設定） |
+| `LOG_PRETTY` | ログ整形出力（`true` で有効化） | （未設定） |
 | `LOG_LEVEL` | ログレベル（fatal/error/warn/info/debug/trace/silent） | 未設定時は環境別デフォルト（開発: debug、本番: info） |
-| `GOOGLE_CLOUD_PROJECT` | GCP プロジェクト ID | `kikagaku` |
-| `PREFIX` | リソース名プレフィックス | `local` |
+| `BETTER_AUTH_URL` | Better Auth のベース URL | （未設定） |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | Better Auth の信頼オリジン（カンマ区切り） | （空） |
 
-### Client
+### Client（apps/client）
 
 | 変数名 | 説明 | 既定値 |
 |--------|------|--------|
+| `CLIENT_PORT` | client（Vite）のポート | `3000` |
+| `API_BASE_URL` | API サーバーの URL（SSR は ADR-001 のインプロセス呼び出しを使うため主に worktree 用） | `http://localhost:8080` |
 
 ### Docker / インフラ
 
 | 変数名 | 説明 | 既定値 |
 |--------|------|--------|
-| `SERVER_PUBLIC_URL` | サーバー公開 URL | `http://localhost:8080` |
-| `POSTGRES_VOLUME_NAME` | Postgres データボリューム名 | `postgres-data` |
-| `POSTGRES_TEST_VOLUME_NAME` | テスト用 Postgres ボリューム名 | `postgres-test-data` |
-| `POSTGRES_CONTAINER_NAME` | Postgres コンテナ名 | `ax_saas_postgres` |
-| `POSTGRES_TEST_CONTAINER_NAME` | テスト用 Postgres コンテナ名 | `ax_saas_postgres_test` |
+| `POSTGRES_CONTAINER_NAME` | Postgres コンテナ名 | `app_postgres` |
+| `POSTGRES_TEST_CONTAINER_NAME` | テスト用 Postgres コンテナ名 | `app_postgres_test` |
+| `PGADMIN_CONTAINER_NAME` | pgAdmin コンテナ名 | `app_pgadmin` |
+| `POSTGRES_VOLUME_NAME` | Postgres データボリューム名 | `app-postgres-data` |
+| `PGADMIN_VOLUME_NAME` | pgAdmin データボリューム名 | `app-pgadmin-data` |
 | `DATABASE_PORT` | Postgres ポート | `5432` |
 | `TEST_DATABASE_PORT` | テスト用 Postgres ポート | `5433` |
+
+> テスト用 Postgres（`postgres-test`）は使い捨てで named volume を持たないため、
+> `POSTGRES_TEST_VOLUME_NAME` は使用しない。`SERVER_PUBLIC_URL` は `scripts/worktree.sh` が
+> worktree 用 `.env` に書き込むだけで、アプリ本体（`config.ts`）は参照しない残置変数。
 
 ---
 
