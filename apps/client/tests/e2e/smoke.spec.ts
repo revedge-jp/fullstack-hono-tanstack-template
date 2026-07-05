@@ -18,4 +18,14 @@ test.describe("Smoke Tests", () => {
     const response = await page.goto("/this-page-does-not-exist");
     expect(response?.status()).toBe(404);
   });
+
+  test("HTML レスポンスにセキュリティヘッダーが付与される", async ({ page }) => {
+    const response = await page.goto("/");
+    const headers = response?.headers() ?? {};
+    expect(headers["content-security-policy"]).toContain("default-src 'self'");
+    expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(headers["x-content-type-options"]).toBe("nosniff");
+    expect(headers["x-frame-options"]).toBe("DENY");
+    expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  });
 });

@@ -60,7 +60,8 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="antialiased" suppressHydrationWarning>
         {children}
-        <TanStackRouterDevtools position="bottom-right" />
+        {/* devtools は開発時のみ。本番バンドルからは import.meta.env.DEV の静的置換で除外される */}
+        {import.meta.env.DEV ? <TanStackRouterDevtools position="bottom-right" /> : null}
         <Scripts />
       </body>
     </html>
