@@ -32,9 +32,11 @@ jobs:
       deps: ${{ steps.filter.outputs.deps }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
+      # persist-credentials を無効化しない: paths-filter は pull_request では GitHub API を使うが、
+      # push イベントでは比較対象コミットを git fetch で取得するため、private リポジトリでは
+      # checkout が残した認証情報が必要（無効化すると main への push で exit 128 になる）。
+      # このジョブは push を行わず、後続 step も paths-filter のみなのでリスクは限定的。
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
       - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         id: filter
         with:
