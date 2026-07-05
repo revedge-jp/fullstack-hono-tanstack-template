@@ -62,14 +62,14 @@ bash scripts/setup-deploy-env.sh production
 
 | Secret | 用途 |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | Hyperdrive / Worker の作成・デプロイ（Workers 編集権限が必要） |
+| `CLOUDFLARE_API_TOKEN` | Hyperdrive / Worker の作成・デプロイ（Workers 編集権限が必要）。発行時のトークン名は `<APP_NAME>-deploy` 推奨（stage 間で共有するトークンのため） |
 | `CLOUDFLARE_ACCOUNT_ID` | 同上 |
-| `PLANETSCALE_SERVICE_TOKEN_ID` | PlanetScale DB / Role の作成 |
+| `PLANETSCALE_SERVICE_TOKEN_ID` | PlanetScale DB / Role の作成。発行時のトークン名は `<APP_NAME>-deploy` 推奨（stage 間で共有するトークンのため） |
 | `PLANETSCALE_SERVICE_TOKEN` | 同上 |
-| `ALCHEMY_PASSWORD` | Alchemy state 内 secrets の暗号化パスワード（任意の強い文字列） |
+| `ALCHEMY_PASSWORD` | Alchemy state 内 secrets の暗号化パスワード（`openssl rand -base64 32` で生成。プロジェクトごとに固有の値を推奨） |
 | `ALCHEMY_STATE_TOKEN` | Alchemy state store（CF 上の Durable Object）の認証トークン（任意の強い文字列。**全環境・ローカルで同一の値**にすること） |
 | `BETTER_AUTH_SECRET` | Better Auth のセッション署名鍵（`openssl rand -base64 32`） |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth。作成時のクライアント名は `<APP_NAME>-<stage>` 推奨（staging / production で別クライアントにするため） |
 
 **Variables**:
 

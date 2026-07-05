@@ -54,14 +54,14 @@ PLANETSCALE_ORGANIZATION|var|PlanetScale の組織名。全 stage 共通
 WORKERS_SUBDOMAIN|var|CF アカウントの workers.dev サブドメイン（bunx wrangler whoami で確認可）。カスタムドメイン運用でも preview 環境が使うため設定推奨
 APP_ORIGIN|var|カスタムドメインの公開 URL（例: https://app.example.com）。workers.dev 運用なら空 Enter でスキップ
 SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL（例: https://<app>-staging.<subdomain>.workers.dev）。空だと smoke は skip される
-CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit）。stage 間で同じ値を使い回してよい
+CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit）。stage 間で同じ値を使い回してよい。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: chobaco-deploy）
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
-PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（org: create_databases + 全 DB read/write/delete 権限、無期限）。stage 間で共有可
+PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（org: create_databases + 全 DB read/write/delete 権限、無期限）。stage 間で共有可。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: chobaco-deploy）
 PLANETSCALE_SERVICE_TOKEN|secret|同サービストークンの secret
 ALCHEMY_STATE_TOKEN|secret|Alchemy state store の認証トークン。CF アカウント内の全プロジェクト・全 stage で【同一の値】にすること
-ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。プロジェクトごとに固有の値を推奨
+ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。プロジェクトごとに固有の値を推奨（openssl rand -base64 32 で生成）
 BETTER_AUTH_SECRET|secret|Better Auth のセッション署名鍵（openssl rand -base64 32 で生成）。【stage ごとに別の値】にすること
-GOOGLE_CLIENT_ID|secret|Google OAuth クライアント ID。staging / production で別クライアント推奨
+GOOGLE_CLIENT_ID|secret|Google OAuth クライアント ID。staging / production で別クライアント推奨。作成時のクライアント名は「<APP_NAME>-<stage>」推奨（例: chobaco-staging）
 GOOGLE_CLIENT_SECRET|secret|同クライアントの secret"
 
 echo ""
