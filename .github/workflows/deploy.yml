@@ -23,9 +23,10 @@ jobs:
     name: Detect deploy target
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-    # Environment 存在チェック（gh api）にリポジトリ読み取りが必要。
+    # Environment 存在チェック（gh api）に actions: read が必要
+    # （environments の GET は fine-grained では Actions (read) にマップされる）。
     permissions:
-      contents: read
+      actions: read
     timeout-minutes: 5
     outputs:
       target: ${{ steps.detect.outputs.target }}
