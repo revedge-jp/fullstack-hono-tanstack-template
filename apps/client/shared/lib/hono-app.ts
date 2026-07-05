@@ -28,7 +28,8 @@ export function initHonoApp(cfEnv: CFBindings) {
   return createApp(env);
 }
 
-// ローカル開発用（TanStack Start 開発サーバー、createServerFn のインプロセス呼び出し）。
+// server.ts を経由しない実行環境（素の vite / node）向けの /api/$ キャッチオールルート用。
+// serverFn の HTTP ループバックフォールバック（api-client.ts 参照）の受け口でもある。
 // process.env（.env の DATABASE_URL）を使用。CF Workers 本番環境では使用しない。
 let _devInstance: ReturnType<typeof createApp> | undefined;
 export function getHonoApp() {

@@ -37,8 +37,8 @@ graph TB
   - ブラウザ: 相対 URL の Hono RPC クライアント（`hc<AppType>("/")`）→ 同一 Worker の `/api/*` へ
   - SSR（loader / createServerFn）: CF Workers では同一オリジンへの `fetch()` が
     自分自身の fetch ハンドラーへループバックしないため（[ADR-001](adr-001-cf-workers-session-check.md)）、
-    AsyncLocalStorage 経由で api-service の container を直接呼び出す
-    （`apps/client/shared/lib/server-container.ts`）
+    AsyncLocalStorage 経由で注入されるインプロセス Hono RPC クライアントで呼び出す
+    （`apps/client/shared/lib/api-client.ts`）
 
 ### Server (`apps/api-service`)
 

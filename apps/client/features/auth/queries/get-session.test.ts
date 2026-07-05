@@ -1,14 +1,27 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { SessionUser } from "@/shared/lib/app-context";
+import type { SessionUser } from "@/shared/lib/api-client";
 
 const mockUser: SessionUser = { id: "u1", email: "a@example.com", name: "A" };
 
-// getSessionChecker は各テストで上書きする
-let mockChecker: ((headers: Headers) => Promise<SessionUser | null>) | undefined;
+let mockMeOk = true;
+let lastHeaders: Record<string, string> | undefined;
 
-mock.module("@/shared/lib/app-context", () => ({
-  getSessionChecker: () => mockChecker,
+mock.module("@/shared/lib/api-client", () => ({
+  getApiClient: () => ({
+    api: {
+      me: {
+        $get: mock((_args: unknown, opts?: { init?: { headers?: Record<string, string> } }) => {
+          lastHeaders = opts?.init?.headers;
+          return Promise.resolve({
+            ok: mockMeOk,
+            json: async () =>
+              mockMeOk ? { ok: true, data: mockUser } : { ok: false, error: "Unauthorized" },
+          });
+        }),
+      },
+    },
+  }),
 }));
 
 mock.module("@tanstack/react-start", () => ({
@@ -24,57 +37,23 @@ mock.module("@tanstack/react-start/server", () => ({
     }),
 }));
 
-let mockMeOk = true;
-
-mock.module("hono/client", () => ({
-  hc: () => ({
-    api: {
-      me: {
-        $get: mock(() =>
-          Promise.resolve({
-            ok: mockMeOk,
-            json: async () =>
-              mockMeOk ? { ok: true, data: mockUser } : { ok: false, error: "Unauthorized" },
-          }),
-        ),
-      },
-    },
-  }),
-}));
-
 const { getSessionServerFn } = await import("./get-session");
 
 describe("auth.getSessionServerFn", () => {
   beforeEach(() => {
-    mockChecker = undefined;
     mockMeOk = true;
+    lastHeaders = undefined;
   });
 
-  describe("CF Workers パス (checker あり)", () => {
-    test("checker が SessionUser を返す場合はそのまま返す", async () => {
-      mockChecker = async () => mockUser;
-      const result = await getSessionServerFn();
-      expect(result).toEqual(mockUser);
-    });
-
-    test("checker が null を返す場合は null を返す", async () => {
-      mockChecker = async () => null;
-      const result = await getSessionServerFn();
-      expect(result).toBeNull();
-    });
+  test("API が ok=true を返す場合は SessionUser を返し、cookie を転送する", async () => {
+    const result = await getSessionServerFn();
+    expect(result).toEqual(mockUser);
+    expect(lastHeaders).toEqual({ cookie: "session=test" });
   });
 
-  describe("ローカル dev フォールバック (checker なし)", () => {
-    test("API が ok=true を返す場合は SessionUser を返す", async () => {
-      mockMeOk = true;
-      const result = await getSessionServerFn();
-      expect(result).toEqual(mockUser);
-    });
-
-    test("API が ok でない場合は null を返す", async () => {
-      mockMeOk = false;
-      const result = await getSessionServerFn();
-      expect(result).toBeNull();
-    });
+  test("API が ok でない場合は null を返す", async () => {
+    mockMeOk = false;
+    const result = await getSessionServerFn();
+    expect(result).toBeNull();
   });
 });

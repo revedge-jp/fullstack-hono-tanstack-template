@@ -34,7 +34,7 @@ apps/client/
 │   │   ├── ui/             # UI コンポーネント
 │   │   └── index.ts        # パブリック API
 ├── shared/                 # 共有レイヤ（横断関心）
-│   └── lib/                # server-container / app-context 等
+│   └── lib/                # api-client 等
 └── components/             # 汎用 UI コンポーネント
     └── ui/                 # shadcn/ui コンポーネント
 ```

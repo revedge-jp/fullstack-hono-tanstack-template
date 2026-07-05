@@ -1,7 +1,7 @@
-# ADR-001: CF Workers + Static Assets でのセッション検証方法
+# ADR-001: CF Workers + Static Assets での SSR からの api-service 呼び出し
 
 **ステータス**: 採用済み
-**日付**: 2026-03-14
+**日付**: 2026-03-14（2026-07-05 改訂: checker/container 直呼びから in-process RPC クライアント注入に変更）
 
 ---
 
@@ -9,9 +9,10 @@
 
 このアプリは TanStack Start (SSR) + Cloudflare Workers + Cloudflare Static Assets で動作する。
 
-認証ガード (`/_authenticated` レイアウトルート) の `loader` は `getSessionServerFn()` というサーバー関数を呼び出し、セッションが有効かどうかを確認する。
+SSR の `loader` / `createServerFn` は api-service の機能を必要とする。代表例:
 
-セッション検証には Better Auth の `auth.api.getSession()` が必要で、これは DB（Hyperdrive 経由 Supabase）にアクセスする。
+- 認証ガード (`/_authenticated` レイアウトルート) の `loader` が `getSessionServerFn()` でセッションを検証する（Better Auth が DB にアクセス）
+- `getTasksServerFn()` が初回表示用のタスク一覧を取得する
 
 ---
 
@@ -26,7 +27,7 @@ getSessionServerFn
   CF の Asset ハンドラーに吸われる         // ← 実際の動作（/api/me は静的ファイルでない → 404）
 ```
 
-`createServerFn` (TanStack Start) はサーバー関数にプラットフォーム固有の binding（CF の `env`）を一切露出しないため、`auth` インスタンスをサーバー関数内で直接生成することもできない。
+`createServerFn` (TanStack Start) はサーバー関数にプラットフォーム固有の binding（CF の `env`）を一切露出しないため、`auth` インスタンスや DB クライアントをサーバー関数内で直接生成することもできない。
 
 ---
 
@@ -49,24 +50,43 @@ Worker 自身への Service Binding を設定し、内部 RPC として呼び出
 - ❌ wrangler.jsonc に自己参照 binding の設定が必要でデプロイが複雑になる
 - ❌ ローカル開発での動作確認が難しい
 
-### C. `AsyncLocalStorage` で CheckSessionFn をスレッドする（採用）
+### C. `AsyncLocalStorage` で container / session checker を直接スレッドする（旧採用案）
 
-`server.ts` の fetch ハンドラーで初期化した `auth` インスタンスを使って session checker 関数を作り、`AsyncLocalStorage` 経由で TanStack Start のハンドラー全体に伝播させる。
+`server.ts` で初期化した `auth` の checker 関数と api-service の `container` を
+`AsyncLocalStorage` で serverFn に渡し、アプリケーション層を直接呼ぶ。
+
+- ✅ HTTP ラウンドトリップなし・オーバーヘッド最小
+- ❌ **アプリケーション層への入口が2本になる**: presentation 層（認証ミドルウェア・
+  zValidator・アクセスログ）をバイパスするため、serverFn 側で認可チェック等を
+  手書きで再現する義務が feature ごとに発生する
+- ❌ client が api-service の container 型に結合する
+
+### D. `AsyncLocalStorage` で in-process Hono RPC クライアントをスレッドする（採用）
+
+`server.ts` の fetch ハンドラーで構築した Hono アプリの `app.request`（インプロセスの
+関数呼び出し。ネットワークに出ないため Static Assets の制約に触れない）を fetch として
+束ねた `hc<AppType>` クライアントを `AsyncLocalStorage` で serverFn に注入する。
 
 ```
 server.ts (fetch handler)
-  ├─ initHonoApp(env) → { app, end, auth }
-  ├─ checkSession = (headers) => auth.api.getSession({ headers })
-  └─ runWithSessionChecker(checkSession, () => handler(request, ctx))
-       └─ getSessionServerFn()
-            └─ getSessionChecker()(request.headers)  // ← DB アクセスなし、auth 直呼び
+  ├─ initHonoApp(env) → { app, end }
+  └─ runWithApiClient(createInProcessApiClient(app), () => handler(request))
+       └─ getTasksServerFn()
+            └─ getApiClient(request).api.tasks.$get(...)  // ← HTTP 境界を通るが、ネットワークには出ない
 ```
 
-- ✅ HTTP ラウンドトリップなし
-- ✅ `auth` インスタンスは `server.ts` で作られたものをそのまま使うため、Hyperdrive 接続も共有
+- ✅ HTTP ラウンドトリップなし（`app.request` は同一 isolate 内の関数呼び出し）
+- ✅ **SSR 経路もブラウザ経路と同じ presentation 層を通る**: 認証ミドルウェア・
+  バリデータ・アクセスログが一元化され、入口が1本になる
+- ✅ Hono RPC の型（`AppType`）がそのまま効く。client と api-service の結合は
+  RPC 契約のみ
+- ✅ テストヘルパー（`createFakeApp` + `hc` with `app.request`）と同じ確立された
+  パターン
 - ✅ `AsyncLocalStorage` は CF Workers (`nodejs_compat_v2`) で正式サポート
-- ✅ ローカル開発では checker が undefined → HTTP ループバックにフォールバック
-- ✅ Next.js・Nuxt 等が同じパターンを内部実装で使用しており実績がある
+- ✅ ALS 未設定の環境（素の vite / node 実行）では同一オリジン HTTP ループバックに
+  フォールバック（`getApiClient` が吸収し、serverFn のコードは1経路のまま）
+- ⚠️ Request/Response の生成と JSON シリアライズのコストが乗るが、SSR read 1回あたり
+  マイクロ秒〜ミリ秒オーダーで実害なし
 
 ---
 
@@ -76,24 +96,25 @@ server.ts (fetch handler)
 
 ```
 Browser → CF Worker (server.ts)
-  initHonoApp(env)                     # per-request: auth + DB 接続を初期化
-  checkSession = (headers) =>
-    auth.api.getSession({ headers })   # Better Auth が auth_sessions を SELECT
-  runWithSessionChecker(checkSession,
-    () => handler(request))            # AsyncLocalStorage にスレッド
+  initHonoApp(env)                        # per-request: Hono アプリ + DB 接続を初期化
+  runWithApiClient(
+    createInProcessApiClient(app),        # hc<AppType> + app.request を ALS にスレッド
+    () => handler(request))
       → /_authenticated loader
           → getSessionServerFn()
-              → getSessionChecker()   # AsyncLocalStorage から取得
-              → checkSession(headers) # 直接呼び出し（HTTP なし）
+              → getApiClient(request)     # AsyncLocalStorage から取得
+              → .api.me.$get({ cookie })  # app.request 直呼び（ネットワークなし）
+                  → requestLogger / requireAuth 等の middleware を通過
+                  → auth feature の usecase
 ```
 
-### データフロー（ローカル開発）
+### データフロー（フォールバック: server.ts を経由しない実行環境）
 
 ```
 Browser → TanStack Start dev server
   getSessionServerFn()
-    → getSessionChecker() === undefined  # AsyncLocalStorage 未設定
-    → fetch(`${origin}/api/me`, { cookie })  # HTTP ループバック
+    → getApiClient(request)              # ALS 未設定 → hc<AppType>(origin) を生成
+    → .api.me.$get({ cookie })           # HTTP ループバック
         → /api/$ ルート → getHonoApp().fetch()
 ```
 
@@ -101,10 +122,11 @@ Browser → TanStack Start dev server
 
 ```
 apps/client/
-  app/server.ts                      # checkSession を構築・スレッド
-  shared/lib/app-context.ts          # AsyncLocalStorage + 型定義
-  features/auth/queries/get-session.ts  # checker 呼び出し / HTTP フォールバック
-apps/api-service/src/app.ts          # createApp が auth を return に含む
+  app/server.ts                      # in-process クライアントを構築・スレッド
+  shared/lib/api-client.ts           # AsyncLocalStorage + hc クライアント生成
+  features/auth/queries/get-session.ts   # getApiClient() 経由で /api/me
+  features/tasks/queries/get-tasks.ts    # getApiClient() 経由で /api/tasks
+apps/api-service/src/app.ts          # createApp が AppType（RPC 契約）を export
 ```
 
 ---
@@ -112,8 +134,13 @@ apps/api-service/src/app.ts          # createApp が auth を return に含む
 ## トレードオフ・注意点
 
 - `nodejs_compat_v2` フラグが必要（`async_hooks` のため）。これは Hyperdrive 使用にも必要なので追加コストはない。
-- `server.ts` と `getSessionServerFn` が `app-context.ts` の契約（`CheckSessionFn` 型）を通じて結合する。インターフェースは意図的に最小化している。
-- Hyperdrive 接続（`auth` が使う DB クライアント）は outer request のものを共有する。`/api/*` ルートの Hono リクエストとは別接続になる（それぞれ `initHonoApp` が呼ばれる）が、これは正しい動作。
+- SSR からの呼び出しも api-service のアクセスログに記録される（method/path/status）。
+  1画面の SSR で複数 serverFn が走るとログ行数はその分増える。
+- mutation は従来どおりブラウザから同一オリジンの API を直接呼ぶ（cookie 自動同送・
+  1ホップ・SSR 先読み不要のため）。この ADR は SSR read 経路のみを対象とする。
+- Hyperdrive 接続は outer request の `initHonoApp` が作ったものを serverFn も共有する。
+  `/api/*` 直アクセスのリクエストとは別接続になる（それぞれ `initHonoApp` が呼ばれる）が、
+  これは正しい動作。
 
 ---
 
