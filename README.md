@@ -83,7 +83,7 @@ gh auth login          # 未認証の場合
 
 ### デプロイ向け
 
-- [Cloudflare Workers デプロイガイド](docs/deploy/cloudflare-workers.md) - デプロイの概要とセットアップ
+- [Cloudflare Workers デプロイガイド](docs/deploy/cloudflare-workers.md) - デプロイの概要とセットアップ（PR プレビュー環境 = `preview` ラベル opt-in もここ）
 - [Alchemy IaC ガイド](docs/dev/alchemy-iac.md) - Infrastructure as TypeScript（PlanetScale DB + Hyperdrive + Worker。deploy.yml のデプロイ本体）
 - [GitHub ルールセット設定](docs/deploy/github-ruleset.md) - ブランチ保護の設定
 

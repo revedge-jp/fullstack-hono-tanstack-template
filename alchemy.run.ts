@@ -16,7 +16,7 @@ import { appendFileSync, existsSync } from "node:fs";
 
 import alchemy from "alchemy";
 import { Assets, Hyperdrive, Worker } from "alchemy/cloudflare";
-import { Database, Role } from "alchemy/planetscale";
+import { Branch, Database, Role } from "alchemy/planetscale";
 import { CloudflareStateStore } from "alchemy/state";
 
 function requireEnv(key: string): string {
@@ -40,8 +40,12 @@ const app = await alchemy(appName, {
 });
 
 const stage = app.stage;
-if (stage !== "staging" && stage !== "production") {
-  throw new Error(`stage は staging | production のみ対応です（--stage で指定、現在: ${stage}）`);
+// pr-<番号> は PR プレビュー環境（preview.yml が管理。DB は staging DB のブランチ）
+const isPreview = /^pr-\d+$/.test(stage);
+if (stage !== "staging" && stage !== "production" && !isPreview) {
+  throw new Error(
+    `stage は staging | production | pr-<番号> のみ対応です（--stage で指定、現在: ${stage}）`,
+  );
 }
 
 // wrangler.jsonc の env 命名と揃える: staging は -staging サフィックス、production は素の名前
@@ -54,26 +58,52 @@ requireEnv("PLANETSCALE_SERVICE_TOKEN_ID");
 requireEnv("PLANETSCALE_SERVICE_TOKEN");
 const planetscaleOrg = requireEnv("PLANETSCALE_ORGANIZATION");
 
-const database = await Database("database", {
-  name: `${appName}-${stage}`,
-  organization: planetscaleOrg,
-  kind: "postgresql",
-  clusterSize: "PS_5",
-  // 0 = シングルノード（$5/月）。未指定だと PlanetScale デフォルトの HA（Primary+レプリカ2 = 3倍額）
-  // で作られるため必ず明示する。本番を HA にしたくなったら 2 に上げる（create 時のみ有効。
-  // 既存 DB はダッシュボードの Cluster 設定から変更する）
-  replicas: 0,
-  arch: "arm", // Graviton。x86 より価格性能比が良い
-  region: { slug: "ap-northeast" }, // AWS Tokyo (ap-northeast-1)
-  adopt: true,
-  // delete はデフォルト false: infra:destroy しても DB 本体は削除されない（誤削除防止）
-});
+let dbRole: Role;
+let dbDisplayName: string;
+if (isPreview) {
+  // PR プレビュー: staging DB のブランチ（PS-DEV、存在時間分だけの課金）を使い捨て DB として使う。
+  // スキーマ・データは複製されないため、preview.yml が migration を頭から適用する。
+  const branch = await Branch("db-branch", {
+    name: stage, // 例: pr-123
+    database: `${appName}-staging`, // staging DB が親（先に staging がデプロイされている必要がある）
+    organization: planetscaleOrg,
+    isProduction: false,
+    adopt: true,
+    // 必ず明示する: JSDoc は「デフォルト true」と言うが実装は `props.delete ?? false`
+    // （alchemy 0.93 のドキュメント齟齬）。明示しないと destroy で state から外れるだけで
+    // ブランチ実体が残り、PS-DEV の課金が続く
+    delete: true,
+  });
+  dbRole = await Role("db-role", {
+    database: `${appName}-staging`,
+    organization: planetscaleOrg,
+    branch,
+    inheritedRoles: ["postgres"],
+  });
+  dbDisplayName = `${appName}-staging#${stage}`;
+} else {
+  const database = await Database("database", {
+    name: `${appName}-${stage}`,
+    organization: planetscaleOrg,
+    kind: "postgresql",
+    clusterSize: "PS_5",
+    // 0 = シングルノード（$5/月）。未指定だと PlanetScale デフォルトの HA（Primary+レプリカ2 = 3倍額）
+    // で作られるため必ず明示する。本番を HA にしたくなったら 2 に上げる（create 時のみ有効。
+    // 既存 DB はダッシュボードの Cluster 設定から変更する）
+    replicas: 0,
+    arch: "arm", // Graviton。x86 より価格性能比が良い
+    region: { slug: "ap-northeast" }, // AWS Tokyo (ap-northeast-1)
+    adopt: true,
+    // delete はデフォルト false: infra:destroy しても DB 本体は削除されない（誤削除防止）
+  });
 
-// アプリ/マイグレーション用ロール。TTL なし（無期限）。
-const dbRole = await Role("db-role", {
-  database,
-  inheritedRoles: ["postgres"],
-});
+  // アプリ/マイグレーション用ロール。TTL なし（無期限）。
+  dbRole = await Role("db-role", {
+    database,
+    inheritedRoles: ["postgres"],
+  });
+  dbDisplayName = database.name;
+}
 
 // ---- Hyperdrive --------------------------------------------------------
 // ADR-002: origin は PlanetScale の直接続エンドポイント（port 5432）。
@@ -107,8 +137,10 @@ if (process.env.SKIP_WORKER !== "1") {
   // APP_ORIGIN で明示指定するか、WORKERS_SUBDOMAIN（CF アカウントの workers.dev サブドメイン）から組み立てる。
   // ?? ではなく || : CI では未設定の GitHub Variable が「空文字列」として渡ってくるため、
   // 空でも WORKERS_SUBDOMAIN へフォールバックさせる。
+  // preview では APP_ORIGIN を無視する（staging のカスタムドメインを指すため。preview の URL は
+  // 常に workers.dev — WORKERS_SUBDOMAIN が必須）。
   const appOrigin =
-    process.env.APP_ORIGIN ||
+    (!isPreview && process.env.APP_ORIGIN) ||
     (process.env.WORKERS_SUBDOMAIN
       ? `https://${workerName}.${process.env.WORKERS_SUBDOMAIN}.workers.dev`
       : undefined);
@@ -143,7 +175,7 @@ if (process.env.SKIP_WORKER !== "1") {
 }
 
 console.info(`[alchemy] stage=${stage} hyperdrive=${hyperdrive.hyperdriveId}`);
-console.info(`[alchemy] planetscale db=${database.name} role=${dbRole.username}`);
+console.info(`[alchemy] planetscale db=${dbDisplayName} role=${dbRole.username}`);
 
 // CI の migrate フェーズへ DATABASE_URL を渡す。値はログに出さずマスク登録のみ行う
 // （::add-mask:: 以降、GitHub Actions のログでこの値は *** に置換される）。

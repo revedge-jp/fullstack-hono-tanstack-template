@@ -1,0 +1,71 @@
+name: Preview Cleanup
+
+# 放置された preview 環境の自動掃除。DB ブランチ（PS-DEV）はオートスリープせず
+# 存在時間分の課金が続くため、最終更新から7日を超えた preview は破棄する。
+# ラベルも外すので、続きが必要なら再度 preview ラベルを付ければ作り直される（DB は空に戻る）。
+on:
+  schedule:
+    - cron: "0 21 * * *" # 毎日 06:00 JST
+  workflow_dispatch: {}
+
+jobs:
+  cleanup:
+    name: Destroy stale previews
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+      ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
+      PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+      PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
+      APP_NAME: ${{ vars.APP_NAME }}
+      GH_TOKEN: ${{ github.token }}
+      STALE_DAYS: "7"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check readiness
+        id: readiness
+        run: |
+          if [ -z "$ALCHEMY_STATE_TOKEN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Preview secrets not configured — nothing to clean up. Skipping."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Find stale previews
+        id: stale
+        if: steps.readiness.outputs.ready == 'true'
+        run: |
+          cutoff=$(date -u -d "-${STALE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
+          stale=$(gh pr list --label preview --state open \
+            --json number,updatedAt \
+            --jq ".[] | select(.updatedAt < \"$cutoff\") | .number" | tr '\n' ' ')
+          echo "numbers=$stale" >> "$GITHUB_OUTPUT"
+          if [ -n "$stale" ]; then
+            echo "::notice::Stale previews (>${STALE_DAYS}d): $stale"
+          else
+            echo "No stale previews."
+          fi
+
+      - uses: ./.github/actions/setup-workspace
+        if: steps.readiness.outputs.ready == 'true' && steps.stale.outputs.numbers != ''
+
+      - name: Destroy stale previews
+        if: steps.readiness.outputs.ready == 'true' && steps.stale.outputs.numbers != ''
+        env:
+          NUMBERS: ${{ steps.stale.outputs.numbers }}
+        run: |
+          for n in $NUMBERS; do
+            echo "==> Destroying preview pr-$n ..."
+            bunx alchemy destroy --stage "pr-$n"
+            gh pr edit "$n" --remove-label preview
+            gh pr comment "$n" --body "🧹 ${STALE_DAYS}日以上更新がないため preview 環境（\`pr-$n\`）を自動削除しました。再度必要なら \`preview\` ラベルを付け直してください（DB は空の状態で作り直されます）。" || true
+          done

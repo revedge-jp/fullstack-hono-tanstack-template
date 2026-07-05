@@ -1,0 +1,171 @@
+name: Preview
+
+# PR プレビュー環境（opt-in）。`preview` ラベルを付けた PR にだけ、使い捨ての
+# プレビュー環境（Worker + PlanetScale の staging DB ブランチ）を立てる。
+#
+#   preview ラベル付与     → 環境作成 + PR に URL コメント
+#   ラベル付きのまま push  → 再デプロイ（DB ブランチは使い回し、migration は差分適用）
+#   ラベル外し / クローズ  → 環境を丸ごと削除（DB ブランチも消える）
+#
+# コスト: DB ブランチ（PS-DEV）は存在時間の按分課金（$5/月相当）。オートスリープは
+# ないため、放置すると課金が続く。preview-cleanup.yml が7日で自動破棄する。
+#
+# 注意: fork からの PR には secrets が渡らないため preview は動かない（GitHub の仕様。
+# 同一リポジトリのブランチからの PR 専用）。preview ラベルは信頼できる PR にだけ付けること
+# （ビルドは PR のコードを secrets が見える環境で実行するため）。
+on:
+  pull_request:
+    types: [labeled, unlabeled, synchronize, closed]
+
+# 同一 PR の deploy / destroy を直列化する（ラベル操作と push の競走を防ぐ）
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy preview
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'preview') ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview'))
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      APP_NAME: ${{ vars.APP_NAME }}
+      WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+      ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+      ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
+      PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+      PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      PREVIEW_STAGE: pr-${{ github.event.number }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # secrets/vars 未設定のリポジトリでは notice を出して skip（deploy.yml と同じ方針）。
+      # preview は workers.dev URL 前提のため WORKERS_SUBDOMAIN が必須（APP_ORIGIN は不可）。
+      - name: Check preview readiness
+        id: readiness
+        run: |
+          missing=""
+          [ -z "$APP_NAME" ] && missing="$missing APP_NAME(var)"
+          [ -z "$WORKERS_SUBDOMAIN" ] && missing="$missing WORKERS_SUBDOMAIN(var)"
+          [ -z "$ALCHEMY_PASSWORD" ] && missing="$missing ALCHEMY_PASSWORD"
+          [ -z "$ALCHEMY_STATE_TOKEN" ] && missing="$missing ALCHEMY_STATE_TOKEN"
+          [ -z "$CLOUDFLARE_API_TOKEN" ] && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -z "$PLANETSCALE_ORGANIZATION" ] && missing="$missing PLANETSCALE_ORGANIZATION(var)"
+          [ -z "$PLANETSCALE_SERVICE_TOKEN_ID" ] && missing="$missing PLANETSCALE_SERVICE_TOKEN_ID"
+          [ -z "$PLANETSCALE_SERVICE_TOKEN" ] && missing="$missing PLANETSCALE_SERVICE_TOKEN"
+          [ -z "$BETTER_AUTH_SECRET" ] && missing="$missing BETTER_AUTH_SECRET"
+          [ -z "$GOOGLE_CLIENT_ID" ] && missing="$missing GOOGLE_CLIENT_ID"
+          [ -z "$GOOGLE_CLIENT_SECRET" ] && missing="$missing GOOGLE_CLIENT_SECRET"
+          if [ -n "$missing" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Preview secrets/vars not fully configured:$missing — skipping. See docs/deploy/cloudflare-workers.md"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/setup-workspace
+        if: steps.readiness.outputs.ready == 'true'
+
+      - name: Materialize APP_NAME placeholder
+        if: steps.readiness.outputs.ready == 'true'
+        run: perl -pi -e 's/\{\{APP_NAME\}\}/$ENV{APP_NAME}/g' apps/client/wrangler.jsonc
+
+      - name: Build
+        if: steps.readiness.outputs.ready == 'true'
+        run: bun run build
+
+      # ① DB ブランチ / Role / Hyperdrive を provision（DATABASE_URL が GITHUB_ENV に入る）
+      - name: Provision infra (DB branch / Hyperdrive)
+        if: steps.readiness.outputs.ready == 'true'
+        run: bunx alchemy deploy --stage "$PREVIEW_STAGE"
+        env:
+          SKIP_WORKER: "1"
+
+      # ② 空の DB ブランチにスキーマを適用（2回目以降は差分のみ）
+      - name: Migrate DB branch
+        if: steps.readiness.outputs.ready == 'true'
+        run: cd packages/database && bun run db:migrate
+
+      # ③ Worker デプロイ
+      - name: Deploy Worker
+        if: steps.readiness.outputs.ready == 'true'
+        run: bunx alchemy deploy --stage "$PREVIEW_STAGE"
+
+      - name: Comment preview URL
+        if: steps.readiness.outputs.ready == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          url="https://${APP_NAME}-${PREVIEW_STAGE}.${WORKERS_SUBDOMAIN}.workers.dev"
+          body="🔍 **Preview**: ${url}
+
+          - commit: ${HEAD_SHA}
+          - DB: \`${APP_NAME}-staging\` のブランチ \`${PREVIEW_STAGE}\`（空の状態から migration 適用済み）
+          - \`preview\` ラベルを外すかこの PR を閉じると環境ごと削除されます（放置しても7日で自動削除）"
+          # 既存のプレビューコメントがあれば編集、なければ新規作成
+          gh pr comment "$PR_NUMBER" --edit-last --body "$body" 2>/dev/null \
+            || gh pr comment "$PR_NUMBER" --body "$body"
+
+  destroy:
+    name: Destroy preview
+    if: >-
+      (github.event.action == 'unlabeled' && github.event.label.name == 'preview') ||
+      (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview'))
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      APP_NAME: ${{ vars.APP_NAME }}
+      ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+      ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
+      PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+      PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
+      PREVIEW_STAGE: pr-${{ github.event.number }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # destroy は state から逆順削除するだけなのでビルド不要（alchemy CLI と認証情報だけ要る）
+      - uses: actions/checkout@v4
+
+      - name: Check destroy readiness
+        id: readiness
+        run: |
+          if [ -z "$ALCHEMY_STATE_TOKEN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Preview secrets not configured — nothing to destroy. Skipping."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/setup-workspace
+        if: steps.readiness.outputs.ready == 'true'
+
+      - name: Destroy preview environment
+        if: steps.readiness.outputs.ready == 'true'
+        run: bunx alchemy destroy --stage "$PREVIEW_STAGE"
+
+      - name: Comment teardown
+        if: steps.readiness.outputs.ready == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+        run: gh pr comment "$PR_NUMBER" --body "🧹 Preview 環境（\`$PREVIEW_STAGE\`）を削除しました。" || true
