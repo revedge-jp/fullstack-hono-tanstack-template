@@ -6,7 +6,12 @@ name: Preview Cleanup
 on:
   schedule:
     - cron: "0 21 * * *" # 毎日 06:00 JST
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      stale_days:
+        description: "この日数より更新が古い preview を破棄する（動作確認には 0 を指定）"
+        default: "7"
+        required: false
 
 jobs:
   cleanup:
@@ -26,7 +31,8 @@ jobs:
       PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
       APP_NAME: ${{ vars.APP_NAME }}
       GH_TOKEN: ${{ github.token }}
-      STALE_DAYS: "7"
+      # schedule 実行時は inputs が空なので 7 にフォールバック
+      STALE_DAYS: ${{ github.event.inputs.stale_days || '7' }}
     steps:
       - uses: actions/checkout@v4
 
