@@ -28,7 +28,7 @@ jobs:
        github.event.comment.author_association == 'OWNER')
     steps:
       # このワークフローは実装をコミット/プッシュするため persist-credentials は既定（true）のまま。
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: anthropics/claude-code-action@26ec041249acb0a944c0a47b6c0c13f05dbc5b44 # v1
         with:
