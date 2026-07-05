@@ -9,22 +9,26 @@
 
 ### 自動ロールバック（smoke 失敗時）
 
-`.github/workflows/deploy.yml` は staging / production ともに、デプロイ直後の smoke チェック
-（`/api/health` + `/`）が失敗すると **直前バージョンへ自動ロールバック**する
-（`wrangler rollback --yes`）。ロールバック後もジョブは赤のまま残るので、原因を修正するまで
+`.github/workflows/deploy.yml` は smoke 通過のたびに commit SHA を
+`LAST_GOOD_SHA_<stage>`（リポジトリ変数）へ記録し、smoke チェック
+（`/api/health` + `/`）が失敗すると **その「既知の正常 commit」を再ビルドして再デプロイ**する。
+ロールバック後もジョブは赤のまま残るので、原因を修正するまで
 次のデプロイ（main への push / タグ作成）は行わないこと。
+
+> **注意**: `wrangler rollback` は使えない。Alchemy のデプロイは上書き型で Cloudflare 側に
+> Worker のバージョン履歴が残らないため（実地訓練で確認済み）、ロールバックは常に
+> git ref ベース（再ビルド → 再デプロイ）で行う。
 
 ### 手動ロールバック
 
 ```bash
-cd apps/client
+# 方法1: 過去の成功した Deploy run を GitHub 上で rerun する（その commit が再デプロイされる）
+gh run list --workflow Deploy   # 戻りたい run を特定
+gh run rerun <run-id>
 
-# 直前のバージョンに戻す（Worker 名: staging は {APP_NAME}-staging、production は {APP_NAME}）
-bunx wrangler rollback --name <worker-name> --message "manual rollback: <理由>"
-
-# 特定バージョンに戻す場合
-bunx wrangler deployments list --name <worker-name>   # version-id を確認
-bunx wrangler rollback <version-id> --name <worker-name> --message "<理由>"
+# 方法2: ローカルから任意の commit をデプロイする
+git checkout <good-sha>
+bun run infra:deploy:staging    # または infra:deploy:production
 ```
 
 **注意**: ロールバックで戻るのは **Worker のコードだけ**で、DB スキーマは戻らない。
