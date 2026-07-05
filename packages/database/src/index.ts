@@ -7,14 +7,24 @@ import * as schema from "./schema";
 export { sql };
 
 export function createDb(connectionString: string) {
-  // CF Workers / Hyperdrive requirements:
-  //   prepare: false — Hyperdrive runs in transaction mode (no prepared statements)
-  //   max: 1 — Hyperdrive manages its own connection pool; using more than 1
-  //             connection per request causes "Timed out waiting for a message
-  //             from another Hyperdrive node" errors due to internal coordination
-  //             failures across Hyperdrive nodes.
-  //
-  const client = postgres(connectionString, { prepare: false, max: 1 });
+  // CF Workers / Hyperdrive 前提の設定（経緯と実測は ADR-002 を参照）:
+  //   max: 1            — 接続プールは Hyperdrive 側が管理する。2 以上にすると
+  //                       "Timed out waiting for a message from another Hyperdrive node"
+  //                       という Hyperdrive ノード間の調整エラーが実際に発生した
+  //   prepare: false    — prepared statement に依存しない安全側の設定。Hyperdrive の接続先は
+  //                       Session Mode（ADR-002）のため有効化できる可能性があるが、
+  //                       変更する場合は staging での実測を経ること
+  //   fetch_types: false — クライアントをリクエストごとに生成するため、既定の型 OID 取得が
+  //                       毎リクエストに 1 往復を追加してしまう。配列型カラム不使用のため不要
+  //   connect_timeout / idle_timeout — ハングした接続が唯一の接続（max: 1）を
+  //                       無期限に占有しないための上限（秒）
+  const client = postgres(connectionString, {
+    prepare: false,
+    max: 1,
+    fetch_types: false,
+    connect_timeout: 5,
+    idle_timeout: 20,
+  });
   const db = drizzle(client, { schema });
   return { db, end: () => client.end() };
 }
