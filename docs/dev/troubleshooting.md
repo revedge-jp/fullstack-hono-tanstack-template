@@ -158,8 +158,8 @@ pino の場合、Node ビルドは stream 引数を渡さない限り内部で S
 **原因:** CF Workers + Static Assets では、同一オリジンへの `fetch()` サブリクエストは
 自分自身の fetch ハンドラーを経由しない（[ADR-001](../architecture/adr-001-cf-workers-session-check.md)）。
 
-**解決方法:** AsyncLocalStorage 経由で api-service の container を直接呼ぶ
-（`apps/client/shared/lib/server-container.ts`、実例は `features/tasks/queries/get-tasks.ts`）。
+**解決方法:** AsyncLocalStorage 経由で注入されるインプロセス Hono RPC クライアントで呼ぶ
+（`apps/client/shared/lib/api-client.ts`、実例は `features/tasks/queries/get-tasks.ts`）。
 
 #### 症状: `bun run dev` (client) が wrangler.jsonc のエラーで起動しない
 

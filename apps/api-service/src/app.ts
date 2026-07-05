@@ -4,6 +4,7 @@ import { createAuthRouter } from "@app/features/auth/presentation";
 import { createTasksRouter } from "@app/features/tasks/presentation";
 import { createDevAuthRouter } from "@app/routes/dev-auth";
 import { stringifyErrorSafe } from "@repo/logging";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { prettyJSON } from "hono/pretty-json";
 import { requestId } from "hono/request-id";
@@ -39,6 +40,14 @@ export function createApp(env?: Record<string, string | undefined>) {
       exposeHeaders: ["x-request-id"],
       maxAge: 600,
       credentials: true,
+    }),
+  );
+  // JSON API のためボディは 1MiB で十分。巨大ボディによるメモリ圧迫を防ぐ。
+  app.use(
+    "*",
+    bodyLimit({
+      maxSize: 1024 * 1024,
+      onError: (c) => c.json({ ok: false, error: "Payload Too Large" }, 413),
     }),
   );
   if (config.nodeEnv !== "production") {

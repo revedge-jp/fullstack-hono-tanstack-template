@@ -87,8 +87,8 @@ const worker = await Worker("client", {
   name: workerName,
   entrypoint,
   noBundle: true,
-  compatibilityDate: "2025-01-01",
-  compatibilityFlags: ["nodejs_compat_v2"],
+  compatibilityDate: "2026-06-01", // wrangler.jsonc の compatibility_date と揃える
+  compatibilityFlags: ["nodejs_compat"],
   adopt: true,
   url: true,
   observability: { enabled: true },

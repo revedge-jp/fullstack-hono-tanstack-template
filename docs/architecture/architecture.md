@@ -37,8 +37,8 @@ graph TB
   - ブラウザ: 相対 URL の Hono RPC クライアント（`hc<AppType>("/")`）→ 同一 Worker の `/api/*` へ
   - SSR（loader / createServerFn）: CF Workers では同一オリジンへの `fetch()` が
     自分自身の fetch ハンドラーへループバックしないため（[ADR-001](adr-001-cf-workers-session-check.md)）、
-    AsyncLocalStorage 経由で api-service の container を直接呼び出す
-    （`apps/client/shared/lib/server-container.ts`）
+    AsyncLocalStorage 経由で注入されるインプロセス Hono RPC クライアントで呼び出す
+    （`apps/client/shared/lib/api-client.ts`）
 
 ### Server (`apps/api-service`)
 
@@ -83,6 +83,8 @@ graph LR
 
 - ワークフロー: `.github/workflows/deploy.yml`
 - 必要な GitHub Secrets: `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `DATABASE_URL`
+- GitHub Environments（staging / production）の Variables に `SMOKE_BASE_URL` を設定すると、
+  デプロイ直後に `/api/health` と `/` の smoke チェックが走る（未設定なら skip）
 - アプリの環境変数は `apps/client/wrangler.jsonc` の `vars` と Workers Secrets で管理
 
 詳細は [Cloudflare Workers デプロイガイド](../deploy/cloudflare-workers.md) を参照してください。

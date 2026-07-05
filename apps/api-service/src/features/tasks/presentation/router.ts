@@ -1,10 +1,8 @@
-import { createApp } from "@app/factory";
+import { createAuthedApp } from "@app/factory";
 import type { makeGetSession } from "@app/features/auth/application/get-session/usecase";
-import type { AuthUser } from "@app/features/auth/domain/models";
+import { requireAuth } from "@app/middlewares/require-auth";
 import { toHttp } from "@app/shared/http/to-http";
 import { zValidator } from "@hono/zod-validator";
-import type { Context } from "hono";
-import { err } from "neverthrow";
 import { z } from "zod";
 
 import type { TasksService } from "../application/service";
@@ -28,71 +26,47 @@ const taskIdParam = zValidator("param", TaskIdParamSchema, (result, c) => {
   }
 });
 
-async function requireUser(
-  c: Context,
-  getSession: ReturnType<typeof makeGetSession>,
-): Promise<AuthUser | Response> {
-  const session = await getSession(c.req.raw);
-  if (session.isErr()) {
-    return toHttp(c, err(session.error), { Unauthorized: 401, Unexpected: 500 });
-  }
-  return session.value;
-}
-
 export function createTasksRouter(deps: {
   tasks: TasksService;
   getSession: ReturnType<typeof makeGetSession>;
 }) {
-  return createApp()
+  return createAuthedApp()
+    .use(requireAuth(deps.getSession))
     .post("/", zValidator("json", CreateTaskRequestSchema), async (c) => {
-      const user = await requireUser(c, deps.getSession);
-      if (user instanceof Response) {
-        return user;
-      }
       const body = c.req.valid("json");
-      const result = await deps.tasks.createTask({ ownerId: user.id, title: body.title });
+      const result = await deps.tasks.createTask({
+        ownerId: c.get("user").id,
+        title: body.title,
+      });
       return toHttp(c, result, { Invalid: 400, Conflict: 409, Unexpected: 500 }, 201);
     })
     .get("/", zValidator("query", ListTasksQuerySchema), async (c) => {
-      const user = await requireUser(c, deps.getSession);
-      if (user instanceof Response) {
-        return user;
-      }
       const query = c.req.valid("query");
       const result = await deps.tasks.listTasks({
-        ownerId: user.id,
+        ownerId: c.get("user").id,
         cursor: query.cursor,
         limit: query.limit,
       });
       return toHttp(c, result, { Invalid: 400, Unexpected: 500 });
     })
     .get("/:id", taskIdParam, async (c) => {
-      const user = await requireUser(c, deps.getSession);
-      if (user instanceof Response) {
-        return user;
-      }
-      const result = await deps.tasks.getTask({ id: c.req.valid("param").id, ownerId: user.id });
+      const result = await deps.tasks.getTask({
+        id: c.req.valid("param").id,
+        ownerId: c.get("user").id,
+      });
       return toHttp(c, result, { NotFound: 404, Unexpected: 500 });
     })
     .patch("/:id", taskIdParam, async (c) => {
-      const user = await requireUser(c, deps.getSession);
-      if (user instanceof Response) {
-        return user;
-      }
       const result = await deps.tasks.advanceTask({
         id: c.req.valid("param").id,
-        ownerId: user.id,
+        ownerId: c.get("user").id,
       });
       return toHttp(c, result, { AlreadyDone: 409, NotFound: 404, Unexpected: 500 });
     })
     .delete("/:id", taskIdParam, async (c) => {
-      const user = await requireUser(c, deps.getSession);
-      if (user instanceof Response) {
-        return user;
-      }
       const result = await deps.tasks.deleteTask({
         id: c.req.valid("param").id,
-        ownerId: user.id,
+        ownerId: c.get("user").id,
       });
       if (result.isOk()) {
         return c.body(null, 204);

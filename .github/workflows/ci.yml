@@ -241,11 +241,19 @@ jobs:
           key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}
 
   e2e-tests:
-    name: E2E Tests (Playwright)
+    # dev: 開発サーバー（vite dev）に対して実行 — 失敗時のデバッグが容易。
+    # prod-shape: ビルド成果物（SSR + API が 1 Worker に同居）を workerd で起動して実行 —
+    #   dev（Bun / vite dev）と本番（workerd）のランタイム乖離をデプロイ前に検出する。
+    #   詳細は apps/client/playwright.config.ts を参照。
+    name: E2E Tests (Playwright, ${{ matrix.mode }})
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.client == 'true'
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [dev, prod-shape]
     services:
       postgres:
         image: postgres:18-alpine
@@ -301,10 +309,13 @@ jobs:
 
       - name: Create .dev.vars for E2E
         run: |
-          cat > apps/client/.dev.vars << 'VARS'
+          # prod-shape は 3100 で起動する（playwright.config.ts と揃える）
+          PORT=3000
+          if [ "${{ matrix.mode }}" = "prod-shape" ]; then PORT=3100; fi
+          cat > apps/client/.dev.vars << VARS
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_db
           BETTER_AUTH_SECRET=dummy-secret-for-e2e-0123456789abcdef
-          BETTER_AUTH_URL=http://localhost:3000
+          BETTER_AUTH_URL=http://localhost:${PORT}
           GOOGLE_CLIENT_ID=dummy-client-id
           GOOGLE_CLIENT_SECRET=dummy-client-secret
           VARS
@@ -315,13 +326,14 @@ jobs:
           CI: true
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
           BETTER_AUTH_SECRET: dummy-secret-for-e2e-0123456789abcdef
+          E2E_PROD_SHAPE: ${{ matrix.mode == 'prod-shape' && '1' || '' }}
         run: bunx playwright test
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.mode }}
           path: apps/client/playwright-report
           retention-days: 14
 

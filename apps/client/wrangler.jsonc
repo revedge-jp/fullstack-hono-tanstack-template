@@ -1,7 +1,10 @@
 {
   "name": "{{APP_NAME}}",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat_v2"],
+  // 2025 年中に workerd の Node.js 互換が大きく進んだ（process.hrtime, node:os 等）。
+  // pino 10 がトップレベルで process.hrtime.bigint() を呼ぶため、古い日付だと起動時に落ちる。
+  // フラグも旧 "nodejs_compat_v2" ではなく現行の "nodejs_compat" を使う。
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
   },

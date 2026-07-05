@@ -33,7 +33,7 @@ apps/client/
 │       ├── ui/             # UI コンポーネント
 │       └── index.ts        # パブリック API
 ├── shared/                 # 共有レイヤ（横断関心）
-│   └── lib/                # server-container / app-context / auth-client 等
+│   └── lib/                # api-client / auth-client 等
 └── components/             # 汎用 UI コンポーネント
     └── ui/                 # shadcn/ui コンポーネント
 ```
@@ -54,7 +54,7 @@ apps/client/
 - **ブラウザ（CSR）**: 相対 URL の Hono RPC クライアント `hc<AppType>("/")` → 同一 Worker の `/api/*`
 - **SSR（loader / createServerFn）**: CF Workers では同一オリジンへの `fetch()` がループバックしない
   （[ADR-001](../../docs/architecture/adr-001-cf-workers-session-check.md)）ため、
-  `shared/lib/server-container.ts` の AsyncLocalStorage 経由で api-service の container を直接呼ぶ。
+  `shared/lib/api-client.ts` が AsyncLocalStorage 経由で注入するインプロセス Hono RPC クライアントで呼ぶ。
   実例: `features/tasks/queries/get-tasks.ts`
 - 型はサーバーの `AppType` から推論（`api-service` の `build` で `.d.ts` 生成）
 
