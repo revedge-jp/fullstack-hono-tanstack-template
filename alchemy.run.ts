@@ -105,8 +105,10 @@ if (process.env.SKIP_WORKER !== "1") {
 
   // Better Auth / CORS はデプロイ後の公開 URL を必要とする。
   // APP_ORIGIN で明示指定するか、WORKERS_SUBDOMAIN（CF アカウントの workers.dev サブドメイン）から組み立てる。
+  // ?? ではなく || : CI では未設定の GitHub Variable が「空文字列」として渡ってくるため、
+  // 空でも WORKERS_SUBDOMAIN へフォールバックさせる。
   const appOrigin =
-    process.env.APP_ORIGIN ??
+    process.env.APP_ORIGIN ||
     (process.env.WORKERS_SUBDOMAIN
       ? `https://${workerName}.${process.env.WORKERS_SUBDOMAIN}.workers.dev`
       : undefined);
