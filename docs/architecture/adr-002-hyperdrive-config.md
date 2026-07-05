@@ -1,35 +1,44 @@
 # ADR-002: Cloudflare Hyperdrive の接続設定
 
-**ステータス**: 採用済み
-**日付**: 2026-03-14
+**ステータス**: 採用済み（2026-07 改訂: DB を Supabase から PlanetScale に変更）
+**日付**: 2026-03-14（改訂 2026-07-05）
 
 ---
 
 ## 背景
 
-このアプリは Supabase (PostgreSQL) を DB として使用し、Cloudflare Hyperdrive 経由で接続する。
+このアプリは PlanetScale (PostgreSQL) を DB として使用し、Cloudflare Hyperdrive 経由で接続する。
+DB・接続ロール・Hyperdrive は `alchemy.run.ts` が IaC として作成するため、
+接続文字列を手動でコピーする工程はない（[Alchemy IaC ガイド](../dev/alchemy-iac.md)）。
+
+> **改訂の経緯**: 当初は Supabase を使用していたが、Supabase 固有機能（Auth/Realtime/
+> Storage/PostgREST）を一切使っておらず、staging/prod 常時 2DB 構成のコストと IaC 統合の
+> 観点で PlanetScale が優位だったため移行した。本 ADR の教訓の多くは Supabase 時代の
+> 障害調査で得られたもので、原則としてそのまま有効。
 
 ---
 
 ## 問題と解決策
 
-### 1. Session Mode (port 5432) vs Transaction Mode (port 6543)
+### 1. Hyperdrive の origin は直接続エンドポイント（port 5432）を使う
 
-Supabase は以下の2つの接続エンドポイントを提供する：
+PlanetScale は 2 つの接続エンドポイントを提供する：
 
-| モード | ポート | 特徴 |
+| 接続 | ポート | 特徴 |
 |--------|--------|------|
-| Session Mode | 5432 | Prepared statements 使用可能、接続が長期保持 |
-| Transaction Mode | 6543 | PgBouncer 経由、Prepared statements 不可 |
+| 直接続 | 5432 | Postgres へ直接接続 |
+| pooled (PgBouncer) | 6432 | PlanetScale 側の接続プーラー経由 |
 
-**Hyperdrive は Transaction Mode との組み合わせで内部ノード間の調整エラーが発生する：**
+**採用**: Hyperdrive の origin は**直接続（port 5432）**とする。`alchemy.run.ts` が
+Role の接続情報（port 5432）を Hyperdrive に直結するため、構造的にこれが保証される。
+
+**理由**: Hyperdrive 自体が接続プーラーであり、pooler（PgBouncer 等）の背後に置くと
+プーラー二段構成になる。Supabase 時代に Transaction Mode pooler（port 6543）との
+組み合わせで以下の内部調整エラーが発生した実績があり、同種の構成は避ける：
 
 ```
 PostgresError: Timed out while waiting for a message from another Hyperdrive node.
 ```
-
-**採用**: Hyperdrive の接続先を **Session Mode (port 5432)** に設定する。
-Cloudflare ダッシュボードの Hyperdrive 設定で Host を `aws-1-ap-northeast-1.pooler.supabase.com:5432` とする。
 
 ### 2. postgres.js の `max: 1`
 
@@ -40,7 +49,7 @@ CF Workers + Hyperdrive では、Worker のリクエストごとに新しい pos
 ```typescript
 // packages/database/src/index.ts
 const client = postgres(connectionString, {
-  prepare: false,  // Hyperdrive は Transaction Mode では Prepared statements 非対応
+  prepare: false,  // Hyperdrive の pooling モードでは Prepared statements 非対応
   max: 1,          // Hyperdrive が接続プールを管理するため 1 で十分
 });
 ```
@@ -67,4 +76,6 @@ return result;
 
 - [Cloudflare Hyperdrive ドキュメント](https://developers.cloudflare.com/hyperdrive/)
 - [postgres.js CF Workers ガイド](https://github.com/porsager/postgres#cloudflare-workers)
+- [Cloudflare Blog: Deploy PlanetScale Postgres with Workers](https://blog.cloudflare.com/deploy-planetscale-postgres-with-workers/)
 - [ADR-001: セッション検証方法](./adr-001-cf-workers-session-check.md)
+- [Alchemy IaC ガイド](../dev/alchemy-iac.md)

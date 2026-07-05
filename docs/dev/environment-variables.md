@@ -121,12 +121,9 @@ Turborepo はタスクの実行結果をキャッシュする際、`env` で宣�
 
 ### 機密情報（Workers Secrets）
 
-パスワードや API キーなどは wrangler secret として登録します。デプロイ後も値は参照できません。
-
-```bash
-cd apps/client
-bunx wrangler secret put DATABASE_URL --env production
-```
+パスワードや API キーなどの Worker への受け渡しは Alchemy（`alchemy.run.ts` の
+`alchemy.secret()`）が担います。値は GitHub Environment Secrets → deploy.yml →
+alchemy.run.ts の経路で渡り、`wrangler secret put` の手動実行は不要です。
 
 ローカル開発では `.dev.vars`（`.env` への symlink）から同じ変数が Workers ランタイムに渡ります。
 
@@ -146,7 +143,7 @@ bunx wrangler secret put DATABASE_URL --env production
 
 ### デプロイ（`.github/workflows/deploy.yml`）
 
-デプロイは `wrangler deploy` で行い、`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `DATABASE_URL`（マイグレーション用）を GitHub Secrets から渡します。アプリの環境変数自体は `wrangler.jsonc` の `vars` と Workers Secrets が担います。
+デプロイは Alchemy（`alchemy.run.ts`）で行い、Cloudflare / PlanetScale / Alchemy / アプリの各シークレットを GitHub Environment Secrets から渡します（一覧は [デプロイガイド](../deploy/cloudflare-workers.md) 参照）。マイグレーション用の `DATABASE_URL` は provision フェーズの Alchemy が生成して後続 step に渡すため、手動設定は不要です。アプリの環境変数・シークレットは `alchemy.run.ts` の `bindings` が担います。
 
 ---
 

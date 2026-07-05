@@ -3,6 +3,12 @@ name: Deploy
 # CI Pipeline (ci.yml) の完了を待って、成功した場合のみ deploy する。
 # workflow_run はタグ push でトリガーされた実行でも head_branch にタグ名(refs/tags/ 抜き)が
 # 入る仕様のため、ブランチ判定とタグ判定はどちらも head_branch を見れば区別できる。
+#
+# デプロイ本体は Alchemy（alchemy.run.ts）。PlanetScale DB / Role / Hyperdrive / Worker を
+# IaC として reconcile する。マイグレーション順序を守るため 2 段実行:
+#   1) SKIP_WORKER=1 で DB/Hyperdrive を provision（DATABASE_URL が GITHUB_ENV に入る）
+#   2) drizzle-kit migrate
+#   3) Worker デプロイ
 on:
   workflow_run:
     workflows: ["CI Pipeline"]
@@ -33,38 +39,54 @@ jobs:
           fi
 
   deploy:
-    name: Deploy to Cloudflare Workers
+    name: Deploy (Alchemy)
     needs: detect-target
     if: needs.detect-target.outputs.target != 'none'
     runs-on: ubuntu-latest
     environment: ${{ needs.detect-target.outputs.target }}
+    env:
+      # Alchemy（alchemy.run.ts）が参照する環境変数。
+      # APP_NAME / WORKERS_SUBDOMAIN / APP_ORIGIN は Environment Variables、それ以外は Environment Secrets。
+      APP_NAME: ${{ vars.APP_NAME }}
+      APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+      WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+      ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+      ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
+      PLANETSCALE_SERVICE_TOKEN_ID: ${{ secrets.PLANETSCALE_SERVICE_TOKEN_ID }}
+      PLANETSCALE_SERVICE_TOKEN: ${{ secrets.PLANETSCALE_SERVICE_TOKEN }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      DEPLOY_TARGET: ${{ needs.detect-target.outputs.target }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      # テンプレート原本リポジトリ（scripts/init-template.sh 未実行 = wrangler.jsonc が
-      # {{APP_NAME}} のまま、かつ Cloudflare/DB の secrets 未設定）では、この先の
-      # build/migrate/deploy が構造的に必ず失敗する。実プロジェクト化 + secrets 設定が
-      # 揃うまでは赤い失敗にせず、後続 step を skip する。
+      # テンプレート原本リポジトリ（secrets/vars 未設定）では build/deploy が構造的に必ず
+      # 失敗する。実プロジェクト化 + 設定が揃うまでは赤い失敗にせず、後続 step を skip する。
       - name: Check deploy readiness
         id: readiness
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          if grep -q '{{APP_NAME}}' apps/client/wrangler.jsonc; then
+          missing=""
+          [ -z "$APP_NAME" ] && missing="$missing APP_NAME(var)"
+          [ -z "$APP_ORIGIN" ] && [ -z "$WORKERS_SUBDOMAIN" ] && missing="$missing APP_ORIGIN|WORKERS_SUBDOMAIN(var)"
+          [ -z "$ALCHEMY_PASSWORD" ] && missing="$missing ALCHEMY_PASSWORD"
+          [ -z "$ALCHEMY_STATE_TOKEN" ] && missing="$missing ALCHEMY_STATE_TOKEN"
+          [ -z "$CLOUDFLARE_API_TOKEN" ] && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -z "$PLANETSCALE_ORGANIZATION" ] && missing="$missing PLANETSCALE_ORGANIZATION(var)"
+          [ -z "$PLANETSCALE_SERVICE_TOKEN_ID" ] && missing="$missing PLANETSCALE_SERVICE_TOKEN_ID"
+          [ -z "$PLANETSCALE_SERVICE_TOKEN" ] && missing="$missing PLANETSCALE_SERVICE_TOKEN"
+          [ -z "$BETTER_AUTH_SECRET" ] && missing="$missing BETTER_AUTH_SECRET"
+          [ -z "$GOOGLE_CLIENT_ID" ] && missing="$missing GOOGLE_CLIENT_ID"
+          [ -z "$GOOGLE_CLIENT_SECRET" ] && missing="$missing GOOGLE_CLIENT_SECRET"
+          if [ -n "$missing" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::apps/client/wrangler.jsonc still has the {{APP_NAME}} placeholder. Run scripts/init-template.sh <app-name> to enable deployment. Skipping deploy."
-          elif grep -qE 'example\.workers\.dev|example\.com|"id": "TODO"' apps/client/wrangler.jsonc; then
-            # init-template.sh 後もダミー URL / Hyperdrive id が残っていると、デプロイ自体は成功するのに
-            # OAuth リダイレクト・CORS・DB 接続がサイレントに壊れる。ここで検出して skip する。
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::apps/client/wrangler.jsonc still contains placeholder values (example.workers.dev / example.com / Hyperdrive id TODO). Update CORS_ORIGIN / BETTER_AUTH_URL / hyperdrive.id for this environment. Skipping deploy."
-          elif [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$DATABASE_URL" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / DATABASE_URL is not fully configured. Skipping deploy."
+            echo "::notice::Deploy secrets/vars not fully configured:$missing — skipping deploy. See docs/deploy/cloudflare-workers.md"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
@@ -76,63 +98,42 @@ jobs:
         if: steps.readiness.outputs.ready == 'true'
         run: bun run build
 
-      - name: Migrate DB (staging)
-        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'staging'
-        run: cd packages/database && bun run db:migrate
+      # ① DB / Role / Hyperdrive を provision（Worker は更新しない）。
+      # alchemy.run.ts が DATABASE_URL を GITHUB_ENV に export する（ログにはマスクのみ）。
+      - name: Provision infra (DB / Hyperdrive)
+        if: steps.readiness.outputs.ready == 'true'
+        run: bunx alchemy deploy --stage "$DEPLOY_TARGET"
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SKIP_WORKER: "1"
 
-      - name: Deploy (staging)
-        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'staging'
-        run: cd apps/client && bunx wrangler deploy --env staging
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # ② 新コードが動き出す前にスキーマを揃える
+      - name: Migrate DB
+        if: steps.readiness.outputs.ready == 'true'
+        run: cd packages/database && bun run db:migrate
+
+      # ③ Worker デプロイ
+      - name: Deploy Worker
+        if: steps.readiness.outputs.ready == 'true'
+        run: bunx alchemy deploy --stage "$DEPLOY_TARGET"
 
       # デプロイ直後の稼働確認。失敗したらこのジョブを赤にする
       # （production はタグ push で別途デプロイされるため、ここが赤のうちはタグを切らないこと）。
-      # SMOKE_BASE_URL は GitHub Environment (staging) の Variables に設定する。
-      - name: Smoke check (staging)
-        id: smoke_staging
-        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'staging'
+      # SMOKE_BASE_URL は GitHub Environment の Variables に設定する。
+      - name: Smoke check
+        id: smoke
+        if: steps.readiness.outputs.ready == 'true'
         run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
 
       # smoke 失敗時は直前のバージョンへ自動ロールバックする（壊れた版を出しっぱなしにしない）。
       # ロールバック後もジョブは赤のまま残る（失敗の可視化のため）。手動手順は docs/deploy/operations.md。
-      - name: Rollback (staging) on smoke failure
-        if: failure() && steps.smoke_staging.outcome == 'failure'
-        # メッセージ内の「: 」は YAML plain scalar として不正のため folded scalar で書く
-        run: >-
-          cd apps/client && bunx wrangler rollback --env staging --yes
-          --message "auto rollback: post-deploy smoke check failed"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Migrate DB (production)
-        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'production'
-        run: cd packages/database && bun run db:migrate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
-      - name: Deploy (production)
-        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'production'
-        run: cd apps/client && bunx wrangler deploy --env production
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      # SMOKE_BASE_URL は GitHub Environment (production) の Variables に設定する。
-      - name: Smoke check (production)
-        id: smoke_production
-        if: steps.readiness.outputs.ready == 'true' && needs.detect-target.outputs.target == 'production'
-        run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
-
-      - name: Rollback (production) on smoke failure
-        if: failure() && steps.smoke_production.outcome == 'failure'
-        run: >-
-          cd apps/client && bunx wrangler rollback --env production --yes
-          --message "auto rollback: post-deploy smoke check failed"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Worker 名は wrangler.jsonc の env 規則と同一（staging: -staging サフィックス、production: 素の名前）。
+      - name: Rollback on smoke failure
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: |
+          if [ "$DEPLOY_TARGET" = "production" ]; then
+            worker_name="$APP_NAME"
+          else
+            worker_name="$APP_NAME-$DEPLOY_TARGET"
+          fi
+          cd apps/client && bunx wrangler rollback --name "$worker_name" --yes \
+            --message "auto rollback: post-deploy smoke check failed"

@@ -19,12 +19,12 @@
 ```bash
 cd apps/client
 
-# 直前のバージョンに戻す
-bunx wrangler rollback --env production --message "manual rollback: <理由>"
+# 直前のバージョンに戻す（Worker 名: staging は {APP_NAME}-staging、production は {APP_NAME}）
+bunx wrangler rollback --name <worker-name> --message "manual rollback: <理由>"
 
 # 特定バージョンに戻す場合
-bunx wrangler deployments list --env production   # version-id を確認
-bunx wrangler rollback <version-id> --env production --message "<理由>"
+bunx wrangler deployments list --name <worker-name>   # version-id を確認
+bunx wrangler rollback <version-id> --name <worker-name> --message "<理由>"
 ```
 
 **注意**: ロールバックで戻るのは **Worker のコードだけ**で、DB スキーマは戻らない。
@@ -32,7 +32,7 @@ bunx wrangler rollback <version-id> --env production --message "<理由>"
 
 ## DB マイグレーション規律（expand / contract）
 
-deploy.yml は「migrate → deploy」の順で実行するため、migrate 成功後に deploy が失敗する・
+deploy.yml は「infra provision → migrate → Worker deploy」の順で実行するため、migrate 成功後に deploy が失敗する・
 ロールバックすると、**旧コードが新スキーマの上で動く**時間帯が必ず存在する。
 これを安全にするため、マイグレーションは常に後方互換（expand/contract）で書く:
 

@@ -57,7 +57,7 @@ graph TB
 
 ## データベース
 
-- **PostgreSQL**（外部マネージドDB。Neon / Supabase / Cloud SQL 等）
+- **PostgreSQL**（外部マネージドDB。標準は PlanetScale — [ADR-002](./adr-002-hyperdrive-config.md)。プレーンな Postgres として扱うため他のマネージド Postgres にも差し替え可能）
 - **接続**: `DATABASE_URL`（本番は Workers Secret）。ローカルは Docker（`bun run db:up`）
 - **マイグレーション**: drizzle-kit（`bun run db:generate` / `db:migrate`）
 
@@ -67,9 +67,9 @@ graph TB
 graph LR
     Main[mainブランチ<br/>push/merge]
     CI[CI Pipeline<br/>Lint / Typecheck / Test<br/>品質ゲート / Arch Check]
-    Stg["deploy (staging)<br/>db:migrate → wrangler deploy --env staging"]
+    Stg["deploy (staging)<br/>alchemy provision → db:migrate → alchemy deploy"]
     Tag[v*タグ push]
-    Prod["deploy (production)<br/>db:migrate → wrangler deploy --env production"]
+    Prod["deploy (production)<br/>alchemy provision → db:migrate → alchemy deploy"]
 
     Main --> CI
     Main --> Stg
@@ -81,11 +81,14 @@ graph LR
     style Prod fill:#ffe1f5
 ```
 
-- ワークフロー: `.github/workflows/deploy.yml`
-- 必要な GitHub Secrets: `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `DATABASE_URL`
+- ワークフロー: `.github/workflows/deploy.yml`（デプロイ本体は Alchemy — `alchemy.run.ts`。
+  PlanetScale DB / Role / Hyperdrive / Worker を IaC として reconcile する）
+- 必要な GitHub Environment Secrets / Variables の一覧は
+  [デプロイガイド](../deploy/cloudflare-workers.md)を参照（Cloudflare / PlanetScale / Alchemy / アプリの各シークレット）
 - GitHub Environments（staging / production）の Variables に `SMOKE_BASE_URL` を設定すると、
   デプロイ直後に `/api/health` と `/` の smoke チェックが走る（未設定なら skip）
-- アプリの環境変数は `apps/client/wrangler.jsonc` の `vars` と Workers Secrets で管理
+- アプリの環境変数・シークレットは `alchemy.run.ts` の `bindings` で管理
+  （`apps/client/wrangler.jsonc` はローカル dev 専用）
 
 詳細は [Cloudflare Workers デプロイガイド](../deploy/cloudflare-workers.md) を参照してください。
 
