@@ -38,7 +38,7 @@
 | unit | `features/*/{domain,application}/**.test.ts`（co-located） | 値オブジェクト・ユースケース・ステップの純粋ロジック | **ミューテーション + カバレッジ対象** |
 | contract | `__tests__/contract/{feature}.contract.test.ts` | API レスポンスのスキーマ形状 | — |
 | integration | `__tests__/integration/{feature}.int.test.ts` | 実 DB での Drizzle・制約・トランザクション | — |
-| E2E | `apps/client/tests/e2e/*.spec.ts` | ブラウザ通し（成功＋エラー経路） | — |
+| E2E | `apps/client/tests/e2e/*.spec.ts` | ブラウザ通し（成功＋エラー経路）。dev モードに加え、CI では **prod-shape**（ビルド成果物を workerd で起動）でも実行し、dev（Bun / vite dev）と本番（workerd）のランタイム乖離を検出する。ローカルは `bun run test:e2e -- --prod-shape` | — |
 | client actions/queries | `features/*/{actions,queries}/*.test.ts`（co-located） | フォーム検証・API 連携・キャッシュ無効化 | **カバレッジ対象（80%）** |
 
 **ミューテーションは純粋ロジック（domain/application）のみ**。ルーティング・fetch・cache 等の
