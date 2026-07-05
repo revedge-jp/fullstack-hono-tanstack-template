@@ -14,8 +14,38 @@ on:
         required: false
 
 jobs:
+  # `environment: staging` を参照する cleanup ジョブは、Environment が存在しないと
+  # ステップ実行前にサイレントに失敗する（preview.yml の preflight と同じ理由）。
+  # テンプレート原本や未セットアップの派生リポジトリで夜間 cron を赤くしないためのガード。
+  preflight:
+    name: Check staging environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Check environment exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 404（未作成）だけを skip 扱いにする（403 等は明示的に失敗させる）。
+          if out=$(gh api "repos/$GITHUB_REPOSITORY/environments/staging" 2>&1 >/dev/null); then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif echo "$out" | grep -q "HTTP 404"; then
+            echo "::notice::GitHub Environment 'staging' が未作成のため cleanup を skip します。"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Environment 'staging' の存在確認に失敗しました: $out"
+            exit 1
+          fi
+
   cleanup:
     name: Destroy stale previews
+    needs: preflight
+    if: needs.preflight.outputs.exists == 'true'
     runs-on: ubuntu-latest
     environment: staging
     permissions:

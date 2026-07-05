@@ -23,26 +23,48 @@ jobs:
     name: Detect deploy target
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-    # head_branch を判定するだけで API 呼び出しはしないため権限不要。
-    permissions: {}
+    # Environment 存在チェック（gh api）にリポジトリ読み取りが必要。
+    permissions:
+      contents: read
     timeout-minutes: 5
     outputs:
       target: ${{ steps.detect.outputs.target }}
     steps:
       # ci.yml の push トリガー(branches: [main], tags: 'v*.*.*')に対応する正規表現でのみ
       # staging/production を判定する。それ以外の head_branch では deploy しない。
+      #
+      # さらに、対応する GitHub Environment が存在しない場合は target=none にして deploy job を
+      # スキップする。deploy job の `environment:` は「存在しない Environment + 制限付きトークン
+      # （workflow の permissions: {}）」の組み合わせだとステップ実行前にサイレントに失敗するため、
+      # job 内の readiness チェックでは救えない（テンプレート原本や setup-deploy-env.sh 未実行の
+      # 派生リポジトリを赤い失敗にしないための、ジョブ手前でのガード）。
       - name: Detect target from head_branch
         id: detect
         env:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$HEAD_BRANCH" = "main" ]; then
-            echo "target=staging" >> "$GITHUB_OUTPUT"
+            target=staging
           elif [[ "$HEAD_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "target=production" >> "$GITHUB_OUTPUT"
+            target=production
           else
-            echo "target=none" >> "$GITHUB_OUTPUT"
+            target=none
           fi
+          if [ "$target" != "none" ]; then
+            # 404（未作成）だけを skip 扱いにする。403 等（トークン権限不足など）まで skip に
+            # 倒すと「設定済みなのに永久にデプロイされない」事故になるため、明示的に失敗させる。
+            if out=$(gh api "repos/$GITHUB_REPOSITORY/environments/$target" 2>&1 >/dev/null); then
+              : # Environment あり → デプロイ続行
+            elif echo "$out" | grep -q "HTTP 404"; then
+              echo "::notice::GitHub Environment '$target' が未作成のため deploy を skip します。有効化するには: bash scripts/setup-deploy-env.sh $target"
+              target=none
+            else
+              echo "::error::Environment '$target' の存在確認に失敗しました: $out"
+              exit 1
+            fi
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy (Alchemy)

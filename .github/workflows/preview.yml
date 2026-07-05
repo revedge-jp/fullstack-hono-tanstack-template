@@ -23,11 +23,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # `environment: preview` を参照するジョブは、Environment が存在しないと（workflow の
+  # 制限付きトークンでは自動作成もできず）ステップ実行前にサイレントに失敗する。
+  # ジョブ内の readiness チェックでは救えないため、手前で存在確認して skip に倒す。
+  # 有効化するには: bash scripts/setup-deploy-env.sh preview
+  preflight:
+    name: Check preview environment
+    if: >-
+      ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name == 'preview') ||
+      ((github.event.action == 'synchronize' || github.event.action == 'closed') && contains(github.event.pull_request.labels.*.name, 'preview'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Check environment exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 404（未作成）だけを skip 扱いにする。403 等（権限不足）まで skip に倒すと
+          # 「設定済みなのに動かない」事故になるため、明示的に失敗させる。
+          if out=$(gh api "repos/$GITHUB_REPOSITORY/environments/preview" 2>&1 >/dev/null); then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif echo "$out" | grep -q "HTTP 404"; then
+            echo "::notice::GitHub Environment 'preview' が未作成のため preview を skip します。有効化するには: bash scripts/setup-deploy-env.sh preview"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Environment 'preview' の存在確認に失敗しました: $out"
+            exit 1
+          fi
+
   deploy:
     name: Deploy preview
+    needs: preflight
     if: >-
-      (github.event.action == 'labeled' && github.event.label.name == 'preview') ||
-      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview'))
+      needs.preflight.outputs.exists == 'true' &&
+      ((github.event.action == 'labeled' && github.event.label.name == 'preview') ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview')))
     runs-on: ubuntu-latest
     # preview 専用 environment。staging を使うと preview デプロイの GitHub Deployment
     # レコードが staging 履歴を汚し、deploy.yml の rollback 戻り先解決が誤動作する。
@@ -130,9 +165,12 @@ jobs:
 
   destroy:
     name: Destroy preview
+    needs: preflight
+    # preview Environment が無い = 何もデプロイされていないので、destroy の skip は安全。
     if: >-
-      (github.event.action == 'unlabeled' && github.event.label.name == 'preview') ||
-      (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview'))
+      needs.preflight.outputs.exists == 'true' &&
+      ((github.event.action == 'unlabeled' && github.event.label.name == 'preview') ||
+      (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview')))
     runs-on: ubuntu-latest
     # deploy と同じ preview 専用 environment（destroy も同じ secrets を参照する）。
     environment: preview
