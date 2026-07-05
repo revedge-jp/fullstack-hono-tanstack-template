@@ -7,6 +7,7 @@ import { reconstituteActivity } from "../../domain/models";
 import { makeRecordActivity } from "./usecase";
 
 const ID_1 = "activity-1";
+const OWNER_ID = "user-1";
 
 describe("activity.record usecase", () => {
   test("正常: 有効な入力で活動ログを記録する", async () => {
@@ -15,6 +16,7 @@ describe("activity.record usecase", () => {
         okAsync(
           reconstituteActivity({
             id: ID_1,
+            ownerId: OWNER_ID,
             kind: "task_created",
             message: "Task created",
             occurredAt: new Date(),
@@ -23,7 +25,7 @@ describe("activity.record usecase", () => {
       list: () => okAsync({ items: [] }),
     };
     const usecase = makeRecordActivity({ activityRepository });
-    const r = await usecase({ kind: "task_created", message: "Task created" });
+    const r = await usecase({ ownerId: OWNER_ID, kind: "task_created", message: "Task created" });
     expect(r.isOk()).toBe(true);
     if (r.isOk()) {
       expect(r.value.item.id).toBe(ID_1);
@@ -33,7 +35,17 @@ describe("activity.record usecase", () => {
   test("異常: kind が空の場合 Invalid を返す", async () => {
     const activityRepository = {} as ActivityRepository;
     const usecase = makeRecordActivity({ activityRepository });
-    const r = await usecase({ kind: "", message: "Task created" });
+    const r = await usecase({ ownerId: OWNER_ID, kind: "", message: "Task created" });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error).toBe("Invalid");
+    }
+  });
+
+  test("異常: ownerId が空の場合 Invalid を返す", async () => {
+    const activityRepository = {} as ActivityRepository;
+    const usecase = makeRecordActivity({ activityRepository });
+    const r = await usecase({ ownerId: "", kind: "task_created", message: "Task created" });
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error).toBe("Invalid");
@@ -46,7 +58,7 @@ describe("activity.record usecase", () => {
       list: () => okAsync({ items: [] }),
     };
     const usecase = makeRecordActivity({ activityRepository });
-    const r = await usecase({ kind: "task_created", message: "Task created" });
+    const r = await usecase({ ownerId: OWNER_ID, kind: "task_created", message: "Task created" });
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error).toBe("Unexpected");

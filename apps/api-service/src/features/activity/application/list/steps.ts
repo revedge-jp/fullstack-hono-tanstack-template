@@ -6,7 +6,7 @@ import type { Activity } from "../../domain/models";
 type FetchActivitiesStepOutput = ResultAsync<{ items: Activity[] }, "Unexpected">;
 
 export function makeFetchActivitiesStep(deps: { activityRepository: ActivityRepository }) {
-  return function fetchActivitiesStep(): FetchActivitiesStepOutput {
-    return deps.activityRepository.list();
+  return function fetchActivitiesStep(input: { ownerId: string }): FetchActivitiesStepOutput {
+    return deps.activityRepository.list(input);
   };
 }

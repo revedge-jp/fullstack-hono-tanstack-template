@@ -64,7 +64,10 @@ export function createApp(env?: Record<string, string | undefined>) {
       "/api/tasks",
       createTasksRouter({ tasks: container.tasks, getSession: container.getSession }),
     )
-    .route("/api/activities", createActivityRouter({ activity: container.activity }))
+    .route(
+      "/api/activities",
+      createActivityRouter({ activity: container.activity, getSession: container.getSession }),
+    )
     .route("/api/dev", createDevAuthRouter({ devAuth: container.devAuth }))
     .get("/", (c) => c.json({ ok: true, message: "Hello Server!" }))
     .notFound((c) => c.json({ ok: false, error: "Not Found" }, 404))

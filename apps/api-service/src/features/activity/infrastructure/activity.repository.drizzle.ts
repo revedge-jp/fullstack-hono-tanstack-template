@@ -1,5 +1,5 @@
 import { activities, type Database } from "@repo/db";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { err, ok, ResultAsync } from "neverthrow";
 
 import type { ActivityRepository } from "../domain/activity.repository";
@@ -18,9 +18,13 @@ export function createActivityRepository(deps: { db: Database }): ActivityReposi
         return row ? ok(mapDbActivityToDomain(row)) : err("Unexpected" as const);
       }),
 
-    list: () =>
+    list: (input) =>
       ResultAsync.fromPromise(
-        db.query.activities.findMany({ orderBy: [desc(activities.occurredAt)], limit: 50 }),
+        db.query.activities.findMany({
+          where: eq(activities.ownerId, input.ownerId),
+          orderBy: [desc(activities.occurredAt)],
+          limit: 50,
+        }),
         () => "Unexpected" as const,
       ).map((rows) => ({ items: rows.map(mapDbActivityToDomain) })),
   };
