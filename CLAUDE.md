@@ -128,6 +128,20 @@ export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
 - **Request-scoped logging**: the `requestLogger` middleware puts a requestId-bound pino child logger
   on the context — use `c.get("logger")` in presentation handlers instead of `console.*`. Access logs
   (method/path/status/durationMs + requestId) are emitted automatically for every request
+- **認証必須ルーター**: `createAuthedApp()`（`src/factory.ts`）と `.use(requireAuth(deps.getSession))`
+  （`src/middlewares/require-auth.ts`）を**必ずセットで**使う。ハンドラでは `c.get("user")` が
+  non-null で型付けされる。requireAuth の付け忘れは `arch:guards` が機械的に検出する。
+  実例: `features/tasks/presentation/router.ts`
+  ```typescript
+  export function createXxxRouter(deps: { xxx: XxxService; getSession: ReturnType<typeof makeGetSession> }) {
+    return createAuthedApp()
+      .use(requireAuth(deps.getSession))
+      .get("/", async (c) => {
+        const result = await deps.xxx.listXxx({ ownerId: c.get("user").id });
+        return toHttp(c, result, { Unexpected: 500 });
+      });
+  }
+  ```
 
 ### Feature-to-feature integration (ports + adapter + DI)
 
@@ -189,11 +203,12 @@ SSR 先読みが不要なので、ブラウザから同一オリジン API を�
 **SSR（推奨）**: `loader` でサーバーサイド取得 → `Route.useLoaderData()` で参照
 
 ```typescript
-// queries/get-xxx.ts — createServerFn でSSRでもCookieを転送できる
+// queries/get-xxx.ts — getApiClient() は server.ts が ALS 注入した in-process Hono RPC クライアント
+// （ネットワークに出ず presentation 層を通る。背景は shared/lib/api-client.ts / ADR-001）
 export const getXxxServerFn = createServerFn().handler(async () => {
   const request = getRequest();
   const cookie = request.headers.get("cookie") ?? "";
-  const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, { init: { headers: { cookie } } });
+  const res = await getApiClient().api.xxx.$get({}, { init: { headers: { cookie } } });
   if (!res.ok) return null;
   return res.json();
 });
@@ -243,8 +258,11 @@ export function xxxQueryOptions() {
 import type { AppType } from "api-service";
 const apiClient = hc<AppType>("/");
 
-// サーバーサイド（createServerFn内）: 絶対URL + Cookie転送
-const res = await hc<AppType>(apiBaseUrl).api.xxx.$get({}, {
+// サーバーサイド（createServerFn内）: in-process クライアント + Cookie転送
+// （HTTP ループバックは CF Workers で不可のため、server.ts が app.request を束ねた
+//  hc クライアントを AsyncLocalStorage で注入する — shared/lib/api-client.ts / ADR-001）
+import { getApiClient } from "@/shared/lib/api-client";
+const res = await getApiClient().api.xxx.$get({}, {
   init: { headers: { cookie } },
 });
 ```

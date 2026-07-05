@@ -195,9 +195,10 @@ git push -u origin <branch>
 - `LOG_PRETTY`: ログの整形出力（`true` で有効化）
 #### Client (`apps/client`)
 
-- `API_BASE_URL`: API サーバーのベース URL（既定: `http://localhost:8080`）
-  - 本番（CF Workers）では client と api-service が同一 Worker のため HTTP ループバックは使わず、
-    SSR からは AsyncLocalStorage 経由で container を直接呼び出す（ADR-001）
+- client 専用の環境変数は現在なし
+  - client と api-service は同一 Worker のため、SSR からの API 呼び出しは
+    `shared/lib/api-client.ts` が AsyncLocalStorage 経由で注入するインプロセス
+    Hono RPC クライアントで行う（ADR-001）。ベース URL の設定は不要
 
 ### 設定例
 
@@ -217,9 +218,6 @@ PORT=8080
 NODE_ENV=development
 LOG_PRETTY=true
 CORS_ORIGIN=http://localhost:3000
-
-# Client
-API_BASE_URL=http://localhost:8080
 ```
 
 **注意**: Docker Compose で起動する場合、デフォルトではユーザー名 `postgres`、パスワード `postgres`、データベース名 `app_db` になります。本番環境では `appuser` ユーザーを使用しますが、開発環境では `postgres` ユーザーを使用します。

@@ -16,47 +16,48 @@ open http://localhost:8080
 
 ## アプリケーション層のステップ設計ガイド
 
-### 方針（ROP: Result-Oriented Programming）
-- ユースケースは`Result`で成功/失敗を表現し、例外は極力境界層でのみ扱う
-- `andThen`/`asyncAndThen`でチェインし、Okだけ次へ進み、Errはショートサーキット
-- HTTPレスポンスは Presentation 層で `isOk(result)` + literal status code で変換する
+### 方針（ROP: Result-Oriented Programming、neverthrow — ADR-005）
+- ユースケースは `ResultAsync` で成功/失敗を表現し、例外は境界層（infrastructure / presentation）でのみ扱う
+- `okAsync().andThen()` でチェインし、Ok だけ次へ進み、Err はショートサーキット
+- HTTP レスポンスは Presentation 層の `toHttp(c, result, errorMap)`（`shared/http/to-http.ts`）で変換する
+- `usecase.ts` は `async` / `try-catch` 禁止（`arch:guards` で強制）。非同期の副作用は steps に委譲する
 
-### ステップ関数の基本形
+### ステップ関数の基本形（実例: `features/tasks/application/create/steps.ts`）
 - ファイル先頭に入出力の型エイリアスを置く（ファイルローカル）
 - 依存は`makeXxxStep({ ...deps })`で注入する
+- リポジトリは `ResultAsync<T, E>` を返す（`Promise<Result<T, E>>` ではない）
 
 ```ts
-// 入出力の型（ファイルローカル）
-type CreateUserStepInput = CreateUserInput; // zod推論型など既存型の別名
-type CreateUserStepOutput = Result<{ item: { id: number } }, "Conflict" | "Unexpected">;
+import type { ResultAsync } from "neverthrow";
 
-export function makeCreateUserStep(deps: { usersRepository: UsersRepository }) {
-  const { usersRepository } = deps;
-  return async function createUserStep(
-    i: CreateUserStepInput,
-  ): Promise<CreateUserStepOutput> {
-    const created = await usersRepository.create(i);
-    if (isOk(created)) return ok({ item: { id: created.value.id } });
-    if (created.value === "Conflict") return err("Conflict");
-    return err("Unexpected");
+type CreateTaskStepOutput = ResultAsync<{ item: { id: string } }, "Conflict" | "Unexpected">;
+
+export function makeCreateTaskStep(deps: { tasksRepository: TasksRepository }) {
+  return function createTaskStep(input: CreateTaskValidated): CreateTaskStepOutput {
+    return deps.tasksRepository
+      .create(input)
+      .map((task) => ({ item: { id: task.id } }));
   };
 }
 ```
 
-### ユースケース（チェイン）の基本形
+### ユースケース（チェイン）の基本形（実例: `features/tasks/application/create/usecase.ts`）
 - 中間結果はOkの`value`のみ次へ渡る
 - すべての中間情報を渡したい場合は、オブジェクトで累積（例: `{ input, validated, created }`）
 
 ```ts
-export function makeCreatePost(deps: { postsRepository: PostsRepository }) {
-  const createPostStep = makeCreatePostStep(deps);
-  return async function createPost(
-    input: CreatePostInput,
-  ): Promise<Result<{ item: { id: number } }, "Invalid" | "Unexpected">> {
-    return flow<CreatePostInput, "Invalid" | "Unexpected">(input)
-      .andThen(validateCreatePost)
-      .asyncAndThen(createPostStep)
-      .value();
+import { okAsync, type ResultAsync } from "neverthrow";
+
+type CreateTaskError = "Conflict" | "Invalid" | "Unexpected"; // ファイル先頭・非export
+
+export function makeCreateTask(deps: { tasksRepository: TasksRepository }) {
+  const createTaskStep = makeCreateTaskStep(deps);
+  return function createTask(
+    input: CreateTaskInput,
+  ): ResultAsync<{ item: { id: string } }, CreateTaskError> {
+    return okAsync(input)
+      .andThen(validateCreateTask) // sync な Result を返すバリデータ
+      .andThen(createTaskStep);    // ResultAsync を返すステップ
   };
 }
 ```
@@ -87,9 +88,9 @@ export function makeCreatePost(deps: { postsRepository: PostsRepository }) {
 
 #### usecase.ts の型配置ポリシー（統一）
 - ユースケースのエラー型や入出力関連の型エイリアスは、原則として「ファイル先頭」に非exportで定義する
-- 同一の型を関数シグネチャと`flow`のジェネリクスで複数回利用する場合は、トップレベル型エイリアスを参照する
+- 同一の型を関数シグネチャとチェーンのジェネリクスで複数回利用する場合は、トップレベル型エイリアスを参照する
 - 例外は最小限：その関数内だけで完結する一時的な型に限り関数内定義を許容（可読性を損ねない場合）
-- 命名はユースケース意図＋`Error`で統一（例: `CreateUserError`/`CreatePostError`/`ListUsersError`/`ListPostsError`/`GetUserError`/`UpdateError`）
+- 命名はユースケース意図＋`Error`で統一（例: `CreateTaskError`/`ListTasksError`/`GetTaskError`/`AdvanceTaskError`）
 
 ### ステップファイルの分割基準
 - 1ファイルにまとめる（推奨条件）
@@ -111,9 +112,9 @@ application/create/steps/
 - ユースケース単位でエラーを文字列リテラルのユニオンで明示（例: `"Invalid" | "Unexpected"`）
 - ステップ横断で揃えると可読性・保守性が上がる
 
-### ヘルパーの再導入基準
-- `fromPromise`のようなヘルパーは、非同期→Result化の重複が目立ってから導入
-- `isErr`は型ガードが必要になった時のみ導入（現状は`isOk`で足りている）
+### 例外の Result 化
+- DB 等の Promise は infrastructure 層で `ResultAsync.fromPromise(promise, errorMapper)` でラップする
+- 判定は neverthrow の型ガード `result.isOk()` / `result.isErr()` を使う（Err 側の値は `result.error`）
 
 ---
 
@@ -122,7 +123,7 @@ application/create/steps/
 ### スクリプト（api-service）
 ```sh
 bun run dev              # ホットリロード起動
-bun run lint             # Biome
+bun run lint             # oxlint + oxfmt --check
 bun run typecheck        # TypeScript
 bun run test             # すべてのテスト
 bun run test:unit        # ユニット
@@ -141,19 +142,23 @@ bun run coverage         # カバレッジ
 
 主要エンドポイント（例）
 ```text
-GET  /api/health   -> { status: "ok" }
-GET  /api/users    -> 一覧
-POST /api/users    -> 作成
+GET    /api/health      -> { status: "ok" }（DB 疎通込み。/api/health/live は DB 非依存）
+GET    /api/me          -> セッションのユーザー情報
+GET    /api/tasks       -> 一覧（要認証・keyset ページネーション）
+POST   /api/tasks       -> 作成（要認証）
+PATCH  /api/tasks/:id   -> ステータス遷移（要認証）
+DELETE /api/tasks/:id   -> 削除（要認証）
 ```
 簡易確認:
 ```sh
 curl -s http://localhost:8080/api/health | jq .
 ```
 
-**注意**: すべてのAPIエンドポイントは `/api` プレフィックスが付いています。Server側では `/api` をベースパスとして設定しているため、内部ルーティングは `/users` などのままで、実際のエンドポイントは `/api/users` になります。Client側は `shared/lib/api.ts` で Hono RPC クライアント (`hc<AppType>`) を使用し、サーバーの型定義から型安全性を確保しています。
+**注意**: すべてのAPIエンドポイントは `/api` プレフィックスが付いています（`app.ts` がマウント時に付与）。Client側はブラウザでは `hc<AppType>("/")`、SSR では `shared/lib/api-client.ts` の in-process クライアントを使用し、サーバーの型定義から型安全性を確保しています。
 
 ### ミドルウェア
-- `pinoLogger`（hono-pino）/`secureHeaders`/`cors`/`etag`/`timing`/`prettyJSON(dev)`を共通適用
+- `requestId`/`requestLogger`（自作・requestId 束ね pino 子ロガー）/`timing`/`secureHeaders`/`cors`/`bodyLimit`(1MiB, 413)/`prettyJSON(dev)` を `app.ts` で共通適用
+- 認証必須ルーターは `createAuthedApp()` + `.use(requireAuth(deps.getSession))` をセットで使う（`middlewares/require-auth.ts`。付け忘れは `arch:guards` が検出）
 
 ### 環境変数/設定
 - ルートの`.env`を常に読み込む（`src/config.ts`）
@@ -175,7 +180,8 @@ curl -s http://localhost:8080/api/health | jq .
 - 契約: `__tests__/contract`で Hono RPC (`hc<typeof app>`) によるレスポンス型契約を確認
 
 ### API クライアント（Client 側）
-- フロントは `hc<AppType>` で型付き RPC クライアントを使用（`apps/client/shared/lib/api.ts`）
+- ブラウザは `hc<AppType>("/")` で相対 URL の型付き RPC クライアントを使用（実例: `apps/client/features/tasks/actions/create-task.ts`）
+- SSR（loader / createServerFn）は `apps/client/shared/lib/api-client.ts` の in-process クライアントを使用（ADR-001）
 
 ---
 
