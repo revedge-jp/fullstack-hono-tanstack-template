@@ -84,6 +84,7 @@ gh auth login          # 未認証の場合
 ### デプロイ向け
 
 - [Cloudflare Workers デプロイガイド](docs/deploy/cloudflare-workers.md) - デプロイの概要とセットアップ
+- [Alchemy IaC ガイド](docs/dev/alchemy-iac.md) - Infrastructure as TypeScript（Hyperdrive + Worker、検証中）
 - [GitHub ルールセット設定](docs/deploy/github-ruleset.md) - ブランチ保護の設定
 
 ## よく使うコマンド
@@ -112,6 +113,16 @@ bun run db:studio     # Drizzle Studio
 bun run db:generate   # マイグレーションファイル生成（drizzle-kit generate）
 bun run db:migrate    # マイグレーション適用（drizzle-kit migrate）
 ```
+
+### インフラ（Alchemy — 検証中）
+
+```sh
+bun run infra:deploy:staging      # client をビルドして staging をデプロイ（Hyperdrive + Worker）
+bun run infra:deploy:production   # production をデプロイ
+bun run infra:destroy:staging     # staging のリソースを削除
+```
+
+事前準備（Cloudflare 認証・環境変数）は [Alchemy IaC ガイド](docs/dev/alchemy-iac.md) を参照してください。
 
 ### アーキテクチャ/依存チェック
 

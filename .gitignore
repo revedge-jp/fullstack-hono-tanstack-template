@@ -31,6 +31,9 @@ reports/
 # Wrangler local state
 **/.wrangler/
 
+# Alchemy state (暗号化 secrets を含むためコミットしない)
+.alchemy/
+
 # Build Outputs
 .next/
 out/

@@ -47,12 +47,17 @@
     "check-all": "bash scripts/check/check-all.sh",
     "dup:check": "jscpd .",
     "dup:report": "jscpd . --reporters html --output ./report",
+    "infra:deploy:staging": "sh -c 'cd apps/client && bun run build' && dotenv -e .env -- bunx alchemy deploy --stage staging",
+    "infra:deploy:production": "sh -c 'cd apps/client && bun run build' && dotenv -e .env -- bunx alchemy deploy --stage production",
+    "infra:destroy:staging": "dotenv -e .env -- bunx alchemy destroy --stage staging",
+    "infra:destroy:production": "dotenv -e .env -- bunx alchemy destroy --stage production",
     "worktree": "bash scripts/worktree.sh",
     "start-from-main": "bash scripts/start-from-main.sh",
     "prepare": "lefthook install"
   },
   "devDependencies": {
     "@feature-sliced/steiger-plugin": "^0.5.8",
+    "alchemy": "^0.93.12",
     "dependency-cruiser": "^17.4.3",
     "dotenv-cli": "^11.0.0",
     "jscpd": "^5.0.11",

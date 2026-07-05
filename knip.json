@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
+    ".": {
+      "entry": ["alchemy.run.ts"]
+    },
     "apps/api-service": {
       "entry": ["src/index.ts", "src/features/**/*.ts", "src/__tests__/**/*.ts"],
       "project": ["src/**/*.ts"]
