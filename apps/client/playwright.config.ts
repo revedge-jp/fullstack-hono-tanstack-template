@@ -34,6 +34,11 @@ export default defineConfig({
       testMatch: /tasks\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "a11y",
+      testMatch: /a11y\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   globalSetup: "./tests/e2e/global-setup.ts",
   globalTeardown: "./tests/e2e/global-teardown.ts",

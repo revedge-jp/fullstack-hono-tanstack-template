@@ -12,7 +12,7 @@ const ignoredDirs = new Set([
   ".next",
   ".output",
   ".turbo",
-  ".cursor",
+  ".claude",
   "generated",
   "node_modules",
   "dist",

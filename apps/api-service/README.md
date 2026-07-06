@@ -84,7 +84,7 @@ export function makeCreateTask(deps: { tasksRepository: TasksRepository }) {
 - 型生成専用ファイルでの`as never`
 - エラーハンドリングでの型ガード（`typeof`チェックと組み合わせて使用）
 
-詳細は`.cursor/rules/typescript-style.mdc`と`docs/dev/development.md`を参照してください。
+詳細は`docs/dev/coding-standards.md`と`docs/dev/development.md`を参照してください。
 
 #### usecase.ts の型配置ポリシー（統一）
 - ユースケースのエラー型や入出力関連の型エイリアスは、原則として「ファイル先頭」に非exportで定義する

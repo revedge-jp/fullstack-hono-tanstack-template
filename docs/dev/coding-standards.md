@@ -315,6 +315,10 @@ export async function getUsers() {
 
 準拠の基準として **WCAG 2.2 AA** を採用する。
 
+機械検証は 2 層で行う:
+- **静的**: oxlint の `jsx-a11y` プラグイン（`.oxlintrc.json`）— `alt` 欠落・不正な ARIA role 等を pre-commit / `bun run lint` で検出
+- **実行時**: axe-core による E2E スキャン（`apps/client/tests/e2e/a11y.spec.ts`）— コントラスト比・ラベルの結び付き等を検査。`bun run test:e2e --project=a11y` で単体実行可
+
 ### 基本ルール
 
 - フォーカス可視化は `focus-visible:ring-*` で必ず付ける
@@ -468,7 +472,6 @@ bun run lint:fix      # Lint 自動修正
 bun run typecheck     # 型チェック
 bun run test          # テスト
 bun run arch:check    # アーキテクチャチェック
-bun run check:a11y    # アクセシビリティチェックリスト表示
 ```
 
 ### アーキテクチャチェック

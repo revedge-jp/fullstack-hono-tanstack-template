@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Additional rules live in `.claude/rules/`: `general.md` / `package-management.md` are always loaded;
+`api-service.md`, `client.md`, `env-vars.md` are path-scoped (loaded when matching files are read).
+
 ## Stack
 
 - **Monorepo**: Turborepo + Bun (required, no npm/yarn/pnpm)

@@ -195,7 +195,7 @@ TypeScriptの型安全性を維持するため、型アサーション（`as`キ
 - 型生成専用ファイルでの`as never`: 型生成のためのダミー値
 - エラーハンドリングでの型ガード: `typeof`チェックと組み合わせて使用（例: `e as { code?: string }`）
 
-詳細は`.cursor/rules/typescript-style.mdc`を参照してください。
+詳細は[コーディング規約](coding-standards.md)と [ADR-003](../architecture/adr-003-as-type-assertion-policy.md) を参照してください。
 
 #### Result 型（[neverthrow](https://github.com/supermacro/neverthrow)、[ADR-005](../architecture/adr-005-neverthrow-for-error-handling.md)）
 
