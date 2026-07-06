@@ -115,6 +115,10 @@ entrypoint ruleset を「丸ごと」管理する（宣言したルールで全�
 同じ zone に手動のレート制限ルールがある場合や、staging / production が同一 zone を
 共有する場合は、有効化を 1 stage に限定すること。
 
+誤上書きはデプロイ時のガードで機械的に防いでいる: `alchemy.run.ts` が Ruleset の適用前に
+zone の既存ルールを検査し、この stage の目印（`[alchemy:{worker名}]`）を持たないルール
+（手動ルール・別 stage のルール）が 1 件でもあれば、**上書きせずエラーで中断**する。
+
 ## Alchemy 管理に「しない」もの
 
 - **GitHub Environments の secrets / variables**: Alchemy の github プロバイダで宣言することも

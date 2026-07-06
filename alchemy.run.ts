@@ -15,7 +15,16 @@
 import { appendFileSync, existsSync } from "node:fs";
 
 import alchemy from "alchemy";
-import { Assets, CustomDomain, Hyperdrive, LogPushJob, Ruleset, Worker } from "alchemy/cloudflare";
+import {
+  Assets,
+  createCloudflareApi,
+  CustomDomain,
+  findZoneForHostname,
+  Hyperdrive,
+  LogPushJob,
+  Ruleset,
+  Worker,
+} from "alchemy/cloudflare";
 import { Branch, Database, Role } from "alchemy/planetscale";
 import { CloudflareStateStore } from "alchemy/state";
 
@@ -59,9 +68,9 @@ const workerName = stage === "production" ? appName : `${appName}-${stage}`;
 // TLS 証明書の発行まで Cloudflare 側で自動化される。API トークンには Workers 権限に
 // 加えて対象 zone の Zone:Read + DNS:Edit が必要（docs/deploy/cloudflare-workers.md）。
 const customDomain = (!isPreview && process.env.CUSTOM_DOMAIN) || undefined;
-if (customDomain && /^https?:\/\//.test(customDomain)) {
+if (customDomain && !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(customDomain)) {
   throw new Error(
-    `CUSTOM_DOMAIN はホスト名のみで指定してください（例: app.example.com、現在: ${customDomain}）`,
+    `CUSTOM_DOMAIN はホスト名のみで指定してください（例: app.example.com — URL 形式・パス・ポート付きは不可。現在: ${customDomain}）`,
   );
 }
 
@@ -70,9 +79,10 @@ if (customDomain && /^https?:\/\//.test(customDomain)) {
 //
 // 【重要】Ruleset リソースは対象 zone の http_ratelimit フェーズの entrypoint を
 // 「丸ごと」管理する（既存ルールは上書き、destroy でフェーズ全体が空になる）。
+// このため deploy 時に既存ルールを検査し、この stage の管理外のルール（手動ルールや
+// 別 stage のルール）が zone にある場合は上書きせずエラーで中断する（下のガード参照）。
 //   - 同じ zone を他のアプリ・手動ルールと共有している場合は有効化しないこと
 //   - staging と production が同一 zone を共有する場合、有効化はどちらか一方のみ
-//     （両方で有効化すると後からデプロイした stage が相手のルールを消す）
 const edgeRateLimitRpmRaw = (!isPreview && process.env.EDGE_RATE_LIMIT_RPM) || undefined;
 const edgeRateLimitRpm = edgeRateLimitRpmRaw ? Number(edgeRateLimitRpmRaw) : undefined;
 if (
@@ -242,13 +252,45 @@ if (process.env.SKIP_WORKER !== "1") {
   // 「専有」は zone 単位なので、上の EDGE_RATE_LIMIT_RPM の注意書きを必ず読むこと。
   if (customDomain && edgeRateLimitRpm !== undefined) {
     const requestsPer10s = Math.max(1, Math.round(edgeRateLimitRpm / 6));
+
+    // 上書きガード: Ruleset はフェーズの entrypoint を全置換するため、この stage の目印
+    // （ruleMarker）を持たないルールが zone に残っている場合は、消さずに中断する。
+    // 別 stage のルールも目印が異なるので検出される（「1 zone 1 stage」の機械的な強制）。
+    const ruleMarker = `[alchemy:${workerName}]`;
+    const cfApi = await createCloudflareApi();
+    const { zoneId } = await findZoneForHostname(cfApi, customDomain);
+    const entrypointRes = await cfApi.get(
+      `/zones/${zoneId}/rulesets/phases/http_ratelimit/entrypoint`,
+    );
+    if (entrypointRes.ok) {
+      const entrypoint: { result?: { rules?: Array<{ description?: string }> } } =
+        await entrypointRes.json();
+      const foreignRules = (entrypoint.result?.rules ?? []).filter(
+        (rule) => !(rule.description ?? "").includes(ruleMarker),
+      );
+      if (foreignRules.length > 0) {
+        const summary = foreignRules.map((r) => r.description || "(説明なし)").join(" / ");
+        throw new Error(
+          `zone の http_ratelimit フェーズに管理外のルールが ${foreignRules.length} 件あります（${summary}）。` +
+            "EDGE_RATE_LIMIT_RPM はフェーズを丸ごと上書きするため中断しました。" +
+            "既存ルールを整理するか、この stage の EDGE_RATE_LIMIT_RPM を外してください",
+        );
+      }
+    } else if (entrypointRes.status !== 404) {
+      // 404 = entrypoint 未作成（ルールなし）。それ以外は権限不足などの異常
+      throw new Error(
+        `http_ratelimit エントリポイントの確認に失敗しました（HTTP ${entrypointRes.status}）。` +
+          "CLOUDFLARE_API_TOKEN に対象 zone の WAF 権限があるか確認してください",
+      );
+    }
+
     await Ruleset("edge-rate-limit", {
       zone: customDomain,
       phase: "http_ratelimit",
       description: `${workerName}: /api/* rate limit (managed by alchemy)`,
       rules: [
         {
-          description: `${workerName}: limit /api/* to ${edgeRateLimitRpm} req/min per IP`,
+          description: `${ruleMarker} limit /api/* to ${edgeRateLimitRpm} req/min per IP`,
           expression: `(http.host eq "${customDomain}" and starts_with(http.request.uri.path, "/api/"))`,
           action: "block",
           ratelimit: {

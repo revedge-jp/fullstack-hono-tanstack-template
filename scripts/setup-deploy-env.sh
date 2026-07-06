@@ -53,7 +53,7 @@ ITEMS="APP_NAME|var|Worker / Hyperdrive / DB の命名ベース。init-template.
 PLANETSCALE_ORGANIZATION|var|PlanetScale の組織名。全 stage 共通
 WORKERS_SUBDOMAIN|var|CF アカウントの workers.dev サブドメイン（bunx wrangler whoami で確認可）。カスタムドメイン運用でも preview 環境が使うため設定推奨
 CUSTOM_DOMAIN|var|Worker に割り当てるカスタムドメインのホスト名（例: app.example.com。zone が CF アカウントにあること）。DNS/TLS/公開 URL は Alchemy が自動設定。workers.dev 運用なら空 Enter でスキップ
-EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ごとの分間リクエスト数、例: 300）。CUSTOM_DOMAIN 必須。zone の http_ratelimit フェーズを専有するため、zone を共有する場合は 1 stage のみで設定（alchemy.run.ts の注意書き参照）。不要なら空 Enter
+EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ごとの分間リクエスト数、例: 300）。CUSTOM_DOMAIN 必須。zone の http_ratelimit フェーズを専有するため zone を共有する場合は 1 stage のみで設定（管理外の既存ルールを検知した場合、deploy は上書きせず中断する）。不要なら空 Enter
 SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL（例: https://<app>-staging.<subdomain>.workers.dev）。空だと smoke は skip される
 CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。stage 間で同じ値を使い回してよい。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: chobaco-deploy）
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
