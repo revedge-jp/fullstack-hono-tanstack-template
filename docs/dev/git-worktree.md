@@ -137,7 +137,7 @@ POSTGRES_TEST_VOLUME_NAME="postgres-test-data_slot1"
 
 ### 1. AI エージェント並列開発
 
-複数の Cursor ウィンドウで同時に機能開発を行う場合:
+複数のエディタウィンドウ（または Claude Code セッション）で同時に機能開発を行う場合:
 
 ```bash
 # 開発スロットを作成
@@ -145,8 +145,8 @@ bun run worktree add dev-1
 bun run worktree add dev-2
 
 # 各ウィンドウで別々の worktree を開く
-# Cursor ウィンドウ1: ~/dev/fullstack-hono-tanstack-template-dev-1
-# Cursor ウィンドウ2: ~/dev/fullstack-hono-tanstack-template-dev-2
+# ウィンドウ1: ~/dev/fullstack-hono-tanstack-template-dev-1
+# ウィンドウ2: ~/dev/fullstack-hono-tanstack-template-dev-2
 ```
 
 ### 2. worktree の用途を明確にする
@@ -202,7 +202,7 @@ git log origin/main
 
 ### 6. IDE の設定
 
-**VS Code / Cursor**:
+**VS Code 等のエディタ**:
 - 各 worktree を別ウィンドウで開く
 - ワークスペース設定は worktree ごとに独立
 

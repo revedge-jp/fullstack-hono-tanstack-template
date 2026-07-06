@@ -144,12 +144,7 @@ bun run dep:graph     # 依存グラフ画像生成（client/api-service）
 
 #### トラブルシューティング
 
-FSD チェック実行時に `EMFILE: too many open files` エラーが発生する場合、Cursor を使用している場合は以下の設定で解決できます。
-
-1. Cursor の設定を開く
-2. `Cursor Settings` > `Auto Run Mode` で `Unsandboxed` を選択
-
-※ その他の AI ツールを使用している場合の解決方法は未確認です。
+FSD チェック実行時に `EMFILE: too many open files` エラーが発生する場合、エディタや AI ツールのサンドボックス内で実行している可能性があります。通常のターミナルから実行するか、ツール側のサンドボックス設定を無効化してください。
 
 詳細は [開発コマンド詳細](docs/dev/dev-commands.md) を参照してください。
 
