@@ -175,6 +175,15 @@ feature B's behavior:
 Real example: `tasks` → `activity` (`features/tasks/application/ports.ts`,
 `integrations/composition/activity-recorder.ts`, wiring in `container.ts`).
 
+**境界見直しのシグナル** — ports + adapter は増やすほど正しいわけではない。以下が出たら
+feature の切り方そのものを見直す:
+
+- 特定の feature ペア間で adapter が**双方向・複数本**になっている → 2 つの feature の境界が
+  間違っている可能性が高い（統合するか、境界線を引き直す）
+- **1 つの feature がほぼ全 feature から参照される** → 共有カーネル化の兆候。ports の量産では
+  なく、middleware + `c.get`/`c.set` への昇格や config → container DI への昇格を検討する
+- 目安: **adapter 数 > feature 数**、新 feature を追加するたびに既存の `ports.ts` を触っている、など
+
 `integrations/` is split by role:
 - `integrations/external/` — thin wrappers around third-party SDKs (e.g. `external/auth.ts` for Better Auth).
   Must not import from `features/`.
@@ -331,6 +340,9 @@ if (result.isErr()) { /* result.error */ }
 - `validators.test.ts` — if `validators.ts` has non-trivial logic
 - `domain/models.test.ts` — if domain has behavior (value objects)
 - `__tests__/integration/{feature}.int.test.ts` — real-DB behavior (constraints, ownership scoping)
+- `integrations/composition/{adapter}.test.ts` — **feature 間 adapter を追加したら必ず**（co-located）。
+  入力の組み立てとポートのエラー型への正規化を検証する。adapter は feature 間連携の参照実装で、
+  コピーされて量産される起点になるため。実例: `activity-recorder.test.ts`
 
 **client — always:**
 - `actions/{action}.test.ts` (co-located)

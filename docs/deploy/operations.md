@@ -59,15 +59,22 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 2. **GitHub Actions の失敗通知**: deploy.yml の失敗（smoke 失敗 = 本番異常を含む）が
    即座に届くよう、リポジトリの Watch 設定 or Slack の GitHub App（`/github subscribe owner/repo workflows`）を設定
 3. **（必要になったら）Logpush**: `observability.enabled: true` のログはダッシュボードで
-   閲覧できるが保持が短い。長期保存・検索が必要になったら Logpush で R2 や外部集約先に送る
+   閲覧できるが保持が短い。長期保存・検索が必要になったら Environment Secret
+   `LOGPUSH_DESTINATION` を設定する（Alchemy が Worker の logpush フラグと LogPushJob を
+   作成し R2 や外部集約先に送る。Workers Paid 必須 —
+   [Alchemy IaC ガイド](../dev/alchemy-iac.md#オプションリソース環境変数で-opt-in)）
 
 ## レート制限
 
 アプリ層にはレート制限を実装していない（Better Auth の既定レート制限が `/api/auth/*` に
 効くのみ）。公開エンドポイント（`/api/health` など）の濫用対策は **Cloudflare 側**で行う:
 
-- ダッシュボード > Security > WAF > Rate limiting rules で、たとえば
-  「`/api/*` に対し同一 IP から 60 秒に 100 リクエストを超えたら block」を作成する
+- カスタムドメイン運用なら Environment Variable `EDGE_RATE_LIMIT_RPM` を設定する
+  （Alchemy が WAF に「`/api/*` を IP ごとに N req/分で block」のルールを作成する。
+  **zone の http_ratelimit フェーズを専有する**注意点があるため
+  [Alchemy IaC ガイド](../dev/alchemy-iac.md#オプションリソース環境変数で-opt-in)を先に読むこと）
+- zone を共有していて Alchemy 管理にできない場合は、ダッシュボード > Security > WAF >
+  Rate limiting rules で同等のルールを手動作成する
 - Workers の課金は「リクエスト数 + CPU 時間」なので、CF 側で止めるのが最も安価
 - アプリ層で細かい制御（ユーザー単位など）が必要になったら、その時点で
   Durable Objects / KV ベースのレートリミッタを検討する

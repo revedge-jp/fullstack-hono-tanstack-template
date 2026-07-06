@@ -62,7 +62,7 @@ bash scripts/setup-deploy-env.sh production
 
 | Secret | 用途 |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | Hyperdrive / Worker の作成・デプロイ（Workers 編集権限が必要）。発行時のトークン名は `<APP_NAME>-deploy` 推奨（stage 間で共有するトークンのため） |
+| `CLOUDFLARE_API_TOKEN` | Hyperdrive / Worker の作成・デプロイ（Workers 編集権限が必要）。オプション機能を使う場合は追加権限が必要: `CUSTOM_DOMAIN` → 対象 zone の Zone:Read + DNS:Edit、`EDGE_RATE_LIMIT_RPM` → Zone WAF:Edit、`LOGPUSH_DESTINATION` → Logs:Edit。発行時のトークン名は `<APP_NAME>-deploy` 推奨（stage 間で共有するトークンのため） |
 | `CLOUDFLARE_ACCOUNT_ID` | 同上 |
 | `PLANETSCALE_SERVICE_TOKEN_ID` | PlanetScale DB / Role の作成。発行時のトークン名は `<APP_NAME>-deploy` 推奨（stage 間で共有するトークンのため） |
 | `PLANETSCALE_SERVICE_TOKEN` | 同上 |
@@ -70,6 +70,7 @@ bash scripts/setup-deploy-env.sh production
 | `ALCHEMY_STATE_TOKEN` | Alchemy state store（CF 上の Durable Object）の認証トークン（任意の強い文字列。**全環境・ローカルで同一の値**にすること） |
 | `BETTER_AUTH_SECRET` | Better Auth のセッション署名鍵（`openssl rand -base64 32`） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth。作成時のクライアント名は `<APP_NAME>-<stage>` 推奨（staging / production で別クライアントにするため） |
+| `LOGPUSH_DESTINATION` | （オプション）Worker trace ログの Logpush 宛先 URI。**Workers Paid プラン必須**。宛先資格情報を含むため secret 扱い。未設定なら Logpush は無効 |
 
 **Variables**:
 
@@ -77,7 +78,8 @@ bash scripts/setup-deploy-env.sh production
 |---|---|
 | `APP_NAME` | Worker / Hyperdrive / DB の命名ベース（init-template.sh のアプリ名と同じ値） |
 | `PLANETSCALE_ORGANIZATION` | PlanetScale の組織名 |
-| `APP_ORIGIN` または `WORKERS_SUBDOMAIN` | 公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN` に使用）。`WORKERS_SUBDOMAIN` 指定時は `https://{worker名}.{subdomain}.workers.dev` を自動組み立て |
+| `CUSTOM_DOMAIN` / `APP_ORIGIN` / `WORKERS_SUBDOMAIN` | 公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN` に使用）。この優先順で解決される。`CUSTOM_DOMAIN`（推奨、例: `app.example.com`）は Alchemy がドメイン割り当て・DNS・TLS まで自動設定する。`APP_ORIGIN` は手動割り当てした URL の明示指定（後方互換）。`WORKERS_SUBDOMAIN` 指定時は `https://{worker名}.{subdomain}.workers.dev` を自動組み立て |
+| `EDGE_RATE_LIMIT_RPM` | （オプション）エッジ（WAF）での `/api/*` レート制限。IP ごとの分間リクエスト数（例: `300`）。`CUSTOM_DOMAIN` 必須。**対象 zone の http_ratelimit フェーズを専有する**ため、zone を他アプリ・手動ルールと共有している場合や staging/production が同一 zone の場合は 1 stage のみで設定すること（管理外の既存ルールを検知した場合、deploy は上書きせず中断する） |
 | `SMOKE_BASE_URL` | デプロイ直後の smoke チェック先 URL。`/api/health`（Hyperdrive 経由の DB 疎通）と `/`（SSR）を検証し、失敗するとデプロイジョブが赤になる。**未設定の場合 smoke チェックは skip される**（notice が出るだけでジョブは成功扱い） |
 
 secrets / vars が未設定のうちは deploy job は notice を出して skip する（テンプレート原本や
