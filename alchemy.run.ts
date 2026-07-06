@@ -15,7 +15,7 @@
 import { appendFileSync, existsSync } from "node:fs";
 
 import alchemy from "alchemy";
-import { Assets, Hyperdrive, Worker } from "alchemy/cloudflare";
+import { Assets, CustomDomain, Hyperdrive, LogPushJob, Ruleset, Worker } from "alchemy/cloudflare";
 import { Branch, Database, Role } from "alchemy/planetscale";
 import { CloudflareStateStore } from "alchemy/state";
 
@@ -50,6 +50,49 @@ if (stage !== "staging" && stage !== "production" && !isPreview) {
 
 // wrangler.jsonc の env 命名と揃える: staging は -staging サフィックス、production は素の名前
 const workerName = stage === "production" ? appName : `${appName}-${stage}`;
+
+// ---- オプション機能（カスタムドメイン運用時のみ有効化） -------------------
+// いずれも preview では無視する（preview の URL は常に workers.dev、リソースは使い捨て）。
+//
+// CUSTOM_DOMAIN: Worker に割り当てるホスト名（例: app.example.com）。zone が同じ
+// CF アカウントにあれば zone ID はホスト名から自動解決され、DNS レコードの作成・
+// TLS 証明書の発行まで Cloudflare 側で自動化される。API トークンには Workers 権限に
+// 加えて対象 zone の Zone:Read + DNS:Edit が必要（docs/deploy/cloudflare-workers.md）。
+const customDomain = (!isPreview && process.env.CUSTOM_DOMAIN) || undefined;
+if (customDomain && /^https?:\/\//.test(customDomain)) {
+  throw new Error(
+    `CUSTOM_DOMAIN はホスト名のみで指定してください（例: app.example.com、現在: ${customDomain}）`,
+  );
+}
+
+// EDGE_RATE_LIMIT_RPM: エッジ（WAF）での /api/* レート制限。IP ごとの分間リクエスト数。
+// zone 必須のため CUSTOM_DOMAIN とセットでのみ有効。
+//
+// 【重要】Ruleset リソースは対象 zone の http_ratelimit フェーズの entrypoint を
+// 「丸ごと」管理する（既存ルールは上書き、destroy でフェーズ全体が空になる）。
+//   - 同じ zone を他のアプリ・手動ルールと共有している場合は有効化しないこと
+//   - staging と production が同一 zone を共有する場合、有効化はどちらか一方のみ
+//     （両方で有効化すると後からデプロイした stage が相手のルールを消す）
+const edgeRateLimitRpmRaw = (!isPreview && process.env.EDGE_RATE_LIMIT_RPM) || undefined;
+const edgeRateLimitRpm = edgeRateLimitRpmRaw ? Number(edgeRateLimitRpmRaw) : undefined;
+if (
+  edgeRateLimitRpm !== undefined &&
+  (!Number.isInteger(edgeRateLimitRpm) || edgeRateLimitRpm < 6)
+) {
+  throw new Error(
+    `EDGE_RATE_LIMIT_RPM は 6 以上の整数で指定してください（現在: ${edgeRateLimitRpmRaw}）`,
+  );
+}
+if (edgeRateLimitRpm !== undefined && !customDomain) {
+  throw new Error(
+    "EDGE_RATE_LIMIT_RPM には CUSTOM_DOMAIN が必要です（zone 単位の WAF ルールのため）",
+  );
+}
+
+// LOGPUSH_DESTINATION: Worker の trace ログ（console.log / 例外）を外部へ転送する
+// Logpush の宛先 URI（例: R2 なら r2://bucket/path?account-id=...&access-key-id=...&
+// secret-access-key=...）。Workers Paid プランが必要。値に資格情報を含むため secret 扱い。
+const logpushDestination = (!isPreview && process.env.LOGPUSH_DESTINATION) || undefined;
 
 // ---- PlanetScale (DB + Role) -------------------------------------------
 // 認証はサービストークン（PLANETSCALE_SERVICE_TOKEN_ID / PLANETSCALE_SERVICE_TOKEN）。
@@ -134,12 +177,14 @@ if (process.env.SKIP_WORKER !== "1") {
   }
 
   // Better Auth / CORS はデプロイ後の公開 URL を必要とする。
-  // APP_ORIGIN で明示指定するか、WORKERS_SUBDOMAIN（CF アカウントの workers.dev サブドメイン）から組み立てる。
+  // CUSTOM_DOMAIN（Alchemy がドメイン割り当てまで行う）→ APP_ORIGIN（手動割り当てした URL の
+  // 明示指定・後方互換）→ WORKERS_SUBDOMAIN（workers.dev URL の組み立て）の順で解決する。
   // ?? ではなく || : CI では未設定の GitHub Variable が「空文字列」として渡ってくるため、
-  // 空でも WORKERS_SUBDOMAIN へフォールバックさせる。
-  // preview では APP_ORIGIN を無視する（staging のカスタムドメインを指すため。preview の URL は
-  // 常に workers.dev — WORKERS_SUBDOMAIN が必須）。
+  // 空でも次の候補へフォールバックさせる。
+  // preview では CUSTOM_DOMAIN / APP_ORIGIN を無視する（staging のカスタムドメインを指すため。
+  // preview の URL は常に workers.dev — WORKERS_SUBDOMAIN が必須）。
   const appOrigin =
+    (customDomain && `https://${customDomain}`) ||
     (!isPreview && process.env.APP_ORIGIN) ||
     (process.env.WORKERS_SUBDOMAIN
       ? `https://${workerName}.${process.env.WORKERS_SUBDOMAIN}.workers.dev`
@@ -159,6 +204,8 @@ if (process.env.SKIP_WORKER !== "1") {
     adopt: true,
     url: true,
     observability: { enabled: true },
+    // Logpush 転送は Worker 側のフラグと LogPushJob の両方が必要（下のブロック参照）
+    logpush: logpushDestination !== undefined,
     bindings: {
       ASSETS: await Assets({ path: "apps/client/dist/client" }),
       HYPERDRIVE: hyperdrive,
@@ -175,6 +222,61 @@ if (process.env.SKIP_WORKER !== "1") {
   });
 
   console.info(`[alchemy] worker=${workerName} url=${worker.url ?? "(workers.dev URL 無効)"}`);
+
+  // ---- カスタムドメイン（opt-in） ----------------------------------------
+  // DNS レコード・TLS 証明書は Cloudflare が自動管理。appOrigin はこのドメインから
+  // 導出済みなので、Better Auth / CORS の URL も自動で一致する。
+  if (customDomain) {
+    await CustomDomain("custom-domain", {
+      name: customDomain,
+      workerName,
+      adopt: true,
+    });
+    console.info(`[alchemy] custom domain=${customDomain} -> ${workerName}`);
+  }
+
+  // ---- エッジレート制限（opt-in・zone の http_ratelimit フェーズを専有） ----
+  // アプリ内の rate-limit ミドルウェア（isolate ローカル）より手前、Cloudflare エッジで
+  // IP ごとに /api/* を制限する。無料プランの制約（period/mitigation_timeout = 10 秒固定）に
+  // 合わせて RPM を 10 秒あたりに換算する。ホスト名でスコープしているが、entrypoint の
+  // 「専有」は zone 単位なので、上の EDGE_RATE_LIMIT_RPM の注意書きを必ず読むこと。
+  if (customDomain && edgeRateLimitRpm !== undefined) {
+    const requestsPer10s = Math.max(1, Math.round(edgeRateLimitRpm / 6));
+    await Ruleset("edge-rate-limit", {
+      zone: customDomain,
+      phase: "http_ratelimit",
+      description: `${workerName}: /api/* rate limit (managed by alchemy)`,
+      rules: [
+        {
+          description: `${workerName}: limit /api/* to ${edgeRateLimitRpm} req/min per IP`,
+          expression: `(http.host eq "${customDomain}" and starts_with(http.request.uri.path, "/api/"))`,
+          action: "block",
+          ratelimit: {
+            characteristics: ["cf.colo.id", "ip.src"],
+            period: 10,
+            requests_per_period: requestsPer10s,
+            mitigation_timeout: 10,
+          },
+        },
+      ],
+    });
+    console.info(
+      `[alchemy] edge rate limit=${edgeRateLimitRpm} rpm (${requestsPer10s}/10s) on ${customDomain}/api/*`,
+    );
+  }
+
+  // ---- Logpush（opt-in・Workers Paid） -----------------------------------
+  // Worker の logpush フラグ（上の Worker 定義）とセット。dataset は Worker の
+  // console.log / 例外 / メタデータを含む workers_trace_events（アカウントレベル）。
+  if (logpushDestination) {
+    await LogPushJob("worker-logpush", {
+      name: `${workerName}-trace`,
+      dataset: "workers_trace_events",
+      destination: alchemy.secret(logpushDestination),
+      enabled: true,
+    });
+    console.info(`[alchemy] logpush job=${workerName}-trace (workers_trace_events)`);
+  }
 }
 
 console.info(`[alchemy] stage=${stage} hyperdrive=${hyperdrive.hyperdriveId}`);

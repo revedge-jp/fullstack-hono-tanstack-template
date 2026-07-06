@@ -86,10 +86,15 @@ jobs:
       deployments: read # rollback の戻り先解決（過去の成功 Deployment の commit を参照）
     env:
       # Alchemy（alchemy.run.ts）が参照する環境変数。
-      # APP_NAME / WORKERS_SUBDOMAIN / APP_ORIGIN は Environment Variables、それ以外は Environment Secrets。
+      # APP_NAME / WORKERS_SUBDOMAIN / APP_ORIGIN / CUSTOM_DOMAIN / EDGE_RATE_LIMIT_RPM は
+      # Environment Variables、それ以外は Environment Secrets。
       APP_NAME: ${{ vars.APP_NAME }}
       APP_ORIGIN: ${{ vars.APP_ORIGIN }}
       WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+      # オプション機能（未設定なら無効 — alchemy.run.ts のコメント参照）
+      CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN }}
+      EDGE_RATE_LIMIT_RPM: ${{ vars.EDGE_RATE_LIMIT_RPM }}
+      LOGPUSH_DESTINATION: ${{ secrets.LOGPUSH_DESTINATION }}
       ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
       ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -119,7 +124,7 @@ jobs:
         run: |
           missing=""
           [ -z "$APP_NAME" ] && missing="$missing APP_NAME(var)"
-          [ -z "$APP_ORIGIN" ] && [ -z "$WORKERS_SUBDOMAIN" ] && missing="$missing APP_ORIGIN|WORKERS_SUBDOMAIN(var)"
+          [ -z "$CUSTOM_DOMAIN" ] && [ -z "$APP_ORIGIN" ] && [ -z "$WORKERS_SUBDOMAIN" ] && missing="$missing CUSTOM_DOMAIN|APP_ORIGIN|WORKERS_SUBDOMAIN(var)"
           [ -z "$ALCHEMY_PASSWORD" ] && missing="$missing ALCHEMY_PASSWORD"
           [ -z "$ALCHEMY_STATE_TOKEN" ] && missing="$missing ALCHEMY_STATE_TOKEN"
           [ -z "$CLOUDFLARE_API_TOKEN" ] && missing="$missing CLOUDFLARE_API_TOKEN"
