@@ -340,10 +340,10 @@ const rows = await db.query.tasks.findMany();
 
 | 場所 | バージョン | 理由 |
 |---|---|---|
-| ルート `package.json` | `6.0.3`（安定版） | dependency-cruiser / knip が TypeScript の **JS コンパイラ API** を必要とする。ネイティブ版（7.x RC / tsgo）にすると **depcruise が 0 modules で静かに空回りする**（`bun run arch:selftest` がこれを検出する） |
-| 各ワークスペース | `7.0.1-rc`（ネイティブ tsgo） | `tsc --noEmit` の typecheck が大幅に高速。コンパイラ API は使わないため RC で問題ない |
+| ルート `package.json` | `6.0.3`（安定版） | dependency-cruiser / knip が TypeScript の **JS コンパイラ API** を必要とする。ネイティブ版（7.x / tsgo）にすると **depcruise が 0 modules で静かに空回りする**（`bun run arch:selftest` がこれを検出する）。TS 7.1 の安定プログラマティック API と各ツールの対応を待って統一する（#26） |
+| 各ワークスペース | `7.0.2`（ネイティブ tsgo） | `tsc --noEmit` の typecheck が大幅に高速。コンパイラ API は使わないため問題ない |
 
-RC でツールチェーン互換問題が出た場合は、各ワークスペースの `typescript` を `6.0.3` に
+ツールチェーン互換問題が出た場合は、各ワークスペースの `typescript` を `6.0.3` に
 揃えれば安定版に戻せる（typecheck が遅くなる以外の影響はない）。
 ルートを 7.x に上げる場合は、必ず `bun run arch:selftest` が通ることを確認すること。
 

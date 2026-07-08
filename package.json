@@ -92,6 +92,6 @@
     "lodash-es": "推移依存の脆弱性回避。>=4.17.24 で修正済み",
     "minimatch": "推移依存の脆弱性回避（ReDoS 系）。>=10.2.3 で修正済み",
     "picomatch": "推移依存の脆弱性回避。>=2.3.2 で修正済み",
-    "typescript": "root は 6.x 固定（意図的）: dependency-cruiser / knip は TypeScript の JS コンパイラ API を必要とし、7.x RC（ネイティブ tsgo）では depcruise が 0 modules で静かに空回りする（arch:selftest で検出可能）。各ワークスペースの typecheck は高速なネイティブ 7.0.1-rc を使う"
+    "typescript": "root は 6.x 固定（意図的）: dependency-cruiser / knip は TypeScript の JS コンパイラ API を必要とし、7.x（ネイティブ tsgo）では depcruise が 0 modules で静かに空回りする（arch:selftest で検出可能）。各ワークスペースの typecheck は高速なネイティブ 7.x を使う"
   }
 }
