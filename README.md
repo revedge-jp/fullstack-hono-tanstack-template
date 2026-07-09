@@ -248,3 +248,16 @@ LOG_PRETTY=false
 - Bun（`packageManager: bun@1.3.1`）
 
 依存の追加/更新は必ず Bun 経由で行い、ロックファイルを尊重すること。
+
+## 謝辞
+
+技術スタックの選定は、吉崎亮介さん（[@yoshizaki_91](https://x.com/yoshizaki_91)）が公開された
+[技術スタック一覧](https://x.com/yoshizaki_91/status/2034481827306688944)を最大限参考にしています。
+本テンプレートの独自性は選定そのものではなく、その上に載せた検証層
+（[品質ゲート](docs/dev/quality-gates.md) / [ADR-006](docs/architecture/adr-006-ai-era-quality-strategy.md)）にあります。
+
+## メンテナンス方針
+
+- 本テンプレートは Revedge の実プロダクト開発の土台として実運用しており、そこで得た学びを随時還元しています
+- 個人メンテのため対応の SLA はありません。Issue / PR は歓迎しますが、取り込みは品質ゲートとの整合を優先して判断します
+- 破壊的変更はバージョンタグと CHANGELOG ではなく、コミット履歴と ADR（`docs/architecture/`）で追跡しています
