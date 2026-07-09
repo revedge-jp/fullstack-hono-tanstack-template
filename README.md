@@ -249,12 +249,9 @@ LOG_PRETTY=false
 
 依存の追加/更新は必ず Bun 経由で行い、ロックファイルを尊重すること。
 
-## 謝辞
+## クレジット
 
-技術スタックの選定は、吉崎亮介さん（[@yoshizaki_91](https://x.com/yoshizaki_91)）が公開された
-[技術スタック一覧](https://x.com/yoshizaki_91/status/2034481827306688944)を最大限参考にしています。
-本テンプレートの独自性は選定そのものではなく、その上に載せた検証層
-（[品質ゲート](docs/dev/quality-gates.md) / [ADR-006](docs/architecture/adr-006-ai-era-quality-strategy.md)）にあります。
+技術スタックの選定は [@yoshizaki_91](https://x.com/yoshizaki_91) さんの[公開スタック一覧](https://x.com/yoshizaki_91/status/2034481827306688944)を参考にしています。
 
 ## メンテナンス方針
 
