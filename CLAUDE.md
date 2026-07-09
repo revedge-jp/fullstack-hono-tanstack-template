@@ -60,7 +60,8 @@ bun run check:feature # Feature structure completeness (required layers/tests/wi
 ```bash
 bun run coverage:check         # api-service domain/application coverage threshold (85%)
 bun run coverage:check:client  # client actions/queries coverage threshold (80%)
-cd apps/api-service && bun run mutation  # Mutation testing (domain/application, break 90%)
+cd apps/api-service && bun run mutation:diff  # Mutation testing (PR diff only, same as CI; ADR-007)
+cd apps/api-service && bun run mutation       # Mutation testing full audit (domain/application, break 90%)
 bun run dup:check              # Duplicate code detection (jscpd, threshold 5%)
 bun run arch:selftest          # Verify arch-guards actually catch known violations
 ```

@@ -17,6 +17,6 @@
   "reporters": ["clear-text", "html"],
   "timeoutMS": 20000,
   "concurrency": 4,
-  "_comment_incremental": "incremental は使わない: testRunner=command では Stryker がテストとミュータントを対応付けられず、テストファイルの変更が過去の結果を無効化しない（テスト追加後も古い Survived/Killed を再利用する誤動作を実測確認）。実行時間が問題になったら --mutate での対象絞り込みを使う",
+  "_comment_incremental": "incremental は使わない: testRunner=command では Stryker がテストとミュータントを対応付けられず、テストファイルの変更が過去の結果を無効化しない（テスト追加後も古い Survived/Killed を再利用する誤動作を実測確認）。CI は差分スコープ（--mutate）で実行する（ADR-007 / scripts/check/mutation-diff.sh）",
   "thresholds": { "high": 95, "low": 90, "break": 90 }
 }

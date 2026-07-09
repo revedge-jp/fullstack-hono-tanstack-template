@@ -87,10 +87,14 @@ jobs:
     # Renovate の devDeps 自動マージがビルド/テストを素通りする。
     if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true' || needs.changes.outputs.deps == 'true'
     steps:
+      # fetch-depth: 0（フル履歴）+ persist-credentials: true は mutation testing の
+      # diff スコープ算出（git diff origin/main...HEAD、ADR-007）に必要。
+      # persist-credentials は private リポジトリでの git fetch に必要で、
+      # このジョブは push を行わないため changes ジョブと同じ理由でリスクは限定的。
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 1
-          persist-credentials: false
+          fetch-depth: 0
+          persist-credentials: true
 
       - uses: ./.github/actions/setup-workspace
         with:
@@ -151,9 +155,9 @@ jobs:
         if: needs.changes.outputs.api-service == 'true'
         run: bun run coverage:check
 
-      - name: Mutation testing (domain/application)
+      - name: Mutation testing (domain/application, diff scope)
         if: needs.changes.outputs.api-service == 'true'
-        run: cd apps/api-service && bun run mutation
+        run: cd apps/api-service && bun run mutation:diff
 
       - name: Client coverage threshold (actions/queries)
         if: needs.changes.outputs.client == 'true'
