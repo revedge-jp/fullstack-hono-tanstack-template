@@ -26,6 +26,7 @@
     "coverage:unit": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov src/__tests__/unit src/features src/shared src/middlewares src/config.test.ts",
     "coverage:integration": "bun test --coverage src/__tests__/integration",
     "mutation": "stryker run",
+    "mutation:diff": "bash ../../scripts/check/mutation-diff.sh",
     "dep:cycles": "madge src --ts-config tsconfig.json --extensions ts --circular --exclude 'node_modules|dist|generated'",
     "dep:orphans": "madge src/index.ts --ts-config tsconfig.json --extensions ts --orphans --exclude 'node_modules|dist|generated|(^|/)__tests__($|/)|(^|/).*\\.test\\.ts$|(^|/)src/index\\.ts$'",
     "dep:graph": "madge src --ts-config tsconfig.json --extensions ts --image ../../docs/server-deps.svg --exclude 'node_modules|dist|generated'"
