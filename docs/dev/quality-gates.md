@@ -22,7 +22,7 @@
 | ガード自己テスト | ガード自身が壊れていないか | `bun run arch:selftest` | ✗ | ✓ |
 | カバレッジ閾値（api） | domain/application の網羅（85%） | `bun run coverage:check` | ✗ | ✓ |
 | カバレッジ閾値（client） | actions/queries の網羅（80%） | `bun run coverage:check:client` | ✗ | ✓ |
-| ミューテーション | domain/application のテストの**質**（90%） | `cd apps/api-service && bun run mutation` | ✗ | ✓ |
+| ミューテーション | domain/application のテストの**質**（90%） | `cd apps/api-service && bun run mutation` | ✗ | ✓（PR 差分のみ、[ADR-007](../architecture/adr-007-mutation-testing-diff-scope.md)） |
 | 依存脆弱性（bun audit） | 既知の高脆弱性 | `bun audit --audit-level=high` | ✗ | ✓（別ジョブ、deps変更時） |
 
 - **pre-push（`bun run check-all`）= 速い中核**。lint/type/test/arch/guards/knip を回す。
@@ -56,8 +56,8 @@
 2. 実装                      Domain → Infrastructure → Application → Presentation の順
 3. こまめに速い確認          bun run typecheck && bun run lint
 4. 一区切りでフル確認        bun run check-all          # lint/type/test/arch/guards/knip
-5. ロジックを変えたら        cd apps/api-service && bun run mutation   # 任意・数秒
-6. push → CI が全ゲート実行  カバレッジ・ミューテーション・jscpd・自己テスト・integration
+5. ロジックを変えたら        cd apps/api-service && bun run mutation:diff   # 任意・差分のみで速い
+6. push → CI が全ゲート実行  カバレッジ・ミューテーション（差分スコープ）・jscpd・自己テスト・integration
 ```
 
 - **新機能**: Domain → Infrastructure → Application → Presentation の順。各 action に `usecase.test.ts` は必須
@@ -69,7 +69,8 @@
   （`tasks` → `activity` の `ActivityRecorder` が実例）。feature 間の直接 import は
   dependency-cruiser が検知して落とす。
 - **手元で重いゲートを試したいとき**: `bun run coverage:check` / `coverage:check:client` /
-  `cd apps/api-service && bun run mutation` / `bun run dup:check` / `bun run arch:selftest` を個別に叩ける。
+  `cd apps/api-service && bun run mutation:diff`（差分のみ、CI と同じ）/ `bun run mutation`（全体監査）/
+  `bun run dup:check` / `bun run arch:selftest` を個別に叩ける。
 
 ---
 
@@ -104,5 +105,6 @@
 ## 参照
 
 - [ADR-006: AI コーディング時代の品質・テスト戦略](../architecture/adr-006-ai-era-quality-strategy.md)（思想）
+- [ADR-007: mutation testing を PR の差分ファイルにスコープする](../architecture/adr-007-mutation-testing-diff-scope.md)（CI での実行方式）
 - [テストガイド](./testing.md)（feature ごとに書くテストの規約・パターン）
 - [機能追加ガイド](./adding-features.md)（実装順序）
