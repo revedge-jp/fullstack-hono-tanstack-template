@@ -8,6 +8,14 @@ paths:
 
 データ取得（SSR / useQuery）・mutation・認証パターンは CLAUDE.md を参照。
 
+## actions / queries のテストは `test-helpers/api-mock.ts` を使う
+
+`mock.module("hono/client", ...)` + `let mockOk / mockBody / lastJson` の雛形を**テストファイルに
+手書きしない**。`createApiMock()`（+ serverFn なら `reactStartModule` / `reactStartServerModule`）を
+使う — 書き始めは import + `mock.module` 2行で済む。手書き雛形は feature の数だけ写経され、
+派生プロダクトの実測で actions テストの21%・queries テストの25%（計4,100行）に達した。
+実例: `features/tasks/actions/create-task.test.ts` / `features/tasks/queries/get-tasks.test.ts`。
+
 ## 機械的に強制される規約（arch:guards）
 
 - **`window.location.href` への代入禁止**。TanStack Router の `router.navigate()` / `useNavigate()` を使う。

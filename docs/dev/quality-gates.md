@@ -18,7 +18,7 @@
 | feature 構造完全性 | 必須の層・co-located テスト・配線の有無 | `bun run check:feature` | ✓（guards 内） | ✓ |
 | FSD（steiger） | client の Feature-Sliced Design | `bun run arch:fsd` | ✓ | ✓ |
 | 未使用コード（knip） | デッドコード/依存 | `bun run knip` | ✓ | ✓（PRコメントは非ブロック） |
-| 重複（jscpd） | コピペ重複（しきい値5%） | `bun run dup:check` | ✗ | ✓ |
+| 重複（jscpd） | コピペ重複（しきい値5%）。**テストコードも対象**（除外すると写経テストの増殖が測定すらされない — 派生プロダクトで実測20%に達した後から入れるのは困難なため、小さいうちから対象に含める） | `bun run dup:check` | ✗ | ✓ |
 | ガード自己テスト | ガード自身が壊れていないか | `bun run arch:selftest` | ✗ | ✓ |
 | カバレッジ閾値（api） | domain/application の網羅（85%） | `bun run coverage:check` | ✗ | ✓ |
 | カバレッジ閾値（client） | actions/queries の網羅（80%） | `bun run coverage:check:client` | ✗ | ✓ |

@@ -1,76 +1,40 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SessionUser } from "@/shared/lib/api-client";
+import { createApiMock, reactStartModule, reactStartServerModule } from "@/test-helpers/api-mock";
 
 const mockUser: SessionUser = { id: "u1", email: "a@example.com", name: "A" };
 
-let mockMeOk = true;
-let mockStatus = 200;
-let lastHeaders: Record<string, string> | undefined;
-
-mock.module("@/shared/lib/api-client", () => ({
-  getApiClient: () => ({
-    api: {
-      me: {
-        $get: mock((_args: unknown, opts?: { init?: { headers?: Record<string, string> } }) => {
-          lastHeaders = opts?.init?.headers;
-          return Promise.resolve({
-            ok: mockMeOk,
-            status: mockStatus,
-            json: async () =>
-              mockMeOk ? { ok: true, data: mockUser } : { ok: false, error: "Unauthorized" },
-          });
-        }),
-      },
-    },
-  }),
-}));
-
-mock.module("@tanstack/react-start", () => ({
-  createServerFn: () => ({
-    handler: (fn: () => unknown) => fn,
-  }),
-}));
-
-mock.module("@tanstack/react-start/server", () => ({
-  getRequest: () =>
-    new Request("http://localhost/", {
-      headers: { cookie: "session=test" },
-    }),
-}));
+const api = createApiMock({ body: { ok: true, data: mockUser } });
+mock.module("@/shared/lib/api-client", api.apiClientModule);
+mock.module("@tanstack/react-start", reactStartModule);
+mock.module("@tanstack/react-start/server", reactStartServerModule());
 
 const { getSessionServerFn } = await import("./get-session");
 
 describe("auth.getSessionServerFn", () => {
-  beforeEach(() => {
-    mockMeOk = true;
-    mockStatus = 200;
-    lastHeaders = undefined;
-  });
+  beforeEach(() => api.reset());
 
   test("API が ok=true を返す場合は SessionUser を返し、cookie を転送する", async () => {
     const result = await getSessionServerFn();
     expect(result).toEqual(mockUser);
-    expect(lastHeaders).toEqual({ cookie: "session=test" });
+    expect(api.state.lastHeaders).toEqual({ cookie: "session=test" });
   });
 
   test("401（未認証）の場合は null を返す（リダイレクトは _authenticated ガードが担う）", async () => {
-    mockMeOk = false;
-    mockStatus = 401;
+    api.reset({ ok: false, status: 401, body: { ok: false, error: "Unauthorized" } });
     const result = await getSessionServerFn();
     expect(result).toBeNull();
   });
 
   test("403（未認可）の場合も null を返す", async () => {
-    mockMeOk = false;
-    mockStatus = 403;
+    api.reset({ ok: false, status: 403, body: { ok: false, error: "Unauthorized" } });
     const result = await getSessionServerFn();
     expect(result).toBeNull();
   });
 
   test("異常: 500（バックエンド障害）は throw する（未認証と区別してエラーバウンダリへ）", async () => {
-    mockMeOk = false;
-    mockStatus = 500;
+    api.reset({ ok: false, status: 500, body: { ok: false, error: "Unauthorized" } });
     await expect(getSessionServerFn()).rejects.toThrow("セッションの取得に失敗しました");
   });
 });

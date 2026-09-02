@@ -1,36 +1,19 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-let mockOk = true;
-let mockBody: unknown = {
+import { createApiMock } from "@/test-helpers/api-mock";
+
+const TASKS_PAGE = {
   ok: true,
   data: { items: [{ id: "task-1", title: "Write docs", status: "todo" }], nextCursor: null },
 };
-let lastQuery: unknown;
 
-mock.module("hono/client", () => ({
-  hc: () => ({
-    api: {
-      tasks: {
-        $get: mock((args: { query?: unknown }) => {
-          lastQuery = args?.query;
-          return Promise.resolve({ ok: mockOk, json: async () => mockBody });
-        }),
-      },
-    },
-  }),
-}));
+const api = createApiMock({ body: TASKS_PAGE });
+mock.module("hono/client", api.honoClientModule);
 
 const { tasksQueryOptions } = await import("./tasks-query");
 
 describe("tasks.tasksQueryOptions", () => {
-  beforeEach(() => {
-    mockOk = true;
-    mockBody = {
-      ok: true,
-      data: { items: [{ id: "task-1", title: "Write docs", status: "todo" }], nextCursor: null },
-    };
-    lastQuery = undefined;
-  });
+  beforeEach(() => api.reset());
 
   test("queryKey は cursor を含む（ページごとに別キャッシュ）", () => {
     expect([...tasksQueryOptions().queryKey]).toEqual(["tasks", null]);
@@ -44,17 +27,17 @@ describe("tasks.tasksQueryOptions", () => {
       items: [{ id: "task-1", title: "Write docs", status: "todo" }],
       nextCursor: null,
     });
-    expect(lastQuery).toEqual({ cursor: "cursor-abc" });
+    expect(api.state.lastQuery).toEqual({ cursor: "cursor-abc" });
   });
 
   test("異常: API が失敗した場合は throw する", async () => {
-    mockOk = false;
+    api.state.ok = false;
     const options = tasksQueryOptions();
     await expect(options.queryFn?.({} as never)).rejects.toThrow("タスク一覧の取得に失敗しました");
   });
 
   test("異常: レスポンス形状が不正な場合は throw する", async () => {
-    mockBody = { unexpected: true };
+    api.state.body = { unexpected: true };
     const options = tasksQueryOptions();
     await expect(options.queryFn?.({} as never)).rejects.toThrow(
       "タスク一覧のレスポンスが不正です",
