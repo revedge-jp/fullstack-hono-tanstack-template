@@ -24,7 +24,7 @@ paths:
 2. `apps/api-service/src/config.ts`: `ConfigSchema` / `AppConfig` / `loadConfig()` の 3 箇所を更新
 3. build / dev / test で使う場合は `turbo.json` の該当タスクの `env` に追加（キャッシュキーに影響）
 4. CI で必要なら `.github/workflows/ci.yml` の該当ジョブの `env` に追加
-5. 本番反映: 非機密の固定値は `alchemy.run.ts` の vars、機密は Workers Secrets（`docs/dev/environment-variables.md` の「本番環境への反映」参照）。デプロイ経路は `.github/workflows/deploy.yml`
+5. 本番反映: `alchemy.run.ts` の Worker `bindings` に追加（非機密は文字列、機密は `alchemy.secret(requireEnv(...))`。`docs/dev/environment-variables.md` の「本番環境への反映」参照）。値は `.github/workflows/deploy.yml` が GitHub Environments から渡す
 6. `docs/dev/environment-variables.md` の一覧を更新
 
 ## client / Docker のみの場合
@@ -43,6 +43,6 @@ paths:
 - [ ] `config.ts`（ConfigSchema / AppConfig / loadConfig）を更新したか
 - [ ] `turbo.json` の `env` に追加したか（該当タスクで使う場合）
 - [ ] CI / デプロイの workflow を更新したか（必要な場合）
-- [ ] `alchemy.run.ts` の vars または Workers Secrets を更新したか（本番で使う場合）
+- [ ] `alchemy.run.ts` の `bindings`（と deploy.yml の env）を更新したか（本番で使う場合）
 - [ ] `docs/dev/environment-variables.md` を更新したか
 - [ ] `bun run arch:guards` が通るか

@@ -506,7 +506,8 @@ bunx hono search middleware --pretty
 本番環境（Cloudflare Workers）の環境変数は `alchemy.run.ts` の Worker `bindings` で設定します
 （非機密は文字列、機密は `alchemy.secret(...)`。詳細は [環境変数ガイド](environment-variables.md)）。
 
-- `DATABASE_URL`: Workers Secret として登録
+- `DATABASE_URL`: 本番では Hyperdrive バインディング（`alchemy.run.ts` が provision）の接続文字列を
+  `shared/lib/hono-app.ts` が `env.DATABASE_URL` に載せ替える。手動で Secret 登録はしない
 
 **環境変数を追加する際の手順**は [環境変数ガイド](environment-variables.md) を参照してください。詳細な一覧や本番・CI への反映方法も同ドキュメントに記載しています。
 

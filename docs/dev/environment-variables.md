@@ -94,7 +94,7 @@ client には独自の設定読み込みが無い。client と api-service は�
 2. **ブラウザに出す値**: 実行環境ごとに変わる値は route の `loader`（サーバー側）から返す。build 時定数として焼き込んでよい非機密の値だけ `VITE_` 接頭辞で `.env.example` に追加し、`import.meta.env.VITE_XXX` で参照する（現状は `import.meta.env.DEV` のみ）。機密は絶対に含めない
 3. **turbo.json**: `VITE_` 変数は client の build のキャッシュキーに影響するため `build` タスクの `env` に追加する
 4. **CI**: E2E 等で必要なら `.github/workflows/ci.yml` の `e2e-tests` ジョブの `env` に追加する
-5. **本番環境**: staging / production は `alchemy.run.ts` の vars（機密は Workers Secrets）。`apps/client/wrangler.jsonc` の `vars` はローカル `wrangler dev` 用
+5. **本番環境**: staging / production は `alchemy.run.ts` の Worker `bindings`（非機密は文字列、機密は `alchemy.secret(...)`）。`apps/client/wrangler.jsonc` の `vars` はローカル `wrangler dev` 用
 6. **ドキュメント**: 本ファイルの一覧と `README.md` を更新する
 
 ### Docker / インフラのみの環境変数の場合
