@@ -82,7 +82,7 @@
    - `loadConfig()` の戻り値オブジェクトにマッピングを追加
 3. **`turbo.json`** の該当タスクの `env` 配列に追加する（build/dev/test 等で使用する場合）
 4. **CI**: `.github/workflows/ci.yml` の該当ジョブの `env` に追加する（テストやビルドで必要な場合）
-5. **本番環境**: `apps/client/wrangler.jsonc` の `vars`（非機密）または `wrangler secret put`（機密）で渡す
+5. **本番環境**: `alchemy.run.ts` の Worker `bindings` に追加する（非機密は文字列、機密は `alchemy.secret(requireEnv("XXX"))`）。値は `.github/workflows/deploy.yml` が GitHub Environments の Secrets / Variables から渡す
 6. **ドキュメント**: 本ファイルの一覧と `README.md` の環境変数セクションを更新する
 
 ### client に環境変数を追加する場合
@@ -114,7 +114,8 @@ client には独自の設定読み込みが無い。client と api-service は�
 | `apps/api-service/src/config.ts` | api-service の環境変数バリデーション（Zod）と型定義の中心。`loadConfig()` で起動時に検証 |
 | `turbo.json` | Turborepo のタスクごとに `env` を宣言。**キャッシュキーに影響**するため、build 結果に影響する変数はここに追加する |
 | `docker-compose.yml` | Postgres 等のコンテナ起動時の環境変数。`${VAR:-default}` で上書き可能 |
-| `apps/client/wrangler.jsonc` | 本番 Cloudflare Workers の環境変数（`vars`）。環境別は `env.staging` / `env.production` |
+| `alchemy.run.ts` | staging / production の Worker `bindings`（非機密の vars と `alchemy.secret` の機密）。デプロイ時の正典 |
+| `apps/client/wrangler.jsonc` | ローカル `wrangler dev` 用の Worker 設定（`vars` もローカル専用。`env.*` セクションは持たない） |
 | `apps/client/.dev.vars` | ローカル開発時に Workers ランタイムへ渡す変数（`.env` への symlink、`.gitignore` 済み） |
 
 ### turbo.json に env を追加する理由
@@ -127,16 +128,14 @@ Turborepo はタスクの実行結果をキャッシュする際、`env` で宣�
 
 ### 非機密の固定値（vars）
 
-`apps/client/wrangler.jsonc` の `vars` に追加します（環境別は `env.staging` / `env.production` 配下）。
+`alchemy.run.ts` の Worker `bindings` に追加します。ステージで値を変えるなら `stage` で分岐します。
 
-```jsonc
-{
-  "env": {
-    "production": {
-      "vars": { "MY_VAR": "fixed-value" }
-    }
-  }
-}
+```typescript
+// alchemy.run.ts
+bindings: {
+  MY_VAR: stage === "production" ? "fixed-value" : "staging-value",
+  MY_SECRET: alchemy.secret(requireEnv("MY_SECRET")), // 機密は secret で包む
+},
 ```
 
 ### 機密情報（Workers Secrets）

@@ -7,8 +7,6 @@
     "dev": "ln -sf ../../.env .dev.vars && sh -c 'vite --port ${CLIENT_PORT:-3000}'",
     "build": "vite build",
     "preview": "wrangler dev",
-    "deploy:staging": "vite build && node scripts/prepare-deploy.mjs staging && wrangler deploy --config dist/server/wrangler.json",
-    "deploy:production": "vite build && node scripts/prepare-deploy.mjs production && wrangler deploy --config dist/server/wrangler.json",
     "lint": "oxlint . && oxfmt --check .",
     "lint:fix": "oxlint --fix . && oxfmt .",
     "test": "sh -c 'files=$(find app features shared -name \"*.test.ts\" 2>/dev/null | head -1); [ -z \"$files\" ] || bun test app features shared'",

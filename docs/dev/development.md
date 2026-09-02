@@ -503,8 +503,8 @@ bunx hono search middleware --pretty
 
 ### 本番環境
 
-本番環境（Cloudflare Workers）では、`apps/client/wrangler.jsonc` の `vars`（非機密）と
-Workers Secrets（`wrangler secret put`、機密）で環境変数を設定します。
+本番環境（Cloudflare Workers）の環境変数は `alchemy.run.ts` の Worker `bindings` で設定します
+（非機密は文字列、機密は `alchemy.secret(...)`。詳細は [環境変数ガイド](environment-variables.md)）。
 
 - `DATABASE_URL`: Workers Secret として登録
 
