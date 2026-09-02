@@ -77,6 +77,7 @@ fi
 echo "==> Writing temporary .dev.vars pointing at the test database..."
 rm -f "$DEV_VARS"
 cat > "$DEV_VARS" <<VARS
+NODE_ENV=development
 DATABASE_URL=$TEST_DATABASE_URL
 BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-dummy-secret-for-e2e}
 BETTER_AUTH_URL=http://localhost:$E2E_PORT

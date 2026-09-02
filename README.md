@@ -200,7 +200,7 @@ git push -u origin <branch>
 #### Server (`apps/api-service`)
 
 - `API_PORT`: API サーバーのポート（既定: 8080。`PORT` も後方互換で受理される）
-- `NODE_ENV`: 環境（`development` / `test` / `production`、既定: `development`）
+- `NODE_ENV`: 環境（`development` / `test` / `production`、既定: `production` — fail-closed。ローカル開発は `.env` で `NODE_ENV=development` を明示する）
 - `CORS_ORIGIN`: CORS 許可オリジン（本番では必須。開発/テスト時は未設定時 `http://localhost:3000`）
 - `LOG_PRETTY`: ログの整形出力（`true` で有効化）
 - `BETTER_AUTH_URL` / `BETTER_AUTH_TRUSTED_ORIGINS`: Better Auth のベース URL / 信頼オリジン

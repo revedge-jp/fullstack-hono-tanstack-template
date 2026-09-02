@@ -36,7 +36,7 @@
 
 | 変数名 | 説明 | 既定値 |
 |--------|------|--------|
-| `NODE_ENV` | 環境（development/test/production） | `development` |
+| `NODE_ENV` | 環境（development/test/production）。既定は production（fail-closed）。ローカル開発は `.env` で `NODE_ENV=development` を明示する | `production` |
 | `API_PORT` | API サーバーのポート（`PORT` も後方互換で受理） | `8080` |
 | `CORS_ORIGIN` | CORS 許可オリジン | 本番必須。開発/テスト時は未設定時 `http://localhost:3000` |
 | `LOG_PRETTY` | ログ整形出力（`true` で有効化） | （未設定） |

@@ -54,10 +54,21 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 このテンプレートには能動的な通知経路が組み込まれていない。実プロジェクト化したら
 以下の 3 点を設定すること:
 
-1. **Cloudflare Notifications**（ダッシュボード > Notifications）:
-   Workers の error rate / CPU limit 超過にアラートを作成し、メール or webhook（Slack）に飛ばす
+1. **Worker 失敗の検知**: Cloudflare Notifications には **Workers 専用の error rate /
+   CPU limit 超過の通知カテゴリが存在しない**（通知カテゴリ一覧を確認済み。最も近い
+   `Origin Error Rate Alert` はリバースプロキシ配下の従来型オリジン向けで Workers には
+   効かない）。ダッシュボード設定だけでは検知できないため、Worker の失敗イベントを拾う
+   **Tail Worker** を別途デプロイして Slack 等へ転送する。実装時の要点:
+   - `outcome=canceled` は検知対象に含めない（大半はクライアントのタブ閉じ/画面遷移で
+     サーバー異常ではない。混ぜると通知が「大体無視してよい」ものになる）
+   - Worker のハングは CF ランタイム強制終了後も `outcome=ok` のまま `status>=500` を
+     返すことがあるため、5xx 判定でも拾う
+   - URL はクエリに個人情報が乗りうるので method + pathname のみを転送し、ボディは送らない
 2. **GitHub Actions の失敗通知**: deploy.yml の失敗（smoke 失敗 = 本番異常を含む）が
-   即座に届くよう、リポジトリの Watch 設定 or Slack の GitHub App（`/github subscribe owner/repo workflows`）を設定
+   即座に届くよう、リポジトリの Watch 設定 or Slack の GitHub App（`/github subscribe owner/repo workflows`）を設定。
+   Slack webhook を CI から直接使う場合、webhook 用 Secret は **リポジトリレベル** に
+   登録すること（Environment を持たない通知ジョブから Environment Secret は空に見え、
+   無言でスキップされて「設定したのに永遠に届かない」状態になる）
 3. **（必要になったら）Logpush**: `observability.enabled: true` のログはダッシュボードで
    閲覧できるが保持が短い。長期保存・検索が必要になったら Environment Secret
    `LOGPUSH_DESTINATION` を設定する（Alchemy が Worker の logpush フラグと LogPushJob を

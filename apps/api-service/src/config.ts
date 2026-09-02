@@ -17,7 +17,11 @@ const numberEnv = (defaultValue: number) =>
 
 const ConfigSchema = z
   .object({
-    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    // 既定は production(fail-closed)。development に倒すと、デプロイ経路で NODE_ENV の
+    // 注入を忘れたとき、エラーなく dev-auth(/api/dev/login)が有効・cookie の secure 無し・
+    // CORS localhost 許可の状態で起動しうる。production に倒せば未設定時は CORS_ORIGIN 等の
+    // 必須検証で起動時に fail-fast する(ローカル開発は .env の NODE_ENV=development で明示)。
+    NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
     LOG_PRETTY: z.string().optional(),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
     CORS_ORIGIN: z.string().optional(),

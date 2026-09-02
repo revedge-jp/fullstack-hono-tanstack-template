@@ -55,8 +55,25 @@ module.exports = {
     // （含めるとエッジ自体がグラフから消え、npm パッケージを禁止する to.path ルールが
     // 全く発火しなくなる — 実際にこの不具合が存在していた）。
     doNotFollow: { path: "node_modules" },
+    // `.claude/worktrees` はメインのチェックアウト配下に作られる git worktree の置き場で、
+    // 中身は別ブランチのソース一式。depcruise はリポジトリルート(`.`)から走査し gitignore も
+    // 見ないため、除外しないと他ブランチのコードまで解析対象になる。実害は2つ:
+    //   1. 走査対象が桁違いに増えて arch:dc が無駄に遅い
+    //   2. 他の worktree で mutation テスト(Stryker)が動いていると、走査中にサンドボックスが
+    //      破棄されて ENOENT で落ちる。自分の変更と無関係に push が失敗し、原因も分かりにくい
+    // `.stryker-tmp` 自体も、メイン側で mutation テストを回した場合に同じ問題を起こすため除外する。
     exclude: {
-      path: ["\\.next", "dist", "build", "generated", "__tests__", "\\.test\\.", "\\.spec\\."],
+      path: [
+        "\\.next",
+        "dist",
+        "build",
+        "generated",
+        "__tests__",
+        "\\.test\\.",
+        "\\.spec\\.",
+        "\\.claude/worktrees",
+        "\\.stryker-tmp",
+      ],
     },
   },
   forbidden: [

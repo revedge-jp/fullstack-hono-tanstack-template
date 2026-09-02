@@ -59,6 +59,17 @@ describe("loadConfig — production 必須検証", () => {
     );
   });
 
+  // fail-closed: NODE_ENV 未設定はサイレントに development へ倒さず production として扱う。
+  // dev-auth 有効化・secure cookie 無効・CORS localhost 許可が「注入忘れ」だけで
+  // 同時成立する構造を塞ぐ。
+  test("NODE_ENV 未設定は production として扱われる", () => {
+    const config = loadConfig({ ...prodEnv, NODE_ENV: undefined });
+    expect(config.nodeEnv).toBe("production");
+    expect(() => loadConfig({ ...prodEnv, NODE_ENV: undefined, CORS_ORIGIN: undefined })).toThrow(
+      /CORS_ORIGIN is required in production/,
+    );
+  });
+
   test("TRUSTED_ORIGINS 欠落でも BETTER_AUTH_URL から導出される", () => {
     const config = loadConfig({ ...prodEnv, BETTER_AUTH_TRUSTED_ORIGINS: undefined });
     expect(config.auth.trustedOrigins).toEqual(["https://app.example.com"]);

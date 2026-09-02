@@ -82,6 +82,11 @@ if [ "${SKIP_FILENAME:-}" != "1" ]; then
   run_step_bg "Filename" node scripts/check/check-kebab-case.mjs
 fi
 
+# migration journal の when 順序チェック（詳細は check-migration-journal-order.mjs 冒頭）
+if [ "${SKIP_MIGRATION_ORDER:-}" != "1" ]; then
+  run_step_bg "MigrationOrder" bun run check:migration-order
+fi
+
 # Architecture 個別チェック（SKIP_ARCH=1 のときはすべてスキップ）
 if [ "${SKIP_ARCH:-}" != "1" ]; then
   if [ "${SKIP_FSD:-0}" != "1" ]; then
@@ -118,7 +123,7 @@ done
 
 # 結果を表示（Deprecated は警告のみで FAIL にしない）
 WARN_ONLY_STEPS="Deprecated"
-for name in Lint Typecheck Tests Filename FSD Deps DC Guards Knip ProcessEnv Deprecated; do
+for name in Lint Typecheck Tests Filename MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")

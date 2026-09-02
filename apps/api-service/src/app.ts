@@ -87,7 +87,15 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
     "/api/auth/*",
     rateLimit({ windowMs: config.rateLimit.windowMs, max: config.rateLimit.max }),
   );
-  app.on(["GET", "POST", "PUT", "PATCH", "DELETE"], "/api/auth/**", (c) =>
+  // 二重ワイルドカード "/api/auth/**" は使わない: Hono の RegExpRouter は「同じ深さで
+  // 静的セグメントと :param が競合する」ルート(例: 他featureの `/:id` に対する
+  // `/新規セグメント` の追加)が1つでもアプリ全体に存在すると UnsupportedPathError を
+  // 投げて SmartRouter が TrieRouter へフォールバックする。ところが Hono の TrieRouter は
+  // "**" を正しくマッチできない(TrieRouter 単体で "/api/auth/**" は "/api/auth/session" を
+  // 含め常に 404 になる)。単純な "*" はどちらのルータでも複数階層のパスに正しくマッチする
+  // ため、フォールバック先でも安全に動く "*" を使う。他 feature で新しいルートを追加する
+  // たびにこのルートが無関係に壊れる非決定的な障害を防ぐための恒久対応。
+  app.on(["GET", "POST", "PUT", "PATCH", "DELETE"], "/api/auth/*", (c) =>
     runtime.auth.handler(c.req.raw),
   );
 

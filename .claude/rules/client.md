@@ -14,6 +14,42 @@ paths:
 - `features/` 配下で `process.env` 直参照禁止（`loadConfig()` 経由に統一）。
 - UI コンポーネントから `processXxx` の直接 import 禁止（`xxxAction` 経由に統一）。
 
+## `window` などブラウザ専用 API はコンポーネントの render 本体で直接参照しない
+
+TanStack Start は初回表示を SSR するため、`window`/`document`/`navigator` をコンポーネントの
+render 本体（`return` の前）で直接読むと `window is not defined` でサーバー側の描画が丸ごと
+クラッシュする。`"use client"` ディレクティブはこのリポジトリでは RSC 未導入のため no-op で、
+SSR を止める効果は無い。
+
+- **クリックなどのイベントハンドラ内でのみ読む**のが最も簡単な回避策。
+- render 本体で値として表示する必要がある場合は、該当箇所を `@tanstack/react-router` の
+  `ClientOnly` で包み、`fallback` に SSR 時のプレースホルダ（`Skeleton` 等）を渡す。
+- UI コンポーネントの変更は `bun run typecheck`/`lint`/`test` だけでは検出できない（SSR は
+  実際にサーバーでレンダーして初めて再現する）。ローカルで dev サーバーを起動し、対象ページを
+  実際に取得して確認する。
+
+## TanStack Router の `<Link>` は自前の isActive 判定と競合する
+
+`<Link>` は `activeOptions.exact`（既定 `false`）に基づく**自身のアクティブ判定**を持ち、
+自身がアクティブと判断すると `data-status="active"` / `aria-current="page"` を、
+**呼び出し側が渡した props の後から spread して上書きする**。
+
+独自の `isActive` を計算して `aria-current`/`className` を制御していても、`<Link>` に
+`activeOptions={{ exact: true }}` を渡さない限り、Router 自身の既定（非 exact = 祖先パスも
+アクティブとみなす prefix 判定）が別途発火し、独自ロジックの結果を `aria-current` 上で
+無効化する。自前の `isActive` に一本化したいときは、対象の `<Link>` に
+`activeOptions={{ exact: true }}` を明示する。
+
+## UI 文言のリネームは Playwright ロケーターの部分一致衝突を全ファイル横断で確認する
+
+`page.getByRole("link", { name: "..." })` 等の `name` は既定で**部分一致**(substring)なため、
+UI 文言をリネームして新しい文字列が既存の別要素の文字列を包含する形になると、リネーム前は
+一意だったロケーターが複数要素にマッチして strict mode violation で壊れる。
+
+- リネーム対象の文言を `grep -rn` で **spec ファイルだけでなく `tests/e2e/helpers/` 配下の
+  共有ヘルパーも含めて** `apps/client/tests/e2e/` 全体から検索する。
+- 衝突を避ける修正は該当ロケーターに `exact: true` を追加する。
+
 ## アクセシビリティ（WCAG 2.2 AA）
 
 `alt` 欠落・不正な ARIA 等は oxlint の `jsx-a11y` プラグインが、コントラスト比・ラベルの結び付き等は

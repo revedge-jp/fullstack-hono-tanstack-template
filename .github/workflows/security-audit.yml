@@ -35,7 +35,7 @@ jobs:
           path: |
             ~/.bun
             ~/.cache/bun
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
 
@@ -49,7 +49,7 @@ jobs:
           path: |
             ~/.bun
             ~/.cache/bun
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
       - name: Run bun audit
         id: audit

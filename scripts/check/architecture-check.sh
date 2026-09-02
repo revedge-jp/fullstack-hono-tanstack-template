@@ -99,12 +99,19 @@ else
   warn "重複チェックは SKIP_DUP=1 によりスキップ"
 fi
 
+# 7) migration journal の when 順序（詳細は check-migration-journal-order.mjs 冒頭）
+if [ "${SKIP_MIGRATION_ORDER:-0}" != "1" ]; then
+  run_step_bg "MigrationOrder" bun run check:migration-order
+else
+  warn "migration journal 順序チェックは SKIP_MIGRATION_ORDER=1 によりスキップ"
+fi
+
 # バックグラウンドジョブの完了を待機
 for pid in "${PIDS[@]}"; do
   wait "$pid" || true
 done
 
-# 7) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
+# 8) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
 #    Guards と並列に走らせると同じ fixture パスを奪い合いフレーキーになる。
 #    並列バッチが完全に終わってから単独で実行する）
 if [ "${SKIP_SELFTEST:-0}" != "1" ]; then
@@ -161,9 +168,10 @@ DC:依存規約(dependency-cruiser)
 Guards:構文/配置ガード
 Knip:未使用(knip)
 Dup:重複(jscpd)
+MigrationOrder:migration journal 順序
 Selftest:ガード自己テスト"
 
-for name in FSD Deps DC Guards Knip Dup Selftest; do
+for name in FSD Deps DC Guards Knip Dup MigrationOrder Selftest; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")

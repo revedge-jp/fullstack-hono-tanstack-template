@@ -14,6 +14,18 @@
           }
         ]
       }
+    ],
+    "UserPromptExpansion": [
+      {
+        "matcher": "code-review|security-review|ultrareview",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/on-review-command.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

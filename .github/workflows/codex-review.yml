@@ -1,7 +1,16 @@
 name: Codex AI Review
 
 # Trigger: PR opened/synchronized targeting main or develop
-# Prerequisites: CODEX_REVIEW_API_KEY secret must be configured in repository settings.
+#
+# 有効化には **2つとも** 必要:
+#   1. Settings → Secrets で CODEX_REVIEW_API_KEY を登録
+#   2. Settings → Variables で ENABLE_CODEX_REVIEW=true
+#
+# なぜ変数で二重にゲートするか: `secrets` コンテキストはジョブレベルの `if:` から参照できない
+# ため、「キーが無いから起動しない」を secrets だけでは表現できない。キー未設定のままだと
+# ジョブは起動し、何もせず success で終わる — そして GitHub Actions はジョブ単位で1分に
+# 切り上げて課金するので、実作業数十秒でも1分ずつ請求され続ける。
+# 既定は未設定=false（＝起動しない）。
 
 on:
   pull_request:
@@ -21,6 +30,7 @@ jobs:
   codex-review:
     name: Codex Code Review
     runs-on: ubuntu-latest
+    if: vars.ENABLE_CODEX_REVIEW == 'true'
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
