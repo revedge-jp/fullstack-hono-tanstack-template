@@ -26,7 +26,7 @@ gh auth login          # 未認証の場合
 |--------|------|------|
 | **PRマージ必須** | ✅ 有効 | `main` への直接プッシュを禁止。すべての変更はPRを経由 |
 | **レビュー承認** | 0名 | 一人開発のため不要。チーム開発時は1名以上に変更推奨 |
-| **CIチェック必須** | ✅ 有効 | `CI Pipeline` ジョブが成功しないとマージ不可 |
+| **CIチェック必須** | ✅ 有効 | `CI Pipeline` と `Review converged` が成功しないとマージ不可 |
 | **最新ブランチ必須** | ❌ 無効 | merge queue が「main に積んだ状態」で CI を通すため不要（下の「merge queue と auto-merge」節） |
 | **merge queue** | ✅ 有効 | squash / ALLGREEN / 最大 5 件バッチ。必須チェックは `CI Pipeline` と `Review converged` |
 | **フォースプッシュ禁止** | ✅ 有効 | 履歴の改変を防止 |
