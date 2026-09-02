@@ -109,5 +109,7 @@
       ".eval-claude.json",
       "apps/client/features/tasks/actions/archive-task.test.ts"
     ]
-  }
+  },
+  "model_requested": "(settings.json の既定: sonnet)",
+  "model_used": ["claude-sonnet-5"]
 }
