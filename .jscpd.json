@@ -14,10 +14,6 @@
     "**/generated/**",
     "**/coverage/**",
     "**/routeTree.gen.ts",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.spec.ts",
-    "**/__tests__/**",
     "**/components/ui/**"
   ]
 }
