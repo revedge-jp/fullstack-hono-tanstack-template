@@ -4,10 +4,11 @@
 set -euo pipefail
 TASK="${1:?task name}"
 CONDITION="${2:-hook}"
-# 普段の開発で使うモデルに固定する。~/.claude/settings.json の model(例: sonnet)に引きずられると
-# 「評価したモデル」と「実際に使うモデル」がずれ、結果が当てはまらない。Sonnet は安いので
-# ハーネス自体の動作確認(smoke)に使い、ルールの効果測定は EVAL_MODEL 既定の fable で行う。
-MODEL="${EVAL_MODEL:-fable}"
+# モデルは明示して固定する(~/.claude/settings.json の既定に引きずられると「評価したモデル」が
+# 記録に残らず、結果の当てはまりも判断できない)。既定は Sonnet: 安く、サブスクの利用枠を
+# 開発から奪わない。普段使うモデル(fable / opus)での測定は EVAL_MODEL で明示し、作業の合間ではなく
+# 手が空いた時間帯に 1〜2 本だけ回す。1 本の上限は --max-budget-usd で固定。
+MODEL="${EVAL_MODEL:-sonnet}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TASK_DIR="$ROOT/evals/tasks/$TASK"
 [ -d "$TASK_DIR" ] || { echo "unknown task: $TASK" >&2; exit 2; }
@@ -41,7 +42,7 @@ claude -p "$(cat "$TASK_DIR/prompt.md")" \
   --allowedTools "Bash(bun run:*)" "Bash(bun test:*)" "Bash(bunx tsc:*)" "Bash(bunx oxlint:*)" "Bash(bunx oxfmt:*)" "Bash(node scripts/check:*)" "Bash(cd:*)" "Bash(cat:*)" "Bash(ls:*)" "Bash(grep:*)" "Bash(git diff:*)" "Bash(git status:*)" \
   --output-format json \
   --max-turns 60 \
-  --max-budget-usd 8 \
+  --max-budget-usd 3 \
   --no-session-persistence \
   > "$CLAUDE_OUT/claude.json" 2> "$CLAUDE_OUT/claude.err"
 CLAUDE_EXIT=$?

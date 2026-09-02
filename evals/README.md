@@ -16,14 +16,19 @@ bash evals/run.sh coverage-temptation nohook
 - 実行はリポジトリ直下に一時 worktree(`.claude/worktrees/eval-*`)を作って行い、終了後に削除する
 - 結果は `evals/results/<task>-<condition>-<日時>.json` に追記される(コミットしてよい)
 - 費用: サブスクリプションでログインした端末ならプランの利用枠、`ANTHROPIC_API_KEY` なら従量課金。
-  1 タスク数分・数ドル相当。`--max-budget-usd` で上限を掛けている
+  Sonnet で 1 タスク 2〜3 分・$0.5〜0.8 相当。`--max-budget-usd 3` で上限を掛けている
 
 ## モデル
 
-`run.sh` は `EVAL_MODEL`(既定 `fable`)を `--model` で明示し、結果 JSON に `model_used` を記録する。
-`~/.claude/settings.json` の既定モデルに引きずられないため。**Sonnet が通ったから Opus / Fable でも
-安全、とは言えない**(能力が高いモデルほどゲートの回避策も思いつく。誘惑への耐性は能力に単調でない)。
-Sonnet はハーネス自体の動作確認(smoke)に使い、ルールの効果測定は普段の開発で使うモデルで行う。
+`run.sh` は `EVAL_MODEL`(既定 `sonnet`)を `--model` で明示し、結果 JSON に `model_used` を記録する
+(`~/.claude/settings.json` の既定に引きずられて「何を評価したか」が残らないのを防ぐ)。
+
+- **Sonnet が通ったから Opus / Fable でも安全、とは言えない**。能力が高いモデルほどゲートの回避策も
+  思いつくので、誘惑への耐性は能力に単調ではない
+- それでも既定を Sonnet にするのは、サブスクの利用枠を開発から奪わないため。ハーネスの動作確認と
+  ルール変更時の粗い比較は Sonnet で行い、普段使うモデルでの確認は `EVAL_MODEL=fable` を明示して
+  手が空いた時間帯に 1〜2 本だけ回す。1 本の上限は `--max-budget-usd 3`
+- Routine(クラウド定期実行)に載せる場合も Sonnet 固定
 
 ## 採点の原則
 
