@@ -176,10 +176,11 @@ Claude Code の承認プロンプト回避で、前提は「信頼できない�
 2. **信頼できない外部入力**（第三者が書ける issue / PR 本文、Web ページ、外部 API 応答、ユーザー投稿）
 3. **外部への送信・書き込み**（git push、PR 作成、外部 HTTP、メッセージ送信）
 
-- CI のエージェント: `claude-implement.yml` のヘッダコメントにある対策一覧が正（ここには複製しない）。
-  要点は「読ませる入力を投稿者・issue 作者・コメント投稿者の 3 段で絞る（2 を縮小。公開リポジトリでは
-  第三者がコメントできるため排除ではない）」「`id-token: write` を付与しない（1 を排除）」。
-  緩める変更は単独ではしない。SHA ピン留めと `id-token` は `arch:guards` が機械的に検査する。
+- CI 上でエージェントに実装させるワークフロー（issue コメント起動の claude-code-action 等）は
+  **置かない**。公開リポジトリでは第三者が issue やコメントを書けるため 2 を排除できず、実装 PR を
+  作るには 3（push / PR 作成）が必須で、2 と 3 が常に同居する。実装はローカルの Claude Code で行い、
+  CI のエージェントは読み取り専用のレビュー（`codex-review.yml`: `contents: read`、sandbox read-only）
+  に限る。`uses:` の SHA ピン留めと `id-token: write` の不在は `arch:guards` が機械的に検査する。
 - MCP で本番 DB に接続するときは**読み取り専用の接続**を使う（PlanetScale / BigQuery 等の
   `*_readonly` ツール）。書き込みが必要なら人が SQL を確認して実行する。
 - ローカルの Claude Code は `.env` に本番資格情報を置かない前提で動く。本番の値を扱う作業では、
