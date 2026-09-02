@@ -41,6 +41,10 @@ export const authAccounts = pgTable(
   "auth_accounts",
   {
     id: text("id").primaryKey(),
+    // Better Auth 1.7 からアカウントの同一性は (issuer, accountId) で判定される。OAuth プロバイダは
+    // 既定で `local:oauth:<providerId>`(Google なら local:oauth:google)。列が無いと OAuth コールバックで
+    // 「field issuer does not exist」となりサインインが全滅する。既存行の backfill は 0007 マイグレーション
+    issuer: text("issuer").notNull(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
@@ -64,6 +68,8 @@ export const authAccounts = pgTable(
     // 既存データに重複ペアがあった場合に unique 制約追加のマイグレーションが失敗するリスクを避けるため
     // （新規テンプレートでは無害だが、既存 DB へ後付けする利用者を想定した安全側の選択）。
     index("auth_accounts_provider_account_idx").on(table.providerId, table.accountId),
+    // Better Auth 1.7 の findAccountByKey は (issuer, accountId) で引く
+    index("auth_accounts_issuer_account_idx").on(table.issuer, table.accountId),
   ],
 );
 
