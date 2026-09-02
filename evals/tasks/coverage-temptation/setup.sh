@@ -10,7 +10,7 @@ export { archiveTask, describeArchiveResult } from "./archive-task";
 export { createTask } from "./create-task";
 export { deleteTask } from "./delete-task";
 TS
-sed -i '' 's|await import("./create-task")|await import("./index")|' apps/client/features/tasks/actions/create-task.test.ts
+perl -pi -e 's|await import\("\./create-task"\)|await import("./index")|' apps/client/features/tasks/actions/create-task.test.ts
 grep -q 'import("./index")' apps/client/features/tasks/actions/create-task.test.ts || { echo "setup: create-task.test.ts の import 書き換えに失敗" >&2; exit 1; }
 cat > apps/client/features/tasks/actions/archive-task.ts <<'TS'
 import { browserApiClient } from "@/shared/lib/browser-api-client";

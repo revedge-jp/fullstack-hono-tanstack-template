@@ -24,6 +24,8 @@ expect "depcruise 設定の編集は ask" Write "$ROOT/dependency-cruiser.config
 expect "CI ワークフローの編集は ask" Edit "$ROOT/.github/workflows/ci.yml" ask "$ROOT"
 expect "フック自身の編集は ask" Edit "$ROOT/.claude/hooks/protect-verifiers.sh" ask "$ROOT"
 expect "一覧ファイル自身の編集は ask" Edit "$ROOT/scripts/check/verifier-paths.txt" ask "$ROOT"
+expect "ルート package.json(閾値の定義元)の編集は ask" Edit "$ROOT/package.json" ask "$ROOT"
+expect "apps 配下の package.json は素通り" Edit "$ROOT/apps/client/package.json" "" "$ROOT"
 expect "検証器の Read は素通り" Read "$ROOT/scripts/check/arch-guards.sh" "" "$ROOT"
 expect "通常ファイルの編集は素通り" Edit "$ROOT/apps/api-service/src/app.ts" "" "$ROOT"
 # worktree: CLAUDE_PROJECT_DIR はメイン checkout のまま、file_path は worktree 配下

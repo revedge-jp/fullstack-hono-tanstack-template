@@ -4,6 +4,9 @@
 #   - .github/workflows/ci.yml の verifier-change ジョブ (PR 本文に「検証器の変更理由」を要求する)
 # 判定は scripts/check/is-verifier-path.sh に集約している。
 scripts/check/*
+# ルート package.json: coverage:check* の COVERAGE_THRESHOLD や各ゲートのコマンド定義を持つ
+# (apps/*/package.json は対象外。bun add 等の CLI 経由の書き換えはフックを通らない)
+package.json
 .github/workflows/*
 .claude/hooks/*
 .claude/settings.json

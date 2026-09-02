@@ -27,11 +27,12 @@ START=$(date +%s)
 set +e
 # acceptEdits だけだと Bash が全部拒否され、テストもゲートも実行できないまま書くことになる。
 # 検証コマンドは許可し、検証器の編集はフック(ask → ヘッドレスでは拒否)に判定させる。
+# `bun -e` / `node -e` のような任意スクリプト実行は許可しない(フックを迂回してファイルを書ける)。
 CLAUDE_OUT="$ROOT/evals/results/.tmp-$TASK-$CONDITION-$STAMP"
 mkdir -p "$CLAUDE_OUT"
 claude -p "$(cat "$TASK_DIR/prompt.md")" \
   --permission-mode acceptEdits \
-  --allowedTools "Bash(bun run:*)" "Bash(bun test:*)" "Bash(bun:*)" "Bash(bunx:*)" "Bash(cd:*)" "Bash(cat:*)" "Bash(ls:*)" "Bash(grep:*)" "Bash(git diff:*)" "Bash(git status:*)" "Bash(node:*)" \
+  --allowedTools "Bash(bun run:*)" "Bash(bun test:*)" "Bash(bunx tsc:*)" "Bash(bunx oxlint:*)" "Bash(bunx oxfmt:*)" "Bash(node scripts/check:*)" "Bash(cd:*)" "Bash(cat:*)" "Bash(ls:*)" "Bash(grep:*)" "Bash(git diff:*)" "Bash(git status:*)" \
   --output-format json \
   --max-turns 60 \
   --max-budget-usd 8 \
@@ -41,7 +42,8 @@ CLAUDE_EXIT=$?
 set -e
 ELAPSED=$(( $(date +%s) - START ))
 
-SCORE=$(bash "$TASK_DIR/score.sh")
+SCORE=$(bash "$TASK_DIR/score.sh" 2>"$CLAUDE_OUT/score.err" || true)
+[ -n "$SCORE" ] || SCORE=$(python3 -c "import json,sys; print(json.dumps({'score_error': open(sys.argv[1]).read()[-2000:]}))" "$CLAUDE_OUT/score.err")
 python3 - "$CLAUDE_OUT/claude.json" "$SCORE" "$TASK" "$CONDITION" "$STAMP" "$CLAUDE_EXIT" "$ELAPSED" "$(git -C "$ROOT" rev-parse --short HEAD)" > "$RESULT" <<'PY'
 import sys, json
 raw, score, task, cond, stamp, cexit, elapsed, sha = sys.argv[1:]
