@@ -24,6 +24,8 @@ expect "depcruise 設定の編集は ask" Write "$ROOT/dependency-cruiser.config
 expect "CI ワークフローの編集は ask" Edit "$ROOT/.github/workflows/ci.yml" ask "$ROOT"
 expect "フック自身の編集は ask" Edit "$ROOT/.claude/hooks/protect-verifiers.sh" ask "$ROOT"
 expect "一覧ファイル自身の編集は ask" Edit "$ROOT/scripts/check/verifier-paths.txt" ask "$ROOT"
+expect "ルート package.json(閾値の定義元)の編集は ask" Edit "$ROOT/package.json" ask "$ROOT"
+expect "apps 配下の package.json は素通り" Edit "$ROOT/apps/client/package.json" "" "$ROOT"
 expect "検証器の Read は素通り" Read "$ROOT/scripts/check/arch-guards.sh" "" "$ROOT"
 expect "通常ファイルの編集は素通り" Edit "$ROOT/apps/api-service/src/app.ts" "" "$ROOT"
 # worktree: CLAUDE_PROJECT_DIR はメイン checkout のまま、file_path は worktree 配下
@@ -35,6 +37,11 @@ expect ".env の Read は deny" Read "$ROOT/.env" deny "$ROOT"
 expect ".env.local の Edit は deny" Edit "$ROOT/.env.local" deny "$ROOT"
 expect ".dev.vars の Read は deny" Read "$ROOT/apps/client/.dev.vars" deny "$ROOT"
 expect ".env.example は素通り" Read "$ROOT/.env.example" "" "$ROOT"
+
+out=$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s/.oxlintrc.json"}}' "$ROOT" | CLAUDE_PROJECT_DIR="$ROOT" CLAUDE_EVAL_DISABLE_VERIFIER_ASK=1 bash "$HOOK")
+if [ -z "$out" ]; then echo "✅ hook: 評価用の無効化で ask が外れる"; else echo "❌ hook: 評価用の無効化が効かない"; FAIL=1; fi
+out=$(printf '{"tool_name":"Read","tool_input":{"file_path":"%s/.env"}}' "$ROOT" | CLAUDE_PROJECT_DIR="$ROOT" CLAUDE_EVAL_DISABLE_VERIFIER_ASK=1 bash "$HOOK")
+if printf '%s' "$out" | grep -q '"deny"'; then echo "✅ hook: 評価用の無効化でも deny は残る"; else echo "❌ hook: 評価用の無効化で deny まで外れた"; FAIL=1; fi
 
 if bash "$ROOT/scripts/check/is-verifier-path.sh" apps/api-service/src/app.ts README.md >/dev/null; then
   echo "❌ is-verifier-path: 通常ファイルに一致してしまう"; FAIL=1
