@@ -22,7 +22,7 @@
 
 - スタイル・命名の好み（oxlint / oxfmt / `check:kebab` が機械的に決める）
 - 「〜かもしれない」で止まる推測。トリガーを特定できないなら PLAUSIBLE と明記し、確認方法を書く
-- `apps/client/components/ui/**` などの生成コード
+- 生成コード: `apps/client/components/ui/**`、`**/ui-shadcn/**`（`.oxlintrc.json` の ignorePatterns と同じ）
 - テストファイル内の `as` キャスト、`*.test.ts` 限定の緩和ルール
 - 既存の欠陥で今回の差分が触れていないもの（ただし触れた関数内の欠陥は対象）
 

@@ -7,10 +7,13 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
 
 - `apps/api-service/AGENTS.md` / `apps/client/AGENTS.md` は各ディレクトリで先に読むべき節への
   短い案内（内容の複製はしない）
-- `.claude/rules/`: `general.md` / `package-management.md` は常時ロード、`api-service.md` /
-  `client.md` / `env-vars.md` はパススコープ（該当ファイルを読んだときにロード）。Claude Code
-  以外のツールはパススコープを解釈しないので、該当ディレクトリの AGENTS.md から明示的に辿る
-- `REVIEW.md`: コードレビュー（Claude Code Review / `/code-review` / Codex）が参照する判定基準
+- `.claude/rules/`: Claude Code は `general.md` / `package-management.md` を常時ロードし、
+  `api-service.md` / `client.md` / `env-vars.md` をパススコープ（該当ファイルを読んだとき）でロードする。
+  **Claude Code 以外のツールは、このファイルの次に `.claude/rules/general.md` と
+  `.claude/rules/package-management.md` を読む**（ログ規約・Git 安全運用・`bun add` 必須など、最初に
+  破りやすい規約はそこにある）。パススコープの 3 つは各ディレクトリの AGENTS.md から辿る
+- `REVIEW.md`: コードレビューの採否基準。Claude Code の `/code-review` はこれを読み、Codex には
+  `codex-review.yml` の prompt で渡す
 
 ## Stack
 
