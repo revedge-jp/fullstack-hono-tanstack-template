@@ -33,8 +33,9 @@ export function createContainer(config: AppConfig): Container {
     level: config.logLevel,
   });
 
-  const auth = createAuth(config.auth, config.nodeEnv, db);
-  const devAuth = config.nodeEnv !== "production" ? createDevAuth(config.auth, db) : undefined;
+  const auth = createAuth(config.auth, config.nodeEnv, db, logger);
+  const devAuth =
+    config.nodeEnv !== "production" ? createDevAuth(config.auth, db, logger) : undefined;
   const verifySession = makeVerifySession(auth, logger);
   const getSession = makeGetSession({ verifySession });
 

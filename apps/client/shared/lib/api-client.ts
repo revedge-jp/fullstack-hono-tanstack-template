@@ -27,11 +27,28 @@ type HonoAppLike = {
 const storage = new AsyncLocalStorage<ApiClient>();
 
 export function createInProcessApiClient(app: HonoAppLike, requestId?: string): ApiClient {
+  const injected: Record<string, string> = {};
+  // SSR 起点の API 呼び出しを outer リクエストと同じ requestId で相関させる
+  // （api-service の requestId ミドルウェアは既存の x-request-id ヘッダーを尊重する）
+  if (requestId) {
+    injected["x-request-id"] = requestId;
+  }
+  // 注入は hc の `headers` オプションではなく fetch ラッパーで行う。hono client は
+  // per-call の `init` を fetch オプションへ後から spread する(`{ headers, ...opt?.init }` —
+  // hono/dist/client/client.js)ため、serverFn が cookie 転送のために `init.headers` を渡すと
+  // クライアント生成時の headers が丸ごと上書きされて消える（requestId 相関がサイレントに
+  // 失われる）。最終的な RequestInit にマージすることで、どの呼び出し方でも注入ヘッダーが
+  // 生き残る。
   return hc<AppType>("http://internal", {
-    fetch: app.request.bind(app),
-    // SSR 起点の API 呼び出しを outer リクエストと同じ requestId で相関させる
-    // （api-service の requestId ミドルウェアは既存の x-request-id ヘッダーを尊重する）
-    headers: requestId ? { "x-request-id": requestId } : undefined,
+    fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      for (const [key, value] of Object.entries(injected)) {
+        if (!headers.has(key)) {
+          headers.set(key, value);
+        }
+      }
+      return app.request(input, { ...init, headers });
+    },
   });
 }
 

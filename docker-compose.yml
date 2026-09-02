@@ -8,7 +8,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: app_db
     ports:
-      - "${DATABASE_PORT:-5432}:5432"
+      # 127.0.0.1 バインド必須: 既定の "port:5432" は 0.0.0.0 公開で、同一 LAN
+      # （共有 Wi-Fi 等）から postgres/postgres のスーパーユーザー接続が通ってしまう
+      - "127.0.0.1:${DATABASE_PORT:-5432}:5432"
     volumes:
       # postgres:18 は VOLUME を /var/lib/postgresql に移し、PGDATA は
       # /var/lib/postgresql/18/docker（バージョン付きサブディレクトリ）を既定とする。
@@ -30,7 +32,8 @@ services:
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
-      - "5050:80"
+      # SERVER_MODE=False（認証なし）のため、ループバック限定公開は特に重要
+      - "127.0.0.1:5050:80"
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     depends_on:
@@ -46,7 +49,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: app_db
     ports:
-      - "${TEST_DATABASE_PORT:-5433}:5432"
+      - "127.0.0.1:${TEST_DATABASE_PORT:-5433}:5432"
     # テスト用 DB は使い捨て。named volume を持たず（コンテナの書き込みレイヤーのみ）、
     # docker compose down / rm でデータごと破棄する。永続化が必要なテストは無いため意図的。
     healthcheck:

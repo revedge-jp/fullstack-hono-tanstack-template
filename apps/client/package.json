@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@repo/logging": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "^1.170.17",
     "@tanstack/react-router-ssr-query": "^1.167.1",

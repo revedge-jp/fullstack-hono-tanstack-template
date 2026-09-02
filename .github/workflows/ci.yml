@@ -109,9 +109,16 @@ jobs:
           # Turbo のタスクハッシュキャッシュは ref が同じでも中身が更新されるため、
           # 不変キーのままだと最初の run 以降 save がスキップされ続けキャッシュが陳腐化する。
           # restore は restore-keys の prefix フォールバックで直近のキャッシュを取得する。
-          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}-${{ github.sha }}
+          #
+          # hashFiles に `**/` グロブを使わないこと。hashFiles は node_modules を除外しない
+          # ため、`**/package.json` は実体十数個に対して node_modules 内の千個以上を舐める。
+          # しかもこの式が評価されるのは step の with: が展開される直前 = node_modules を
+          # 復元し終えた後なので、ログに何も出ない空白時間として現れる（実測で約36秒/run）。
+          # turbo.json はルートに1つだけ。依存の変更は必ず bun.lock に出るのでこの2つで足りる
+          # （各パッケージの package.json の中身は turbo 自身のタスクハッシュが見ている）。
+          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('turbo.json', 'bun.lock') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}-
+            ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('turbo.json', 'bun.lock') }}-
             ${{ runner.os }}-turbo-${{ github.ref }}-
             ${{ runner.os }}-turbo-refs/heads/main-
             ${{ runner.os }}-turbo-
@@ -238,6 +245,23 @@ jobs:
               });
             }
 
+      # knip の Unlisted binaries / Unresolved imports は knip の exit code を 1 にするため、
+      # ローカルの `bun run arch:check` と pre-push(check-all)が全開発者で落ちる。上の step は
+      # exit code を捨てている(`|| true`)ので、この2カテゴリだけ明示的に落とす。
+      # (外部 CLI を呼ぶスクリプトの追加 PR が緑のままマージされ、main 取り込み後に全員の
+      # プッシュが塞がる事故の再発防止)
+      - name: Fail on knip issues that break local checks
+        if: steps.knip.outcome == 'success'
+        run: |
+          set -euo pipefail
+          BLOCKING=$(grep -E "^(Unlisted binaries|Unresolved imports) \([0-9]+\)" knip-raw.txt || true)
+          if [ -n "$BLOCKING" ]; then
+            echo "::error::knip がローカルの arch:check / pre-push を塞ぐ問題を検出しました。knip.json の ignoreBinaries 等で宣言してください。"
+            grep -A 20 -E "^(Unlisted binaries|Unresolved imports) \(" knip-raw.txt || true
+            exit 1
+          fi
+          echo "OK: ローカルのチェックを塞ぐ knip の問題はありません"
+
       - name: Upload unit test coverage (api-service)
         if: needs.changes.outputs.api-service == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -281,7 +305,7 @@ jobs:
           # restore と同じ run 一意キー。github.sha を含めることで毎 run 新しいキャッシュが
           # 保存され（不変キーだと GitHub Actions Cache は上書き不可のため save が no-op になる）、
           # 更新された Turbo キャッシュが次 run 以降に引き継がれる。
-          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('**/turbo.json', '**/package.json') }}-${{ github.sha }}
+          key: ${{ runner.os }}-turbo-${{ github.ref }}-${{ hashFiles('turbo.json', 'bun.lock') }}-${{ github.sha }}
 
   e2e-tests:
     # dev: 開発サーバー（vite dev）に対して実行 — 失敗時のデバッグが容易。
@@ -322,7 +346,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-playwright-chromium-v2-
 
@@ -337,7 +361,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('bun.lock') }}
 
       - name: Run database migrations
         working-directory: packages/database

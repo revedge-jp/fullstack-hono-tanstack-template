@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
+  "globalDependencies": [".oxlintrc.json", ".oxfmtrc.json"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -12,12 +13,14 @@
     "typecheck": {
       "dependsOn": ["^build", "^typecheck"]
     },
-    "api-service#build:types": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
-    },
     "client#typecheck": {
-      "dependsOn": ["^build", "^typecheck", "api-service#build:types"]
+      // client は api-service を workspace 依存に持つため、^build だけで api-service#build
+      // (= dist/app.d.ts の宣言生成)が保証される。以前はここに api-service#build:types も
+      // 明示していたが、build:types は build と同一コマンドで同じ dist/app.d.ts へ書くため、
+      // 順序依存の無い2タスクが並列実行され同一ファイルへ同時書き込みして .d.ts を壊す
+      // 競合を生んでいた(client#typecheck がランダムに TS1131/TS1109 で落ちる)。
+      // build:types を廃止し ^build 一本に統一することで、dist/app.d.ts を書く tsc は常に1つになる。
+      "dependsOn": ["^build", "^typecheck"]
     },
     "dev": {
       "cache": false,
