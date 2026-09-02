@@ -25,13 +25,15 @@ export type Container = {
 };
 
 export function createContainer(config: AppConfig): Container {
-  const { db, end } = createDb(config.databaseUrl);
-
+  // logger は db より先に組み立てる — createDb は postgres.js の NOTICE を pino へ流すために
+  // ロガーを必要とする（未指定だと素の console.log に出て redact 等の安全網が効かない）
   const logger = createLogger({
     service: "api-service",
     environment: config.nodeEnv,
     level: config.logLevel,
   });
+
+  const { db, end } = createDb(config.databaseUrl, logger);
 
   const auth = createAuth(config.auth, config.nodeEnv, db, logger);
   const devAuth =

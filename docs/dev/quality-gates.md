@@ -25,6 +25,15 @@
 | ミューテーション | domain/application のテストの**質**（90%） | `cd apps/api-service && bun run mutation` | ✗ | ✓（PR 差分のみ、[ADR-007](../architecture/adr-007-mutation-testing-diff-scope.md)） |
 | 依存脆弱性（bun audit） | 既知の高脆弱性 | `bun audit --audit-level=high` | ✗ | ✓（別ジョブ、deps変更時） |
 
+> **⚠ 対象範囲は `src/features/*/{domain,application}` に限られる。**
+> カバレッジ閾値（api）・ミューテーション・`arch:guards` の一部（`process.env` 直参照禁止、
+> application 層の import 禁止）は、いずれも `src/features` 配下しか見ていない。**feature から
+> `src/shared/` へロジックを移すと、これらのゲートから静かに外れる**（エラーは出ず CI も緑のまま）。
+> `integrations/composition/` の adapter も同様に対象外。移したら `stryker.config.json` の
+> `mutate` へ個別に列挙して戻すこと。詳細は
+> [`.claude/rules/api-service.md`](../../.claude/rules/api-service.md) の
+> 「`src/shared/` へロジックを移すと品質ゲートから静かに外れる」を参照。
+
 - **pre-push（`bun run check-all`）= 速い中核**。lint/type/test/arch/guards/knip を回す。
 - **重め・専門的なゲート（jscpd・自己テスト・カバレッジ・ミューテーション・integration・audit）は CI 主体**。pre-push を軽く保つため。
 - ローカルでアーキ一式（jscpd・自己テスト込み）を回したいときは **`bun run arch:check`**。`FAST=1` を付けると knip/deps/dc/jscpd/自己テストをスキップして高速化できる。
@@ -99,6 +108,13 @@
 | 重複（jscpd） | 5% | `.jscpd.json` の `threshold` |
 
 いずれも**保守的な floor**として設定している（急落を検知するのが目的で満点強制ではない）。運用しながら締める。
+
+### lint 設定は turbo の `globalDependencies` に入れる
+
+`.oxlintrc.json` / `.oxfmtrc.json` は `turbo.json` の `globalDependencies` に登録している。
+登録が無いと **lint 設定を変えても turbo のキャッシュが無効化されず**、`bun run lint` が古い結果を
+replay する。設定を触ったのに結果が変わらないときは、まず `bun run lint --force` で確かめること。
+lint ルールを別ファイルへ切り出す場合は `globalDependencies` にも足す。
 
 ---
 

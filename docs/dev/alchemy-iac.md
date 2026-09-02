@@ -96,6 +96,16 @@ staging / production との違い:
 - **`infra:destroy` は DB を削除しない**: PlanetScale の `Database` / `Role` は `delete: false`
   （デフォルト）のため、destroy 時は state から外れるだけで実体は残る（誤削除防止）。
   本当に消す場合は PlanetScale ダッシュボードから削除する
+- **Hyperdrive の `origin_connection_limit` は Cloudflare API 直叩きで是正している**（`15`。
+  alchemy 0.93.12 の `HyperdriveProps` にこのプロパティ自体が存在しないため、`Hyperdrive` 作成
+  直後に `cfApi.patch(...)` している）。Cloudflare 側のデフォルト値（60）は PlanetScale PS-5
+  クラスタの実際の direct 接続上限（約25）を上回っており、この状態だと Hyperdrive が
+  「ソフトリミット」（ネットワーク障害時の高可用性確保のため設定値を超えて接続を張ることがある
+  仕様）に従って DB 側の接続枠を先に枯渇させ、PlanetScale Console からの緊急接続すら
+  張れなくなる。**クラスタサイズを変えたら「ティア上げ → `SHOW max_connections;` の再測定 →
+  `alchemy.run.ts` のこの値を引き上げ」の順で見直すこと**（DB 側の実際の接続上限より確実に
+  低く保つ。逆順は接続枯渇障害を招く）。Hyperdrive の接続数は「同時実行中のクエリ数」ではなく
+  「プールが保持している温存接続数」なので、利用者数にはほぼ比例しない
 
 ## オプションリソース（環境変数で opt-in）
 

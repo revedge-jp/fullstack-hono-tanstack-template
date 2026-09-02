@@ -47,4 +47,50 @@ CLAUDE.md に載っていない細部の規約をまとめる。
 - ラッパーは `process.env` を参照せず、設定値は呼び出し元（container）からパラメータで受け取る。
 - feature 間連携は ports + `integrations/composition/` アダプタ（CLAUDE.md 参照）。adapter を追加したら co-located テストを必ず書く。
 
+## `src/shared/` へロジックを移すと品質ゲートから静かに外れる
+
+`stryker.config.json` の `mutate` は `src/features/*/{domain,application}/**`、
+`scripts/check/coverage-threshold.mjs` の既定 TARGET も `src/features/[^/]+/(domain|application)/`。
+**feature から `src/shared/` へ関数を移した瞬間、そのコードはミューテーションテストとカバレッジ
+閾値の両方の対象外になる。** エラーは出ないし CI も緑のままなので、移した本人も気づかない。
+
+**`integrations/composition/` も同じ理由で対象外。** feature 間アダプタもこのグロブに
+含まれない。adapter を書く際、**マッピング(pick/rename)を超える実ロジック(`??` による
+フォールバック解決、条件分岐、算出等)を adapter 側に置かない**こと — 置いた瞬間その分岐は
+mutation testing にもカバレッジ閾値にもかからなくなる。解決ロジックは対応する feature の
+`application/` 層に置き、adapter はその結果を pick するだけにする。
+
+**外れるのはこの2つだけではない。** `scripts/check/arch-guards.sh` も一部のガード
+（`process.env` 直参照の禁止、application 層からの infrastructure import / `fetch` 直叩き禁止等）を
+`find apps/api-service/src/features ...` で走査しており、`src/shared/` を見ていない。
+`process.env` を持ったまま shared へ移すと `arch:check` は緑のまま通り、Workers では
+`process.env` がローカルの Bun と同じようには埋まらないため、**本番でだけ既定値側の分岐に
+静かに落ちる**（フラグが off 扱い、上限値が `NaN` 等）。
+
+重複解消のために共有化したら、移した先を `stryker.config.json` の `mutate` に**個別に列挙し**、
+`bunx stryker run --mutate '<path>'` で break 90 を満たすことを確認する。あわせて
+`commandRunner.command` に `src/shared` のテストが含まれるかも確認する（含まれないと
+shared のテストが1件も走らず、スコアが実力より大幅に低く出る）。
+
+## `mutation:diff` はコミットしてから回す（未コミットだと「対象なし」で素通りする）
+
+`scripts/check/mutation-diff.sh` は差分を `origin/main...HEAD` で取るため、**作業ツリーの
+未コミット変更は見えない**。コミット前に実行すると
+「domain/application 層に対象の変更が無いため mutation testing をスキップします」と出て
+**成功したように終わる**。エラーではないので、通ったつもりで PR を出して CI で初めて落ちる。
+
+- ローカルで確認するときは**必ずコミットしてから**回す。
+- `origin/main` が古いと差分が膨らむので、事前に `git fetch origin main` する。
+
+**1行触っただけでもファイル全体が差分スコープに入る。** 変更した行ではなくファイル単位で
+mutate されるため、既存コードのテスト不足がそのまま自分の PR の落ちる理由になる。
+**domain/application の既存ファイルに手を入れるときは、その周辺のテストを足す作業が
+セットで発生しうる**と見込んでおく。
+
+## ミューテーションスコアが低いとき、まず疑うのは「殺せない分岐」
+
+生存ミュータントが特定の行に集中していたら、テストを足す前にその分岐が**挙動として冗長でないか**を
+確認する。下流のチェックと同じ入力を弾いているだけのガード節は、消しても観測可能な差が出ないため
+**原理的にテストで殺せない**（等価ミュータント）。この場合の正解はテスト追加ではなく**分岐の削除**。
+
 参照: `docs/dev/adding-features.md`（実装例）/ `docs/dev/coding-standards.md`
