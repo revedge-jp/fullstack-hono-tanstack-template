@@ -361,7 +361,7 @@ bun remove lodash
 ### バージョン指定
 
 ```bash
-# ✅ 通常は不要（最新版がインストールされる）
+# ✅ 通常は不要（公開から 3 日経った最新版がインストールされる — bunfig.toml の minimumReleaseAge）
 bun add hono
 
 # ✅ 必要時のみ指定

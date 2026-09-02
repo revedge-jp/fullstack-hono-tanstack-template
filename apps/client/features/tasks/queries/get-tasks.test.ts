@@ -8,9 +8,9 @@ const TASKS_PAGE = {
 };
 
 const api = createApiMock({ body: TASKS_PAGE });
-mock.module("@/shared/lib/api-client", api.apiClientModule);
-mock.module("@tanstack/react-start", reactStartModule);
-mock.module("@tanstack/react-start/server", reactStartServerModule());
+await mock.module("@/shared/lib/api-client", api.apiClientModule);
+await mock.module("@tanstack/react-start", reactStartModule);
+await mock.module("@tanstack/react-start/server", reactStartServerModule());
 
 const { getTasksServerFn } = await import("./get-tasks");
 

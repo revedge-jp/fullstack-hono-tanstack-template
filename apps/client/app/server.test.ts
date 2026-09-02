@@ -118,7 +118,7 @@ describe("createInProcessApiClient のヘッダー注入", () => {
     return {
       request: (input: RequestInfo | URL, requestInit?: RequestInit) => {
         captured.push({
-          url: String(input),
+          url: input instanceof Request ? input.url : String(input),
           headers: new Headers(requestInit?.headers),
         });
         return new Response(JSON.stringify({ ok: true }), {

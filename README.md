@@ -174,6 +174,7 @@ git push -u origin <branch>
 - **削除**: `bun remove <pkg>`。
 - **実行場所**: 対象パッケージディレクトリで実行（例: `apps/api-service`）。
 - **バージョン指定**: 原則不要（必要時のみ `@<version>`）。
+- **公開 3 日以内の版は入らない**（`bunfig.toml` の `minimumReleaseAge`）。`minimum release age` で弾かれたら版指定を外して 1 つ前を入れる。
 - **lock**: `bun.lock` を信頼し、手動調整はしない。
 
 ## 環境変数

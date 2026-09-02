@@ -55,6 +55,16 @@ expect_guard "window.location.href 代入禁止" \
   'export function selftestLocation() { window.location.href = "/foo"; }' \
   "window.location.href への代入は禁止"
 
+expect_guard "GitHub Actions 未ピン留め検出" \
+  ".github/workflows/__selftest_unpinned.yml" \
+  $'name: selftest\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n' \
+  "commit SHA でピン留め"
+
+expect_guard "id-token: write 検出" \
+  ".github/workflows/__selftest_idtoken.yml" \
+  $'name: selftest\non: push\npermissions:\n  id-token: write\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
+  "id-token: write が付与"
+
 expect_guard "throw 禁止" \
   "$D/application/__selftest_throw.ts" \
   'export function selftestThrow() { throw new Error("x"); }' \

@@ -356,5 +356,33 @@ else
   exit 1
 fi
 
+echo "[guard] GitHub Actions の uses: は commit SHA でピン留め（ローカル ./ と docker@sha256 は許可）"
+# タグ参照(@v4 等)は改竄されうる(2026年の trivy-action 事件)。actionlint は構文しか見ず、
+# Renovate の pinGitHubActionDigests も自分の PR でタグを書き換えるだけで新規の未ピン留めは
+# 止めないため、ここで機械的に検査する。コメント行は対象外。
+UNPINNED=$(grep -rnE '^\s*-?\s*uses:' .github --include='*.yml' --include='*.yaml' 2>/dev/null | \
+  grep -vE ':\s*#' | \
+  grep -vE 'uses:\s*(\./|[^ ]+@[0-9a-f]{40}(\s|$)|docker://[^ ]+@sha256:[0-9a-f]{64}(\s|$))' || true)
+if [ -z "$UNPINNED" ]; then
+  echo "OK"
+else
+  echo "違反: GitHub Actions の uses: は 40 桁の commit SHA でピン留めしてください（タグ・ブランチ参照は不可）"
+  echo "$UNPINNED" | sed 's/^/  • /'
+  exit 1
+fi
+
+echo "[guard] ワークフローに id-token: write を付与しない（OIDC トークン窃取の経路）"
+# エージェントを動かすワークフローに OIDC を渡すと、プロンプトインジェクションでデプロイ先の
+# クラウド資格情報まで奪われる(CVE-2026-24887 系)。デプロイに必要なら専用ワークフローで
+# エージェントと分離し、この guard の除外を理由付きで明示する。
+IDTOKEN=$(grep -rnE '^\s*id-token:\s*write' .github/workflows --include='*.yml' --include='*.yaml' 2>/dev/null || true)
+if [ -z "$IDTOKEN" ]; then
+  echo "OK"
+else
+  echo "違反: ワークフローに id-token: write が付与されています（エージェントと OIDC を同居させない）"
+  echo "$IDTOKEN" | sed 's/^/  • /'
+  exit 1
+fi
+
 echo "[guard] feature 構造の完全性（必須の層・co-located テスト・配線）"
 node scripts/check/feature-structure.mjs

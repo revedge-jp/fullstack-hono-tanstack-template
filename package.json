@@ -69,7 +69,8 @@
     "lefthook": "^2.1.9",
     "madge": "^8.0.0",
     "oxfmt": "0.57.0",
-    "oxlint": "^1.72.0",
+    "oxlint": "^1.80.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "steiger": "^0.5.13",
     "turbo": "^2.10.3",
     "typescript": "6.0.3"
@@ -77,7 +78,7 @@
   "overrides": {
     "defu": ">=6.1.5",
     "fast-xml-parser": ">=5.3.8",
-    "hono": "^4.12.2",
+    "hono": "^4.13.5",
     "lodash-es": ">=4.17.24",
     "minimatch": ">=10.2.3",
     "picomatch": ">=2.3.2"

@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 const mockSocialSignIn = mock(() => Promise.resolve({ data: null, error: null }));
 
-mock.module("@/shared/lib/auth-client", () => ({
+await mock.module("@/shared/lib/auth-client", () => ({
   authClient: {
     signIn: {
       social: mockSocialSignIn,

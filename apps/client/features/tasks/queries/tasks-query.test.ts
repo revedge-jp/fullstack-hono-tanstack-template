@@ -8,7 +8,7 @@ const TASKS_PAGE = {
 };
 
 const api = createApiMock({ body: TASKS_PAGE });
-mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule);
+await mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule);
 
 const { tasksQueryOptions } = await import("./tasks-query");
 

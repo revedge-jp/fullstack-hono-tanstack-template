@@ -28,7 +28,14 @@
       "env": ["DATABASE_URL", "LOG_LEVEL"]
     },
     "lint": {},
+    "client#lint": {
+      // type-aware lint(oxlint-tsgolint)は api-service の dist/app.d.ts(AppType)を参照する。
+      // dist が無いと Hono RPC 呼び出しの型が解決できず no-floating-promises が黙って空振りするため、
+      // typecheck と同じく ^build を先行させる。
+      "dependsOn": ["^build"]
+    },
     "lint:fix": { "cache": false },
+    "client#lint:fix": { "cache": false, "dependsOn": ["^build"] },
     "test": {
       "cache": false,
       "dependsOn": ["^test"],

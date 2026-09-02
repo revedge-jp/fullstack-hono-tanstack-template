@@ -6,9 +6,9 @@ import { createApiMock, reactStartModule, reactStartServerModule } from "@/test-
 const mockUser: SessionUser = { id: "u1", email: "a@example.com", name: "A" };
 
 const api = createApiMock({ body: { ok: true, data: mockUser } });
-mock.module("@/shared/lib/api-client", api.apiClientModule);
-mock.module("@tanstack/react-start", reactStartModule);
-mock.module("@tanstack/react-start/server", reactStartServerModule());
+await mock.module("@/shared/lib/api-client", api.apiClientModule);
+await mock.module("@tanstack/react-start", reactStartModule);
+await mock.module("@tanstack/react-start/server", reactStartServerModule());
 
 const { getSessionServerFn } = await import("./get-session");
 

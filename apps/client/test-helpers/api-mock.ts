@@ -7,13 +7,14 @@
 // ヘルパを先に用意して「書き始めが import + 2行」になる状態を保つ。
 //
 // 使い方(テストファイル側。`mock.module` は SUT の import より前に、
-// テストファイル自身で呼ぶ必要がある — bun:test の制約):
+// テストファイル自身で呼ぶ必要がある — bun:test の制約。戻り値が Promise を含む型なので
+// no-floating-promises を満たすため top-level await にする):
 //
 //   const api = createApiMock();
-//   mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule); // ブラウザ側
-//   mock.module("@/shared/lib/api-client", api.apiClientModule); // SSR 側(serverFn)
-//   mock.module("@tanstack/react-start", reactStartModule);
-//   mock.module("@tanstack/react-start/server", reactStartServerModule());
+//   await mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule); // ブラウザ側
+//   await mock.module("@/shared/lib/api-client", api.apiClientModule); // SSR 側(serverFn)
+//   await mock.module("@tanstack/react-start", reactStartModule);
+//   await mock.module("@tanstack/react-start/server", reactStartServerModule());
 //   const { createTask } = await import("./create-task");
 //
 //   beforeEach(() => api.reset());

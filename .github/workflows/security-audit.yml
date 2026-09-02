@@ -117,7 +117,9 @@ jobs:
             1. 上の「対応が必要な advisory」について、**そのパッケージが Cloudflare Worker の
                バンドルに入り、攻撃者が制御できる入力を処理するか**を確認する
             2. ランタイムに到達する → \`bun update <pkg>\` で修正版へ上げる（上げられなければ
-               代替パッケージ・影響緩和を検討）
+               代替パッケージ・影響緩和を検討）。修正版が公開 3 日以内だと \`minimum release age\`
+               で弾かれる — その場合だけ \`bunfig.toml\` の \`minimumReleaseAgeExcludes\` に
+               理由付きで一時追加する
             3. ビルド・開発時にしか使わない → \`.github/security-audit-allowlist.json\` に
                GHSA ID・経路・判断・再確認期限を書いて登録する。**パッケージ単位ではなく
                advisory 単位**で、期限付きで登録すること（理由は同ファイルの \`$comment\`）

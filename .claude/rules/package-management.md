@@ -15,3 +15,16 @@
 - 「実際に使っているのに削除」リスクを避けるため、未使用判定の削除は段階的に行う。
 - 判断に迷う依存は一時的に `knip.json` の `ignoreDependencies` に入れ、後日見直す。
 - shadcn 配下の UI コンポーネントや生成物・ビルド成果物は除外設定済み。
+
+## 公開直後のパッケージ版は入らない（`bunfig.toml` の `minimumReleaseAge`）
+
+背景と日数の根拠は `bunfig.toml` のコメントが正（ここには複製しない）。運用だけ書く。
+
+- 対象は `bun add` / `bun update` と、lockfile を再解決する `bun install`（Renovate の lock 更新も
+  含む）。`--frozen-lockfile` は解決しないので CI には影響しない。
+- エラー文言はメッセージに **「minimum release age」** を含む（範囲指定なら
+  `blocked by minimum-release-age`、完全一致指定なら `was published within minimum release age`）。
+  これが出たら**バージョン指定を外して1つ前の版を入れる**のが既定の対応。
+- 即日必要なセキュリティ修正の逃し方（`minimumReleaseAgeExcludes`）は `bunfig.toml` のコメント参照。
+  `renovate.json` の `vulnerabilityAlerts` も同じ 3 日に揃えてある（0 日にしても Bun 側で弾かれて
+  lock 更新が失敗するだけ）。

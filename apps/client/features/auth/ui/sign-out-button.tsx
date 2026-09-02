@@ -21,7 +21,7 @@ export function SignOutButton() {
     // サインアウトしたユーザーにひも付く react-query キャッシュ（tasks 等）を破棄し、
     // 次のユーザーに前ユーザーのデータが残らないようにする。
     queryClient.clear();
-    router.navigate({ to: "/signin" });
+    void router.navigate({ to: "/signin" });
   }
 
   return (
