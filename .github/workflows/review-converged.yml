@@ -1,0 +1,42 @@
+name: Review converged
+
+# レビューが収束した PR だけをマージ対象にする。auto-merge / merge queue を使うと「CI 緑」だけで
+# 入ってしまうため、ship.md の手順どおり /code-review を CONFIRMED ゼロまで回した証跡
+# (本文の「レビュー収束:」行)を要求する。行は人が書くので偽装は可能だが、「書かずに通る」経路を塞ぐ。
+#
+# ci.yml と分けている理由: 収束行は最後の push の後に本文編集(edited)と Draft 解除
+# (ready_for_review)で付くため、そのイベントで再評価が必要。ci.yml をそのイベントで回すと
+# 本文を直すたびに CI 全体が走ってしまう。ルールセットはこの check(Review converged)も必須にする。
+# merge_group では PR 本文を読めないので、そこでは無条件に success を返してキューを止めない。
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
+
+permissions: {}
+
+jobs:
+  review-converged:
+    name: Review converged
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: PR 本文にレビュー収束の記録があるか
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          if [ "$EVENT" = "merge_group" ]; then echo "merge_group: PR 側の check で判定済み"; exit 0; fi
+          case "$ACTOR" in *'[bot]') echo "bot の PR は対象外"; exit 0 ;; esac
+          if printf '%s' "$PR_BODY" | grep -qE '^レビュー収束: .*CONFIRMED 0'; then
+            echo "レビュー収束の記録あり"; exit 0
+          fi
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "::notice::Draft のため未収束でよい。収束したら本文に「レビュー収束: 最終周 CONFIRMED 0」を書き、gh pr ready で解除する"
+          fi
+          echo "::error::PR 本文に「レビュー収束: 最終周 CONFIRMED 0」の行がありません。/code-review を CONFIRMED ゼロまで回してから、ship.md の手順で本文に記録してください"
+          exit 1

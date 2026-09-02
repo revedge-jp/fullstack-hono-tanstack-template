@@ -81,10 +81,11 @@ CONFIRMED の指摘が出たら修正して push し、もう 1 周。**CONFIRME
 ```bash
 gh pr edit <番号> --body-file <更新した本文>
 gh pr ready <番号>
-gh pr merge <番号> --auto --squash
+gh pr merge <番号> --auto
 ```
+（マージ方式は merge queue 側で squash に固定されているので `--squash` は付けない）
 
-CI の `Review converged` ジョブが「レビュー収束:」行を検査するので、行が無いと auto-merge は
+必須チェック `Review converged` が「レビュー収束:」行を検査するので、行が無いと auto-merge は
 発火しない。マージは merge queue が「main に積んだ状態」で CI を 1 回通してから行う
 （ブランチの最新化は不要。queue の説明は `docs/deploy/github-ruleset.md`）。
 

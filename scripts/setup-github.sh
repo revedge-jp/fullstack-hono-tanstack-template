@@ -73,7 +73,8 @@ RULESET_JSON=$(cat << 'EOF'
       "parameters": {
         "strict_required_status_checks_policy": false,
         "required_status_checks": [
-          { "context": "CI Pipeline" }
+          { "context": "CI Pipeline" },
+          { "context": "Review converged" }
         ]
       }
     },

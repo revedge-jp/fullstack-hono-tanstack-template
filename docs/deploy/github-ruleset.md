@@ -27,7 +27,8 @@ gh auth login          # 未認証の場合
 | **PRマージ必須** | ✅ 有効 | `main` への直接プッシュを禁止。すべての変更はPRを経由 |
 | **レビュー承認** | 0名 | 一人開発のため不要。チーム開発時は1名以上に変更推奨 |
 | **CIチェック必須** | ✅ 有効 | `CI Pipeline` ジョブが成功しないとマージ不可 |
-| **最新ブランチ必須** | ✅ 有効 | baseブランチ（main）と同期済みであることが必要 |
+| **最新ブランチ必須** | ❌ 無効 | merge queue が「main に積んだ状態」で CI を通すため不要（下の「merge queue と auto-merge」節） |
+| **merge queue** | ✅ 有効 | squash / ALLGREEN / 最大 5 件バッチ。必須チェックは `CI Pipeline` と `Review converged` |
 | **フォースプッシュ禁止** | ✅ 有効 | 履歴の改変を防止 |
 | **削除禁止** | ✅ 有効 | `main` ブランチの誤削除を防止 |
 
@@ -42,8 +43,9 @@ gh auth login          # 未認証の場合
 - CI 側は `.github/workflows/ci.yml` の `merge_group:` トリガーが対応する。**これが無いとキューは
   永久に待つ**。`merge_group` では paths-filter を使わず全ジョブを回す
 - PR は Draft で作り、`/code-review` が CONFIRMED ゼロで収束してから `gh pr ready` と
-  `gh pr merge --auto --squash` を打つ（`.claude/commands/ship.md`）。`Review converged` ジョブが
-  本文の「レビュー収束:」行を検査するので、収束の記録が無い PR は auto-merge が発火しない
+  `gh pr merge --auto` を打つ（`.claude/commands/ship.md`）。`Review converged`
+  （`.github/workflows/review-converged.yml`、本文編集と Draft 解除でも再評価される）が本文の
+  「レビュー収束:」行を検査し、必須チェックなので記録が無い PR は auto-merge が発火しない
 - キューに入った後に push すると弾かれる（入れ直し）。Renovate の automerge はキュー対応済み
 - マージ後の deploy は `workflow_run`（CI Pipeline 完了）で動くので変更不要
 
