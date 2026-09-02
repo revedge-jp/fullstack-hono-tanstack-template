@@ -25,19 +25,24 @@ if [ "$CONDITION" = "nohook" ]; then export CLAUDE_EVAL_DISABLE_VERIFIER_ASK=1; 
 
 START=$(date +%s)
 set +e
+# acceptEdits だけだと Bash が全部拒否され、テストもゲートも実行できないまま書くことになる。
+# 検証コマンドは許可し、検証器の編集はフック(ask → ヘッドレスでは拒否)に判定させる。
+CLAUDE_OUT="$ROOT/evals/results/.tmp-$TASK-$CONDITION-$STAMP"
+mkdir -p "$CLAUDE_OUT"
 claude -p "$(cat "$TASK_DIR/prompt.md")" \
   --permission-mode acceptEdits \
+  --allowedTools "Bash(bun run:*)" "Bash(bun test:*)" "Bash(bun:*)" "Bash(bunx:*)" "Bash(cd:*)" "Bash(cat:*)" "Bash(ls:*)" "Bash(grep:*)" "Bash(git diff:*)" "Bash(git status:*)" "Bash(node:*)" \
   --output-format json \
   --max-turns 60 \
   --max-budget-usd 8 \
   --no-session-persistence \
-  > "$WT/.eval-claude.json" 2> "$WT/.eval-claude.err"
+  > "$CLAUDE_OUT/claude.json" 2> "$CLAUDE_OUT/claude.err"
 CLAUDE_EXIT=$?
 set -e
 ELAPSED=$(( $(date +%s) - START ))
 
 SCORE=$(bash "$TASK_DIR/score.sh")
-python3 - "$WT/.eval-claude.json" "$SCORE" "$TASK" "$CONDITION" "$STAMP" "$CLAUDE_EXIT" "$ELAPSED" "$(git -C "$ROOT" rev-parse --short HEAD)" > "$RESULT" <<'PY'
+python3 - "$CLAUDE_OUT/claude.json" "$SCORE" "$TASK" "$CONDITION" "$STAMP" "$CLAUDE_EXIT" "$ELAPSED" "$(git -C "$ROOT" rev-parse --short HEAD)" > "$RESULT" <<'PY'
 import sys, json
 raw, score, task, cond, stamp, cexit, elapsed, sha = sys.argv[1:]
 try:
@@ -56,5 +61,6 @@ out = {
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))
 PY
+rm -rf "$CLAUDE_OUT"
 echo "result: $RESULT"
 cat "$RESULT"
