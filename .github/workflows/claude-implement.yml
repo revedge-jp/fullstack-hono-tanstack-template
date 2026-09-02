@@ -3,16 +3,13 @@ name: Claude Implementation
 # Trigger: comment "@claude" on an issue (MEMBER or OWNER only)
 # Prerequisites: ANTHROPIC_API_KEY secret must be configured in repository settings.
 #
-# セキュリティ前提(2026年上期に実証された攻撃クラスへの対処):
-#   CVE-2026-24887 / PromptPwnd / GitInject — 公開 issue の本文に仕込んだ間接プロンプト
-#   インジェクションで、エージェントに CI の資格情報(OIDC トークン等)を読ませ write 権限を
-#   奪う攻撃が複数プロバイダで実証された。原因はモデルではなく「CI の資格情報と信頼できない
-#   入力を同時にエージェントへ渡す」構成にある。対策:
-#   (1) コメント投稿者だけでなく issue 作者も MEMBER/OWNER に限定する
-#       (エージェントが読む issue 本文が第三者由来にならないようにする)
-#   (2) action は commit SHA でピン留めし、修正版(2026-01-16)より新しいものだけを使う
-#   (3) `id-token: write` は付与しない
-#   (4) permissions は必要最小限(contents/issues/pull-requests の write は実装 PR 作成に必須)
+# セキュリティ前提(背景と「Rule of Two」は .claude/rules/general.md を参照):
+#   (1) コメント投稿者と issue 作者を MEMBER/OWNER に限定 — issue 本文が第三者由来にならない
+#   (2) include_comments_by_actor でプロンプトに入るコメントをメンバーに限定 — action は既定で
+#       issue の全コメント(最大100件)をプロンプトに含めるため、公開リポジトリでは (1) だけでは
+#       第三者のコメントが読まれる
+#   (3) action は commit SHA でピン留めし、修正版(2026-01-16)より新しいものだけを使う
+#   (4) `id-token: write` は付与しない。permissions は必要最小限
 #   参考: https://labs.cloudsecurityalliance.org/research/csa-research-note-claude-code-github-action-prompt-injection/
 
 on:
@@ -47,3 +44,5 @@ jobs:
       - uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # リポジトリのメンバーをカンマ区切りで列挙する(author_association による動的絞り込みは無い)
+          include_comments_by_actor: mitochon9

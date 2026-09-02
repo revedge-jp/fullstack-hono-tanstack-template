@@ -174,8 +174,10 @@ GitInject 等）は、いずれもこの 3 つが揃った構成でだけ成立�
 2. **信頼できない外部入力**（第三者が書ける issue / PR 本文、Web ページ、外部 API 応答、ユーザー投稿）
 3. **外部への送信・書き込み**（git push、PR 作成、外部 HTTP、メッセージ送信）
 
-- CI のエージェント: `claude-implement.yml` は投稿者と issue 作者を MEMBER/OWNER に限定し（2 を排除）、
-  `id-token: write` を付与しない（1 を排除）。この 2 つを緩める変更は単独ではしない。
+- CI のエージェント: `claude-implement.yml` は投稿者・issue 作者を MEMBER/OWNER に限定し、プロンプトに
+  入るコメントも `include_comments_by_actor` でメンバーに絞る（2 を縮小。公開リポジトリでは第三者が
+  コメントできるため「排除」ではない）。`id-token: write` は付与しない（1 を排除）。具体的な対策一覧は
+  同ファイルのヘッダコメントが正で、ここには複製しない。これらを緩める変更は単独ではしない。
 - MCP で本番 DB に接続するときは**読み取り専用の接続**を使う（PlanetScale / BigQuery 等の
   `*_readonly` ツール）。書き込みが必要なら人が SQL を確認して実行する。
 - ローカルの Claude Code は `.env` に本番資格情報を置かない前提で動く。本番の値を扱う作業では、

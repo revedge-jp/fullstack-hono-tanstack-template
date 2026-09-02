@@ -18,8 +18,13 @@
 
 ## 公開直後のパッケージ版は入らない（`bunfig.toml` の `minimumReleaseAge`）
 
-`bun add` / `bun update` は**公開から3日経っていない版を解決対象から外す**（2026年の npm
-サプライチェーン攻撃はいずれも公開後数時間が露出窓だったため）。最新版を指定して
-`blocked by minimum-release-age` で失敗したら、**バージョン指定を外して1つ前の版を入れる**のが
-既定の対応。緊急のセキュリティ修正で即日必要なときだけ、そのパッケージ名を
-`minimumReleaseAgeExcludes` に理由コメント付きで一時追加し、取り込み後に外す。
+背景と日数の根拠は `bunfig.toml` のコメントが正（ここには複製しない）。運用だけ書く。
+
+- 対象は `bun add` / `bun update` と、lockfile を再解決する `bun install`（Renovate の lock 更新も
+  含む）。`--frozen-lockfile` は解決しないので CI には影響しない。
+- エラー文言はメッセージに **「minimum release age」** を含む（範囲指定なら
+  `blocked by minimum-release-age`、完全一致指定なら `was published within minimum release age`）。
+  これが出たら**バージョン指定を外して1つ前の版を入れる**のが既定の対応。
+- 緊急のセキュリティ修正で即日必要なときだけ、`[install]` に `minimumReleaseAgeExcludes = ["pkg"]`
+  を理由コメント付きで一時追加し、取り込み後に外す。`renovate.json` の `vulnerabilityAlerts` も
+  同じ 3 日に揃えてある（0 日にしても Bun 側で弾かれて lock 更新が失敗するだけ）。

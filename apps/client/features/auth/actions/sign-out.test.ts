@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const mockSignOut = mock(() => Promise.resolve({ data: null, error: null }));
 
-mock.module("@/shared/lib/auth-client", () => ({
+await mock.module("@/shared/lib/auth-client", () => ({
   authClient: {
     signOut: mockSignOut,
   },

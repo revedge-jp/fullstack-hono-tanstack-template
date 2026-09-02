@@ -1,5 +1,3 @@
-# Bun のインストール設定。
-#
 # minimumReleaseAge: 公開から一定時間(秒)経っていないパッケージ版をインストールしない。
 # 2026年に相次いだ npm サプライチェーン攻撃(axios 汚染は約3時間、trivy-action は 76/77 タグ
 # 改竄)はいずれも「公開直後の数時間」が露出窓だった。3日(259200秒)待てば、汚染版は
@@ -9,4 +7,3 @@
 # minimumReleaseAgeExcludes に一時的に足す(理由をコメントし、取り込み後に外す)。
 [install]
 minimumReleaseAge = 259200
-minimumReleaseAgeExcludes = []

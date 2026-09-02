@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createApiMock } from "@/test-helpers/api-mock";
 
 const api = createApiMock({ body: { ok: false, error: "NotFound" } });
-mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule);
+await mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule);
 
 const { deleteTask } = await import("./delete-task");
 

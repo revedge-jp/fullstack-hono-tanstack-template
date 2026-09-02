@@ -22,7 +22,7 @@
     "labels": ["security"],
     "automerge": false,
     "schedule": ["at any time"],
-    "minimumReleaseAge": "0 days",
+    "minimumReleaseAge": "3 days",
     "prCreation": "immediate",
     "prPriority": 10
   },

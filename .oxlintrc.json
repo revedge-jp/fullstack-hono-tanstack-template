@@ -70,9 +70,16 @@
       "rules": {
         "no-console": "off",
         "typescript/no-explicit-any": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/await-thenable": "off",
-        "typescript/no-floating-promises": "off"
+        "typescript/no-non-null-assertion": "off"
+      }
+    },
+    {
+      // bun-types の `expect().rejects` は Matchers<unknown>(toThrow(): void)型で、実行時は
+      // Promise を返す。必須の await が await-thenable に誤検出されるため client のテストだけ off。
+      // no-floating-promises は off にしない(mock.module は top-level await で満たす)。
+      "files": ["apps/client/**/*.test.ts", "apps/client/**/*.test.tsx"],
+      "rules": {
+        "typescript/await-thenable": "off"
       }
     },
     {

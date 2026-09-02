@@ -118,9 +118,7 @@ describe("createInProcessApiClient のヘッダー注入", () => {
     return {
       request: (input: RequestInfo | URL, requestInit?: RequestInit) => {
         captured.push({
-          // テストは常に文字列 URL で呼ぶ。Request が来ても URL 比較に使わないので許容
-          // oxlint-disable-next-line typescript/no-base-to-string
-          url: String(input),
+          url: input instanceof Request ? input.url : String(input),
           headers: new Headers(requestInit?.headers),
         });
         return new Response(JSON.stringify({ ok: true }), {
