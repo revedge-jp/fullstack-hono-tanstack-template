@@ -82,7 +82,8 @@ jobs:
           if ! hits=$(bash scripts/check/is-verifier-path.sh $changed); then
             echo "検証器の変更なし"; exit 0
           fi
-          echo "検証器に当たる変更:"; echo "$hits" | sed 's/^/  • /'
+          echo "検証器に当たる変更:"
+          while IFS= read -r hit; do echo "  • $hit"; done <<< "$hits"
           if printf '%s' "$PR_BODY" | grep -q '^## 検証器の変更理由'; then
             echo "PR 本文に「## 検証器の変更理由」あり"; exit 0
           fi
