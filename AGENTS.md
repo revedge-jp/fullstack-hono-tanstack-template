@@ -64,6 +64,7 @@ bun run arch:check    # All architecture/dependency checks (incl. jscpd + guard 
 bun run dep:cycles    # Detect circular dependencies
 bun run knip          # Detect unused exports / dependencies
 bun run check:feature # Feature structure completeness (required layers/tests/wiring)
+bun run check:instructions # AGENTS.md / .claude/rules 等の参照(パス・bun run・見出し)が実在するか
 ```
 
 ### Quality Gates (see [quality-gates.md](docs/dev/quality-gates.md) for full detail)

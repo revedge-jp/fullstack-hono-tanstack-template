@@ -81,6 +81,8 @@ module.exports = {
     {
       name: "client-shared-to-features",
       severity: "error",
+      comment:
+        "shared は feature 非依存に保つ。feature 固有の型・関数が必要なら shared 側に抽象を置き、feature から shared を参照する向きに直す。",
       from: { path: "^apps/client/shared/" },
       to: { path: "^apps/client/features/" },
     },
@@ -91,6 +93,8 @@ module.exports = {
     {
       name: "server-domain-no-db",
       severity: "error",
+      comment:
+        "domain は永続化を知らない。DB アクセスは infrastructure の *.repository.drizzle.ts に置き、domain には repository インターフェース(型)だけを残す。",
       from: { path: "^apps/api-service/src/features/.+/domain/" },
       to: { path: `^packages/database/|${npmPackagePath("drizzle-orm")}` },
     },
@@ -98,6 +102,8 @@ module.exports = {
     {
       name: "server-features-to-routes",
       severity: "error",
+      comment:
+        "features から routes を参照しない。ルーティングは app.ts が features/*/presentation を組み立てる一方向。",
       from: { path: "^apps/api-service/src/features/" },
       to: { path: "^apps/api-service/src/routes/" },
     },
@@ -105,6 +111,8 @@ module.exports = {
     {
       name: "server-application-no-infra",
       severity: "error",
+      comment:
+        "application は infrastructure を直接参照しない。domain の repository インターフェース型を deps で受け取り、container.ts で Drizzle 実装を注入する。",
       from: { path: "^apps/api-service/src/features/[^/]+/application/" },
       to: { path: "^apps/api-service/src/features/[^/]+/infrastructure/" },
     },
@@ -112,6 +120,8 @@ module.exports = {
     {
       name: "server-application-no-integrations",
       severity: "error",
+      comment:
+        "application は integrations を直接参照しない。必要な外部機能は application/ports.ts に型として宣言し、integrations/composition のアダプタを container.ts で注入する。",
       from: { path: "^apps/api-service/src/features/.+/application/" },
       to: { path: "^apps/api-service/src/integrations?/" },
     },
@@ -119,6 +129,8 @@ module.exports = {
     {
       name: "server-routes-no-infra-or-domain",
       severity: "error",
+      comment:
+        "routes は service 経由でだけ feature を使う。domain/infrastructure が必要になったら application/service.ts に操作を足す。",
       from: { path: "^apps/api-service/src/routes/" },
       to: {
         path: "^apps/api-service/src/features/.+/(infrastructure|domain)/",
@@ -128,6 +140,8 @@ module.exports = {
     {
       name: "server-presentation-no-infra-or-domain",
       severity: "error",
+      comment:
+        "presentation(router.ts)は HTTP I/O だけを担当し service を呼ぶ。domain の型や repository が必要なら application 層のレスポンス mapper / service に寄せる。",
       from: { path: "^apps/api-service/src/features/[^/]+/presentation/" },
       to: { path: "^apps/api-service/src/features/.+/(infrastructure|domain)/" },
     },
@@ -135,6 +149,8 @@ module.exports = {
     {
       name: "server-domain-no-upward",
       severity: "error",
+      comment:
+        "domain は最下層。application/infrastructure/presentation の型が必要に見えたら、その型を domain/models.ts に移す(DTO なら application に留めて domain には渡さない)。",
       from: { path: "^apps/api-service/src/features/[^/]+/domain/" },
       to: {
         path: "^apps/api-service/src/(features/[^/]+/(application|infrastructure|presentation)/|routes/|integration/)",
@@ -144,6 +160,8 @@ module.exports = {
     {
       name: "server-domain-no-framework-libs",
       severity: "error",
+      comment:
+        "domain は純粋な TypeScript。Zod のバリデーションは application/validators.ts、HTTP は presentation に置く。",
       from: { path: "^apps/api-service/src/features/[^/]+/domain/" },
       to: {
         path: ["hono", "zod", "axios", "node-fetch"].map(npmPackagePath).join("|"),
@@ -153,6 +171,8 @@ module.exports = {
     {
       name: "server-infrastructure-no-upward",
       severity: "error",
+      comment:
+        "infrastructure は domain だけに依存する。application の型が欲しくなったら、それは domain に置くべき型。",
       from: { path: "^apps/api-service/src/features/[^/]+/infrastructure/" },
       to: {
         path: "^apps/api-service/src/(features/[^/]+/(application|presentation)/|routes/)",
@@ -162,6 +182,8 @@ module.exports = {
     {
       name: "server-application-no-db",
       severity: "error",
+      comment:
+        "application は DB を直接触らない。クエリは infrastructure の repository 実装に置き、application は repository インターフェース経由で呼ぶ。",
       from: { path: "^apps/api-service/src/features/[^/]+/application/" },
       to: { path: `^packages/database/|${npmPackagePath("drizzle-orm")}` },
     },
@@ -170,6 +192,8 @@ module.exports = {
     {
       name: "server-middlewares-no-direct-integrations",
       severity: "error",
+      comment:
+        "middlewares は integrations を直接参照しない。必要な機能は deps(ports)として受け取り、container.ts で注入する。",
       from: { path: "^apps/api-service/src/middlewares/" },
       to: { path: "^apps/api-service/src/integrations/" },
     },
@@ -178,6 +202,8 @@ module.exports = {
     {
       name: "server-middlewares-no-infra-or-presentation",
       severity: "error",
+      comment:
+        "middlewares は feature の application(service / ports)と domain の型だけを使う。infrastructure が必要なら application 経由に寄せる。",
       from: { path: "^apps/api-service/src/middlewares/" },
       to: { path: "^apps/api-service/src/features/[^/]+/(infrastructure|presentation)/" },
     },
@@ -185,6 +211,8 @@ module.exports = {
     {
       name: "server-shared-no-features",
       severity: "error",
+      comment:
+        "shared は feature 非依存の横断ヘルパ。feature の型が必要なら、その型を shared に持ち上げるか、ヘルパをジェネリックにする。",
       from: { path: "^apps/api-service/src/shared/" },
       to: { path: "^apps/api-service/src/features/" },
     },
@@ -192,6 +220,8 @@ module.exports = {
     {
       name: "server-integrations-external-no-features",
       severity: "error",
+      comment:
+        "integrations/external は第三者 SDK の薄いラッパー。feature の知識は integrations/composition のアダプタに置く。",
       from: { path: "^apps/api-service/src/integrations/external/" },
       to: { path: "^apps/api-service/src/features/" },
     },
@@ -201,6 +231,8 @@ module.exports = {
     {
       name: "server-integrations-composition-only-application",
       severity: "error",
+      comment:
+        "composition アダプタは feature の application/service.ts か application/ports.ts だけを使う。domain/infrastructure が必要なら service にメソッドを足す。",
       from: { path: "^apps/api-service/src/integrations/composition/" },
       to: { path: "^apps/api-service/src/features/[^/]+/(domain|infrastructure|presentation)/" },
     },
@@ -208,6 +240,8 @@ module.exports = {
     {
       name: "server-features-no-web-framework",
       severity: "error",
+      comment:
+        "hono を import してよいのは presentation だけ。Context が必要な処理は presentation で値を取り出して application に渡す。",
       from: {
         path: "^apps/api-service/src/features/",
         pathNot: "^apps/api-service/src/features/[^/]+/presentation/",

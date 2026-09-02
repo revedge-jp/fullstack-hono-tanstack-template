@@ -55,6 +55,12 @@ PR がある場合は PR 番号を渡す方がより確実。
 
 ## 編集方針
 
+- 検証器（`scripts/check/**`・`dependency-cruiser.config.cjs`・`.oxlintrc.json`・`lefthook.yml`・
+  `.github/workflows/**`・各種閾値ファイル）の編集は PreToolUse フックで**ユーザー確認**が入る
+  （`.claude/hooks/protect-verifiers.sh`）。ゲートに引っかかったときの既定はコードを直すこと。
+  検証器を緩めるなら理由を PR 本文に書く。`.env*` の読み書きはフックが拒否する（設定の正典は
+  `.env.example`）。
+
 - 既存ファイルのインデント（タブ/スペース、幅）は必ず維持する。変換・混在をしない。
 - コメントは非自明な理由・前提・注意点のみ。行動説明コメントや自明なコメントは書かない。
 - 命名は `docs/dev/coding-standards.md` に従う（関数は動詞・変数は名詞・1〜2文字の短名や過度な省略語を避ける。ファイル名は kebab-case — `bun run check:kebab` で検査される）。
