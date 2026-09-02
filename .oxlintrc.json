@@ -1,6 +1,9 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "react", "oxc", "jsx-a11y"],
+  "options": {
+    "typeAware": true
+  },
   "env": {
     "browser": true,
     "node": true,
@@ -67,7 +70,9 @@
       "rules": {
         "no-console": "off",
         "typescript/no-explicit-any": "off",
-        "typescript/no-non-null-assertion": "off"
+        "typescript/no-non-null-assertion": "off",
+        "typescript/await-thenable": "off",
+        "typescript/no-floating-promises": "off"
       }
     },
     {

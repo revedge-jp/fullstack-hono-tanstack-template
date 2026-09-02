@@ -68,6 +68,8 @@ function reasonMessage(reason: unknown): string {
     const message = (reason as { message?: unknown }).message;
     return typeof message === "string" ? message : "[object]";
   }
+  // ここに来るのは string/number/boolean/symbol/bigint/function だけ(object は上で除外済み)
+  // oxlint-disable-next-line typescript/no-base-to-string
   return String(reason);
 }
 

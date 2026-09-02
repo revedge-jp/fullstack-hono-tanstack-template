@@ -9,6 +9,8 @@ export function stringifyErrorSafe(err: unknown): string {
     try {
       return JSON.stringify(err);
     } catch {
+      // 循環参照などで JSON 化できない値の最終手段。"[object Object]" になるのは承知の上
+      // oxlint-disable-next-line typescript/no-base-to-string
       return String(err);
     }
   }

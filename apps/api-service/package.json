@@ -36,7 +36,7 @@
     "@repo/logging": "workspace:*",
     "better-auth": "^1.6.23",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.27",
+    "hono": "^4.13.5",
     "neverthrow": "^8.2.0",
     "zod": "^4.4.3"
   },
