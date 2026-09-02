@@ -40,7 +40,7 @@ class Email {
 - 既存コード全体（Infrastructure層の mapper、Application層）への影響が大きい
 - プリミティブ型でなくなるため、呼び出し側で `.value` アクセスが必要になり可読性が下がる
 - 現状の型安全性の問題を解決しない（ファクトリ内部ではどちらも等価）
-- CLAUDE.md の TypeScript スタイルで `class` / `interface` を禁止しており、既存規約と矛盾する
+- `.claude/rules/api-service.md` で `class` / `interface` を禁止しており、既存規約と矛盾する
 
 ### 選択肢 D: `unknown` 経由のダブルキャスト（`value as unknown as Email`）
 

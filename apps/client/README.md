@@ -77,4 +77,4 @@ bun run test:unit  # actions/queries の co-located テスト
 bun run dep:cycles # 依存循環チェック（madge）
 ```
 
-詳細は [開発ガイド](../../docs/dev/development.md#client) と [CLAUDE.md](../../CLAUDE.md#architecture-client) を参照してください。
+詳細は [開発ガイド](../../docs/dev/development.md#client) と [AGENTS.md](../../AGENTS.md#architecture-client) を参照してください。

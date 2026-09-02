@@ -10,7 +10,7 @@ const TasksSearchSchema = z.object({
   cursor: z.string().optional(),
 });
 
-// データ取得の役割分担（CLAUDE.md の「SSR vs クライアントサイド」パターン）:
+// データ取得の役割分担（AGENTS.md の「Data fetching: SSR vs client-side」パターン）:
 // - 初回表示: loader + createServerFn によるサーバーサイド取得（ローディング状態なし）
 // - mutation 後の更新: tasksQueryOptions の invalidate によるブラウザからの再取得
 export const Route = createFileRoute("/_authenticated/tasks")({

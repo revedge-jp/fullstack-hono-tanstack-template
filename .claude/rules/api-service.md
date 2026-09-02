@@ -3,11 +3,11 @@ paths:
   - "apps/api-service/src/**"
 ---
 
-# api-service 実装ルール（CLAUDE.md の補足）
+# api-service 実装ルール（AGENTS.md の補足）
 
-アーキテクチャの全体像・feature 構造・ROP パターンは CLAUDE.md を参照。ここでは
+アーキテクチャの全体像・feature 構造・ROP パターンは AGENTS.md を参照。ここでは
 `bun run arch:guards`（`scripts/check/arch-guards.sh`）で機械的に強制される規約と、
-CLAUDE.md に載っていない細部の規約をまとめる。
+AGENTS.md に載っていない細部の規約をまとめる。
 
 ## arch:guards で強制される禁止事項
 
@@ -46,7 +46,7 @@ CLAUDE.md に載っていない細部の規約をまとめる。
 
 - 外部サービスの SDK は必ず `src/integrations/external/` に薄いラッパーとして配置。features / middlewares から SDK を直接 import しない。
 - ラッパーは `process.env` を参照せず、設定値は呼び出し元（container）からパラメータで受け取る。
-- feature 間連携は ports + `integrations/composition/` アダプタ（CLAUDE.md 参照）。adapter を追加したら co-located テストを必ず書く。
+- feature 間連携は ports + `integrations/composition/` アダプタ（AGENTS.md 参照）。adapter を追加したら co-located テストを必ず書く。
 
 ## `src/shared/` へロジックを移すと品質ゲートから静かに外れる
 

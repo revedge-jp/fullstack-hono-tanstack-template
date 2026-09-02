@@ -53,7 +53,7 @@ graph TB
 - **ロギング**: `@repo/logging`（pino）。Workers ランタイムでは console ベースの
   Workers-safe stream、Bun 開発時は pino-pretty、Bun/Node 本番では stdout NDJSON。
 
-詳細は [CLAUDE.md](../../CLAUDE.md) のアーキテクチャ節と [開発ガイド](../dev/development.md) を参照。
+詳細は [AGENTS.md](../../AGENTS.md) のアーキテクチャ節と [開発ガイド](../dev/development.md) を参照。
 
 ## データベース
 

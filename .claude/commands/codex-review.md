@@ -1,6 +1,6 @@
 以下の手順でコードレビューを実施してください。
 
-**回答は必ず日本語で行ってください。**
+**回答は必ず日本語で行ってください。** 指摘の採否基準は `REVIEW.md` が正。
 
 ---
 
@@ -14,11 +14,7 @@ git diff main
 
 ## 対象外ファイル
 
-以下のパスに含まれるファイルは**すべてのステップでレビュー対象外**とする。
-
-- `apps/client/components/ui/**` — shadcn/ui CLI で生成されたコード
-- `apps/client/components/ui-shadcn/**`
-- `**/shared/ui-shadcn/**`
+`REVIEW.md` の「指摘しないもの」にある生成コードは**すべてのステップでレビュー対象外**とする。
 
 ---
 
@@ -69,21 +65,15 @@ git diff main
 
 Step 1-C で `[考慮漏れ候補]` または `[移動/改名]` とした項目を起点に「実際に困る場面があるか？」を問い続ける。
 
-**指摘を確定する 3 要件（すべて満たす場合のみ指摘する）:**
-
-1. 失敗するコードパスを 1 本追跡できる
-2. その失敗が変更によって**新たに発生した**ことを示せる
-3. 変更前のコードがその問題を**防いでいた**ことを示せる（`[移動/改名]` の場合: 旧コードが扱っていたケースを新コードが扱えていないことを示せる）
+採否は `REVIEW.md` の「指摘してよいもの」の証拠要件に従う（失敗するコードパス 1 本 + 変更前が
+防いでいた根拠。`[移動/改名]` の場合は旧コードが扱っていたケースを新コードが扱えていないことを示す）。
 
 ### トラック B: 新機能正確性検証
 
 Step 1-D で言語化した各追加振る舞いについて、実装が期待動作を満たしているかを検証する。
 
-**指摘を確定する 3 要件（すべて満たす場合のみ指摘する）:**
-
-1. Step 1-D で言語化した期待動作と実装が乖離しているコードパスを追跡できる
-2. そのエラーパスまたはエッジケースが未実装・誤実装であることを示せる（例: バリデーション不足、エラーが `Ok` として返される、権限チェック漏れ）
-3. テストにそのケースが存在しないか、assert が意味のある値を検証していないことを示せる
+採否は `REVIEW.md` の証拠要件に従う（Step 1-D の期待動作と乖離するコードパス + そのケースを検証する
+テストが無いこと）。
 
 > **🟠 の注意**: 並行実行バグ・トランザクション境界の欠如など「コードパス 1 本では表現できない」カテゴリは、「失敗条件を再現可能なシナリオとして記述できる」ことをもって要件 1 の代替とする。
 
@@ -103,7 +93,7 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 - DTOやバリデーション定義（`XxxInput`）が `application/validators.ts` にあるか
 - 外部SDK（GCP等）が `src/integrations/` 以外で直接 import されていないか
 - `features/` 配下で `process.env` を直接参照していないか（`src/config.ts` 経由であるべき）
-- feature が他 feature を直接 import していないか（`features/A/application/` から `features/B/...` への直接 import は禁止。B の機能が必要なら A 側に `application/ports.ts` を定義し、`integrations/composition/` のアダプター経由で注入する。詳細: CLAUDE.md の「Feature-to-feature integration」節）
+- feature が他 feature を直接 import していないか（`features/A/application/` から `features/B/...` への直接 import は禁止。B の機能が必要なら A 側に `application/ports.ts` を定義し、`integrations/composition/` のアダプター経由で注入する。詳細: AGENTS.md の「Feature-to-feature integration」節）
 
 ### 3-B: ROP エラー型チェーン
 
@@ -124,7 +114,7 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 
 ### 3-E: TypeScript
 
-- `as` 型アサーションの不適切な使用がないか（`as const` / テスト内 `as unknown` / 型ファイルの `as never` は許容）
+- `as` 型アサーションの許容範囲は AGENTS.md「TypeScript Style」/ ADR-003 に従う
 - `any` 型を使用していないか
 - Zod v4 API を使用しているか（`z.email()`, `z.url()` を使用、`z.string().email()` は旧API）
 
