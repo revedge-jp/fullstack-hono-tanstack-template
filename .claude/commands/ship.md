@@ -83,7 +83,9 @@ gh pr edit <番号> --body-file <更新した本文>
 gh pr ready <番号>
 gh pr merge <番号> --auto
 ```
-（マージ方式は merge queue 側で squash に固定されているので `--squash` は付けない）
+（マージ方式は merge queue 側で squash に固定されているので `--squash` は付けない。
+`scripts/setup-github.sh` がルールセットを作れていない環境（private + Free プラン）では merge queue も
+auto-merge も無いので、CI 通過後に `gh pr merge <番号> --squash` を手で打つ）
 
 必須チェック `Review converged` が「レビュー収束:」行を検査するので、行が無いと auto-merge は
 発火しない。マージは merge queue が「main に積んだ状態」で CI を 1 回通してから行う
