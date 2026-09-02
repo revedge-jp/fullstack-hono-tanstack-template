@@ -87,13 +87,15 @@
 
 ### client に環境変数を追加する場合
 
-1. **`.env.example`** にサンプル値を追加する
-2. **参照箇所**を実装する（例: `apps/client/shared/lib/api.ts`）。現状バリデーションはないが、フォールバックを適切に設定する
-3. **`VITE_` prefix**: クライアント（ブラウザ）に露出する変数は Vite の慣例に従い `VITE_` を付与する。機密情報は絶対に含めない
-4. **turbo.json**: client の build で使用する場合は `env` に追加する
-5. **CI**: E2E 等で必要なら `.github/workflows/ci.yml` の `e2e-tests` ジョブの `env` に追加する
-6. **本番環境**: `apps/client/wrangler.jsonc` の `vars` に追加する（環境別は `env.staging` / `env.production` 配下）
-7. **ドキュメント**: 本ファイルの一覧と `README.md` を更新する
+client には独自の設定読み込みが無い。client と api-service は同一 Worker にビルドされ、SSR /
+`createServerFn` の実行時は api-service の `loadConfig(env)` が読んだ値をそのまま使える。
+
+1. **サーバー側で使う値**（SSR・serverFn・in-process API 呼び出し）: 上の「api-service に環境変数を追加する場合」の手順どおり `apps/api-service/src/config.ts` に足す。client 側で `process.env` を読まない
+2. **ブラウザに出す値**: 実行環境ごとに変わる値は route の `loader`（サーバー側）から返す。build 時定数として焼き込んでよい非機密の値だけ `VITE_` 接頭辞で `.env.example` に追加し、`import.meta.env.VITE_XXX` で参照する（現状は `import.meta.env.DEV` のみ）。機密は絶対に含めない
+3. **turbo.json**: `VITE_` 変数は client の build のキャッシュキーに影響するため `build` タスクの `env` に追加する
+4. **CI**: E2E 等で必要なら `.github/workflows/ci.yml` の `e2e-tests` ジョブの `env` に追加する
+5. **本番環境**: staging / production は `alchemy.run.ts` の vars（機密は Workers Secrets）。`apps/client/wrangler.jsonc` の `vars` はローカル `wrangler dev` 用
+6. **ドキュメント**: 本ファイルの一覧と `README.md` を更新する
 
 ### Docker / インフラのみの環境変数の場合
 

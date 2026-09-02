@@ -192,8 +192,8 @@ Claude Code の承認プロンプト回避で、前提は「信頼できない�
 - CI 上でエージェントに実装させるワークフロー（issue コメント起動の claude-code-action 等）は
   **置かない**。公開リポジトリでは第三者が issue やコメントを書けるため 2 を排除できず、実装 PR を
   作るには 3（push / PR 作成）が必須で、2 と 3 が常に同居する。実装はローカルの Claude Code で行い、
-  CI のエージェントは読み取り専用のレビュー（`codex-review.yml`: `contents: read`、sandbox read-only）
-  に限る。`uses:` の SHA ピン留めと `id-token: write` の不在は `arch:guards` が機械的に検査する。
+  CI にエージェントを置くなら読み取り専用のレビュー（`contents: read`、sandbox read-only）に限る
+  （現状は置いていない。レビューはローカルの `/code-review` と Claude Code Review）。`uses:` の SHA ピン留めと `id-token: write` の不在は `arch:guards` が機械的に検査する。
 - MCP で本番 DB に接続するときは**読み取り専用の接続**を使う（PlanetScale / BigQuery 等の
   `*_readonly` ツール）。書き込みが必要なら人が SQL を確認して実行する。
 - ローカルの Claude Code は `.env` に本番資格情報を置かない前提で動く。本番の値を扱う作業では、

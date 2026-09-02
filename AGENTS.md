@@ -12,8 +12,7 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
   **Claude Code 以外のツールは、このファイルの次に `.claude/rules/general.md` と
   `.claude/rules/package-management.md` を読む**（ログ規約・Git 安全運用・`bun add` 必須など、最初に
   破りやすい規約はそこにある）。パススコープの 3 つは各ディレクトリの AGENTS.md から辿る
-- `REVIEW.md`: コードレビューの採否基準。Claude Code の `/code-review` はこれを読み、Codex には
-  `codex-review.yml` の prompt で渡す
+- `REVIEW.md`: コードレビューの採否基準。Claude Code の `/code-review` と Claude Code Review が読む
 
 ## Stack
 
