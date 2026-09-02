@@ -87,7 +87,7 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "bun@1.3.9",
+  "packageManager": "bun@1.4.0",
   "overridesNotes": {
     "//": "各 override の理由。上流（bun why <pkg> で確認）が修正版に更新されたら該当行ごと削除する",
     "defu": "推移依存の脆弱性回避（prototype pollution 系）。>=6.1.5 で修正済み",
