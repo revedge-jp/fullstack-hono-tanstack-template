@@ -43,6 +43,14 @@
 bash scripts/agent-worktree-setup.sh
 ```
 
+### `.worktreeinclude` で `.env` を worktree に複製しない
+
+Claude Code の `.worktreeinclude` は gitignore 済みファイルを新 worktree へコピーする仕組みだが、
+このリポジトリの `.env` は worktree ごとに**別のポート・別の DB コンテナ**を割り当てる前提
+（`agent-worktree-setup.sh` がスロットを決めて生成する）。メインの `.env` をコピーすると 2 つの
+worktree が同じ DB とポートを取り合い、テストが互いを壊す。`.worktreeinclude` は置かず、
+セットアップスクリプトを実行する運用を維持する。
+
 ### `git diff main` はローカル main の鮮度に依存する（worktree の有無を問わない）
 
 `code-review` スキルの Step 0 は `git diff main` を使うが、これは**ローカルの `main` ブランチ**

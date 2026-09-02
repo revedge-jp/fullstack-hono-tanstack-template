@@ -246,8 +246,8 @@ LOG_PRETTY=false
 
 ## 要件
 
-- Node >= 18
-- Bun（`packageManager: bun@1.3.1`）
+- Node >= 22
+- Bun（`packageManager: bun@1.4.0`）
 
 依存の追加/更新は必ず Bun 経由で行い、ロックファイルを尊重すること。
 
