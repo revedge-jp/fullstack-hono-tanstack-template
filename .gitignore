@@ -101,3 +101,7 @@ temp/
 
 # Claude Code local state (review history etc.)
 .claude/last-review-commit
+
+# security-audit の一時出力（scripts/check/security-audit-triage.mjs）
+audit-output.json
+audit-output.txt
