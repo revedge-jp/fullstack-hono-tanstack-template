@@ -7,6 +7,9 @@ on:
       - 'v*.*.*'
   pull_request:
     branches: [main, develop]
+  # merge queue が作る一時ブランチ(main + キュー内の PR)で CI Pipeline を走らせる。
+  # これが無いとキューは永久に待つ。詳細は docs/deploy/github-ruleset.md
+  merge_group:
 
 permissions:
   contents: read
@@ -25,12 +28,14 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # merge_group(キュー上の検証)では paths-filter の比較対象が無いので全部 true にして全ジョブを回す。
+    # キューに入るのはマージ直前の 1 回だけなので、ここで絞る意味は薄い
     outputs:
-      client: ${{ steps.filter.outputs.client }}
-      api-service: ${{ steps.filter.outputs.api-service }}
-      packagesAll: ${{ steps.filter.outputs.packagesAll }}
-      deps: ${{ steps.filter.outputs.deps }}
-      workflows: ${{ steps.filter.outputs.workflows }}
+      client: ${{ github.event_name == 'merge_group' || steps.filter.outputs.client == 'true' }}
+      api-service: ${{ github.event_name == 'merge_group' || steps.filter.outputs.api-service == 'true' }}
+      packagesAll: ${{ github.event_name == 'merge_group' || steps.filter.outputs.packagesAll == 'true' }}
+      deps: ${{ github.event_name == 'merge_group' || steps.filter.outputs.deps == 'true' }}
+      workflows: ${{ github.event_name == 'merge_group' || steps.filter.outputs.workflows == 'true' }}
     steps:
       # persist-credentials を無効化しない: paths-filter は pull_request では GitHub API を使うが、
       # push イベントでは比較対象コミットを git fetch で取得するため、private リポジトリでは
@@ -38,6 +43,7 @@ jobs:
       # このジョブは push を行わず、後続 step も paths-filter のみなのでリスクは限定的。
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        if: github.event_name != 'merge_group'
         id: filter
         with:
           filters: |
@@ -93,6 +99,26 @@ jobs:
             echo "PR 本文に「## 検証器の変更理由」あり"; exit 0
           fi
           echo "::error::検証器(上記)を変更していますが、PR 本文に「## 検証器の変更理由」節がありません。閾値の引き下げ・除外の追加・ガードの削除がコードを直す代わりになっていないかを書いてください(一覧: scripts/check/verifier-paths.txt)"
+          exit 1
+
+  # レビューが収束した PR だけをマージ対象にする。auto-merge / merge queue を使うと「CI 緑」だけで
+  # 入ってしまうため、ship.md の手順どおり /code-review を CONFIRMED ゼロまで回した証跡
+  # (本文の「レビュー収束:」行)を要求する。行は人が書くので偽装は可能だが、「書かずに通る」経路を塞ぐ。
+  # bot の依存更新 PR は対象外。
+  review-converged:
+    name: Review converged
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    steps:
+      - name: PR 本文にレビュー収束の記録があるか
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s' "$PR_BODY" | grep -qE '^レビュー収束: .*CONFIRMED 0'; then
+            echo "レビュー収束の記録あり"; exit 0
+          fi
+          echo "::error::PR 本文に「レビュー収束: 最終周 CONFIRMED 0」の行がありません。/code-review を CONFIRMED ゼロまで回してから、ship.md の手順で本文に記録してください(Draft のまま作業中なら、この失敗は無視してよい)"
           exit 1
 
   # ワークフローファイルの構文・式を検証する。YAML としては valid でも GitHub Actions として
@@ -499,7 +525,7 @@ jobs:
   ci-status:
     name: CI Pipeline
     runs-on: ubuntu-latest
-    needs: [changes, ci, api-service-integration-tests, e2e-tests, workflow-lint, verifier-change]
+    needs: [changes, ci, api-service-integration-tests, e2e-tests, workflow-lint, verifier-change, review-converged]
     if: always()
     steps:
       - name: Check CI status
@@ -511,6 +537,7 @@ jobs:
           for entry in \
             "Workflow lint:${{ needs.workflow-lint.result }}" \
             "Verifier change:${{ needs.verifier-change.result }}" \
+            "Review converged:${{ needs.review-converged.result }}" \
             "CI checks:${{ needs.ci.result }}" \
             "Integration tests:${{ needs.api-service-integration-tests.result }}" \
             "E2E tests:${{ needs.e2e-tests.result }}"; do

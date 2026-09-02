@@ -45,7 +45,8 @@ git diff origin/main...HEAD
 以下を順番に実行してください：
 
 1. `git log origin/main..HEAD --oneline` でコミット一覧を確認
-2. `gh pr create` でPRを作成
+2. `gh pr create --draft` で **Draft** として PR を作成（レビュー収束前にマージされないようにする。
+   Draft の間は auto-merge も merge queue も動かない）
 
 PR のタイトルとボディは差分とコミット履歴から自動生成してください：
 - タイトル: 70文字以内、日本語で変更の本質を一言で
@@ -63,3 +64,29 @@ PR のタイトルとボディは差分とコミット履歴から自動生成�
 `レビュー往復: N周（主な指摘: 一言）` を1行残す。squash マージでコミット単位の
 `(コードレビュー指摘)` マーカーは main から消えるため、これが無いとレビュー工数が
 後から一切計測できなくなる。往復が無ければ書かない。
+
+### 5. レビュー収束とマージ
+
+PR を作ったら、**worktree の有無に関係なく PR 番号を渡して** `/code-review medium <PR番号>` を回す。
+CONFIRMED の指摘が出たら修正して push し、もう 1 周。**CONFIRMED がゼロになった周で終了**
+（PLAUSIBLE や整理系だけの周は打ち切ってよい）。依存更新だけの PR でも省かない。
+
+収束したら本文末尾に次の 2 行を書き、Draft を解除して auto-merge を有効にする:
+
+```
+レビュー往復: N周（主な指摘: 一言）
+レビュー収束: 最終周 CONFIRMED 0
+```
+
+```bash
+gh pr edit <番号> --body-file <更新した本文>
+gh pr ready <番号>
+gh pr merge <番号> --auto --squash
+```
+
+CI の `Review converged` ジョブが「レビュー収束:」行を検査するので、行が無いと auto-merge は
+発火しない。マージは merge queue が「main に積んだ状態」で CI を 1 回通してから行う
+（ブランチの最新化は不要。queue の説明は `docs/deploy/github-ruleset.md`）。
+
+**例外（手動マージ）**: マイグレーション・auth・決済・検証器(`scripts/check/verifier-paths.txt`)に
+触る PR は auto-merge を使わず、ユーザーの確認を待つ。
