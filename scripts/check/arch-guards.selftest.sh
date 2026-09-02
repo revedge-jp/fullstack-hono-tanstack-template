@@ -126,6 +126,11 @@ expect_guard "UI からの processXxx 直接 import 禁止" \
 export const SelftestUi = processFoo;' \
   "UI コンポーネントから processXxx を直接 import できません"
 
+expect_guard "@hono/zod-validator 直接 import 禁止" \
+  "$D/presentation/__selftest_zv.ts" \
+  'import { zValidator } from "@hono/zod-validator"; export const selftestZv = zValidator;' \
+  "@hono/zod-validator を直接 import せず"
+
 expect_guard "旧 @repo/result API (result.type ===) 禁止" \
   "$D/application/__selftest_legacy_result.ts" \
   'export function selftestLegacy(result: { type: string }) {

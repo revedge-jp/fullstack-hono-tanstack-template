@@ -1,8 +1,6 @@
-import type { AppType } from "api-service";
-import { hc } from "hono/client";
 import { z } from "zod";
 
-const apiClient = hc<AppType>("/");
+import { browserApiClient as apiClient } from "@/shared/lib/browser-api-client";
 
 const CreateTaskErrorResponseSchema = z.object({ ok: z.literal(false), error: z.string() });
 

@@ -10,7 +10,7 @@
 // テストファイル自身で呼ぶ必要がある — bun:test の制約):
 //
 //   const api = createApiMock();
-//   mock.module("hono/client", api.honoClientModule);        // ブラウザ側(actions / queryFn)
+//   mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule); // ブラウザ側
 //   mock.module("@/shared/lib/api-client", api.apiClientModule); // SSR 側(serverFn)
 //   mock.module("@tanstack/react-start", reactStartModule);
 //   mock.module("@tanstack/react-start/server", reactStartServerModule());
@@ -86,8 +86,11 @@ export function createApiMock(overrides: Partial<ApiMockState> = {}) {
     reset(next: Partial<ApiMockState> = {}) {
       Object.assign(state, defaults, next);
     },
-    // ブラウザ側: `hc<AppType>("/")` を差し替える
-    honoClientModule: () => ({ hc: () => client }),
+    // ブラウザ側: actions/queryFn が使う共有シングルトン(shared/lib/browser-api-client)を
+    // 差し替える。"hono/client" のモックでは足りない — browserApiClient はモジュール
+    // キャッシュされるため、複数テストファイルを同一プロセスで実行すると最初のファイルの
+    // モックに束縛されたまま後続ファイルの state 変更が効かなくなる。
+    browserApiClientModule: () => ({ browserApiClient: client }),
     // SSR 側: `getApiClient()`(shared/lib/api-client)を差し替える
     apiClientModule: () => ({ getApiClient: () => client }),
   };

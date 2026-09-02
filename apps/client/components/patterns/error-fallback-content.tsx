@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { reportReactError } from "@/shared/lib/report-client-error";
 
 import { EmptyState } from "./empty-state";
 
@@ -8,6 +10,11 @@ import { EmptyState } from "./empty-state";
 // __root.tsx と defaultErrorComponent が共有)が使う。外側のセンタリング/レイアウトの
 // ラップは呼び出し側に委ねる — エラー文言を変えるときはここ1箇所を直せば全部に効く。
 export function ErrorFallbackContent(props: { error: Error; description?: string }) {
+  // 画面を壊したクラッシュを自前で通報する。副作用なのでレンダー本体ではなく effect で。
+  useEffect(() => {
+    reportReactError(props.error);
+  }, [props.error]);
+
   return (
     <>
       <EmptyState

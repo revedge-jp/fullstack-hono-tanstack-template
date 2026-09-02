@@ -1,8 +1,8 @@
 import { createAuthedApp } from "@app/factory";
 import type { makeGetSession } from "@app/features/auth/application/get-session/usecase";
 import { requireAuth } from "@app/middlewares/require-auth";
-import { toHttp } from "@app/shared/http/to-http";
-import { zValidator } from "@hono/zod-validator";
+import { toEmptyHttp, toHttp } from "@app/shared/http/to-http";
+import { zValidator } from "@app/shared/http/z-validator";
 import { z } from "zod";
 
 import type { TasksService } from "../application/service";
@@ -68,9 +68,6 @@ export function createTasksRouter(deps: {
         id: c.req.valid("param").id,
         ownerId: c.get("user").id,
       });
-      if (result.isOk()) {
-        return c.body(null, 204);
-      }
-      return toHttp(c, result, { NotFound: 404, Unexpected: 500 });
+      return toEmptyHttp(c, result, { NotFound: 404, Unexpected: 500 });
     });
 }

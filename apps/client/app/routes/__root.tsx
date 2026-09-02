@@ -3,6 +3,7 @@ import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanst
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import type { ReactNode } from "react";
 
+import { StaleVersionBanner } from "@/components/layout/stale-version-banner";
 import { DefaultNotFoundComponent } from "@/components/patterns/default-not-found";
 import { FullScreenError } from "@/components/patterns/full-screen-error";
 
@@ -83,6 +84,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body className="antialiased" suppressHydrationWarning>
+        <StaleVersionBanner />
         {children}
         {/* devtools は開発時のみ。本番バンドルからは import.meta.env.DEV の静的置換で除外される */}
         {import.meta.env.DEV ? <TanStackRouterDevtools position="bottom-right" /> : null}

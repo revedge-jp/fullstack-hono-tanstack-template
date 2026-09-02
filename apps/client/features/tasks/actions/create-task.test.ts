@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createApiMock } from "@/test-helpers/api-mock";
 
 const api = createApiMock({ body: { ok: false, error: "Invalid" } });
-mock.module("hono/client", api.honoClientModule);
+mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule);
 
 const { createTask } = await import("./create-task");
 
