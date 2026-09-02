@@ -25,6 +25,6 @@
 - エラー文言はメッセージに **「minimum release age」** を含む（範囲指定なら
   `blocked by minimum-release-age`、完全一致指定なら `was published within minimum release age`）。
   これが出たら**バージョン指定を外して1つ前の版を入れる**のが既定の対応。
-- 緊急のセキュリティ修正で即日必要なときだけ、`[install]` に `minimumReleaseAgeExcludes = ["pkg"]`
-  を理由コメント付きで一時追加し、取り込み後に外す。`renovate.json` の `vulnerabilityAlerts` も
-  同じ 3 日に揃えてある（0 日にしても Bun 側で弾かれて lock 更新が失敗するだけ）。
+- 即日必要なセキュリティ修正の逃し方（`minimumReleaseAgeExcludes`）は `bunfig.toml` のコメント参照。
+  `renovate.json` の `vulnerabilityAlerts` も同じ 3 日に揃えてある（0 日にしても Bun 側で弾かれて
+  lock 更新が失敗するだけ）。

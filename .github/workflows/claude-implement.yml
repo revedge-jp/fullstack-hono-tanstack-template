@@ -1,13 +1,16 @@
 name: Claude Implementation
 
 # Trigger: comment "@claude" on an issue (MEMBER or OWNER only)
-# Prerequisites: ANTHROPIC_API_KEY secret must be configured in repository settings.
+# Prerequisites: Secrets に ANTHROPIC_API_KEY、Variables に CLAUDE_TRUSTED_ACTORS
+#   (プロンプトに含めてよいコメント投稿者のログインをカンマ区切りで。例: alice,bob,claude[bot])。
+#   変数が空だと action は全コメントを含める(fail-open)ため、未設定ならジョブ自体を起動しない。
 #
 # セキュリティ前提(背景と「Rule of Two」は .claude/rules/general.md を参照):
 #   (1) コメント投稿者と issue 作者を MEMBER/OWNER に限定 — issue 本文が第三者由来にならない
-#   (2) include_comments_by_actor でプロンプトに入るコメントをメンバーに限定 — action は既定で
-#       issue の全コメント(最大100件)をプロンプトに含めるため、公開リポジトリでは (1) だけでは
-#       第三者のコメントが読まれる
+#   (2) include_comments_by_actor(= vars.CLAUDE_TRUSTED_ACTORS)でプロンプトに入るコメントを
+#       列挙したログインに限定 — action は既定で issue の全コメント(最大100件)をプロンプトに
+#       含めるため、公開リポジトリでは (1) だけでは第三者のコメントが読まれる。
+#       author_association による動的絞り込みは無いので、メンバーが増えたら変数を更新する
 #   (3) action は commit SHA でピン留めし、修正版(2026-01-16)より新しいものだけを使う
 #   (4) `id-token: write` は付与しない。permissions は必要最小限
 #   参考: https://labs.cloudsecurityalliance.org/research/csa-research-note-claude-code-github-action-prompt-injection/
@@ -32,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: |
+      vars.CLAUDE_TRUSTED_ACTORS != '' &&
       contains(github.event.comment.body, '@claude') &&
       (github.event.comment.author_association == 'MEMBER' ||
        github.event.comment.author_association == 'OWNER') &&
@@ -44,5 +48,4 @@ jobs:
       - uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # リポジトリのメンバーをカンマ区切りで列挙する(author_association による動的絞り込みは無い)
-          include_comments_by_actor: mitochon9
+          include_comments_by_actor: ${{ vars.CLAUDE_TRUSTED_ACTORS }}

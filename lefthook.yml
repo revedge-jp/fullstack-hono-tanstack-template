@@ -10,6 +10,9 @@ pre-commit:
       # staged_files が全て除外されると unmatched-pattern エラーで非0終了する
       # （下の oxfmt と違いこのフラグが無かった）。shadcn 生成コード単独のコミットが
       # pre-commit で必ず失敗するため必須。
+      # 型情報ルール(no-floating-promises 等)は api-service/dist の宣言が無いと Hono RPC 呼び出しに
+      # 効かない(turbo.json の client#lint 参照)。ここは best-effort で、確実な検出は pre-push の
+      # check-all(turbo lint が ^build を先行させる)に任せる。
       run: bunx oxlint --fix --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     2_oxfmt:

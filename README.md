@@ -58,6 +58,7 @@ gh auth login          # 未認証の場合
 - Ruleset と auto-merge は **public リポジトリまたは GitHub Pro 以上** が必要（対象外の場合はスクリプトが案内を出して他の設定は続行します）
 - Renovate は GitHub App の承認が必要なため、スクリプトの案内に従って https://github.com/apps/renovate からインストールしてください
 - 設定内容の詳細・チーム開発向けの変更は [GitHub Ruleset 設定ガイド](docs/deploy/github-ruleset.md) を参照
+- issue コメントの `@claude` で実装させる場合は Secrets に `ANTHROPIC_API_KEY`、Variables に `CLAUDE_TRUSTED_ACTORS`（プロンプトに含めてよいコメント投稿者のログインをカンマ区切り。例: `alice,bob,claude[bot]`）。変数が無いとワークフローは起動しない（理由は `.github/workflows/claude-implement.yml` 冒頭）
 - Codex AI レビューを使う場合は **2つとも**設定する: Secrets に `CODEX_REVIEW_API_KEY`、Variables に `ENABLE_CODEX_REVIEW=true`（変数を設定しないとワークフローは一度も起動しない — 派生プロダクトで未設定のまま24回 skip し続けた実例あり。詳細は `.github/workflows/codex-review.yml` 冒頭）
 
 ## リポジトリ構成
@@ -174,6 +175,7 @@ git push -u origin <branch>
 - **削除**: `bun remove <pkg>`。
 - **実行場所**: 対象パッケージディレクトリで実行（例: `apps/api-service`）。
 - **バージョン指定**: 原則不要（必要時のみ `@<version>`）。
+- **公開 3 日以内の版は入らない**（`bunfig.toml` の `minimumReleaseAge`）。`minimum release age` で弾かれたら版指定を外して 1 つ前を入れる。
 - **lock**: `bun.lock` を信頼し、手動調整はしない。
 
 ## 環境変数

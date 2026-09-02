@@ -35,6 +35,7 @@
       "dependsOn": ["^build"]
     },
     "lint:fix": { "cache": false },
+    "client#lint:fix": { "cache": false, "dependsOn": ["^build"] },
     "test": {
       "cache": false,
       "dependsOn": ["^test"],
