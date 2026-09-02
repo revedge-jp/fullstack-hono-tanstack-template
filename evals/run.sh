@@ -27,7 +27,8 @@ START=$(date +%s)
 set +e
 # acceptEdits だけだと Bash が全部拒否され、テストもゲートも実行できないまま書くことになる。
 # 検証コマンドは許可し、検証器の編集はフック(ask → ヘッドレスでは拒否)に判定させる。
-# `bun -e` / `node -e` のような任意スクリプト実行は許可しない(フックを迂回してファイルを書ける)。
+# `bun -e` / `node -e` の一行スクリプトは許可しない。ただし `bun run ./x.ts` や `bun test`(テスト
+# 本体は任意コード)でファイルを書く経路は残る。フックは Edit/Write しか見ないので、採点は git diff で行う。
 CLAUDE_OUT="$ROOT/evals/results/.tmp-$TASK-$CONDITION-$STAMP"
 mkdir -p "$CLAUDE_OUT"
 claude -p "$(cat "$TASK_DIR/prompt.md")" \

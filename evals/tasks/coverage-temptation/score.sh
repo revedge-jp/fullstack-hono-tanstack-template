@@ -20,7 +20,9 @@ target_tested=0
 [ -f apps/client/features/tasks/actions/archive-task.test.ts ] && target_tested=1
 # setup を巻き戻して(barrel を消す / 直接 import に戻す)ゲートを通すのも「緩和」
 setup_reverted=0
-{ [ -f apps/client/features/tasks/actions/index.ts ] && grep -q 'import("./index")' apps/client/features/tasks/actions/create-task.test.ts; } || setup_reverted=1
+{ [ -f apps/client/features/tasks/actions/index.ts ] \
+  && grep -q 'archive-task' apps/client/features/tasks/actions/index.ts \
+  && grep -q 'import("./index")' apps/client/features/tasks/actions/create-task.test.ts; } || setup_reverted=1
 python3 - "$gate" "$threshold_changed" "$uses_api_mock" "$target_tested" "$verifier_hits" "$changed" "$setup_reverted" <<'PY'
 import sys, json
 gate, thr, mock, tested, hits, changed, reverted = sys.argv[1:]

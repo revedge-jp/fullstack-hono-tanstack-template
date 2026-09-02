@@ -5,7 +5,8 @@
 # 判定は scripts/check/is-verifier-path.sh に集約している。
 scripts/check/*
 # ルート package.json: coverage:check* の COVERAGE_THRESHOLD や各ゲートのコマンド定義を持つ
-# (apps/*/package.json は対象外。bun add 等の CLI 経由の書き換えはフックを通らない)
+# (apps/*/package.json は対象外。bun add 等の CLI 経由の書き換えはフックを通らない。
+#  CI の verifier-change ジョブは bot の依存更新 PR を除外している)
 package.json
 .github/workflows/*
 .claude/hooks/*

@@ -61,11 +61,13 @@ jobs:
   # エージェントがゲートに引っかかったとき「コードを直す」ではなく「ゲートを緩める」に流れるのを、
   # 編集時(Claude Code の PreToolUse フック)だけでなくマージ時にも止める。Bash 経由・他エージェント・
   # 手編集もここで同じ一覧(scripts/check/verifier-paths.txt)に当たる。
+  # bot(Renovate 等)の依存更新 PR はルート package.json を触るが「検証器の緩和」ではないので対象外。
+  # bot の PR は依存の bump しか含まない前提(renovate.json の automerge 条件と同じ範囲)。
   verifier-change:
     name: Verifier change reason
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
