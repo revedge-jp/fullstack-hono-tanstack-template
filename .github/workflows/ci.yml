@@ -7,6 +7,9 @@ on:
       - 'v*.*.*'
   pull_request:
     branches: [main, develop]
+  # merge queue が作る一時ブランチ(main + キュー内の PR)で CI Pipeline を走らせる。
+  # これが無いとキューは永久に待つ。詳細は docs/deploy/github-ruleset.md
+  merge_group:
 
 permissions:
   contents: read
@@ -25,12 +28,14 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # merge_group(キュー上の検証)では paths-filter の比較対象が無いので全部 true にして全ジョブを回す。
+    # キューに入るのはマージ直前の 1 回だけなので、ここで絞る意味は薄い
     outputs:
-      client: ${{ steps.filter.outputs.client }}
-      api-service: ${{ steps.filter.outputs.api-service }}
-      packagesAll: ${{ steps.filter.outputs.packagesAll }}
-      deps: ${{ steps.filter.outputs.deps }}
-      workflows: ${{ steps.filter.outputs.workflows }}
+      client: ${{ github.event_name == 'merge_group' || steps.filter.outputs.client == 'true' }}
+      api-service: ${{ github.event_name == 'merge_group' || steps.filter.outputs.api-service == 'true' }}
+      packagesAll: ${{ github.event_name == 'merge_group' || steps.filter.outputs.packagesAll == 'true' }}
+      deps: ${{ github.event_name == 'merge_group' || steps.filter.outputs.deps == 'true' }}
+      workflows: ${{ github.event_name == 'merge_group' || steps.filter.outputs.workflows == 'true' }}
     steps:
       # persist-credentials を無効化しない: paths-filter は pull_request では GitHub API を使うが、
       # push イベントでは比較対象コミットを git fetch で取得するため、private リポジトリでは
@@ -38,6 +43,7 @@ jobs:
       # このジョブは push を行わず、後続 step も paths-filter のみなのでリスクは限定的。
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        if: github.event_name != 'merge_group'
         id: filter
         with:
           filters: |

@@ -39,6 +39,11 @@ echo ""
 # -----------------------------------------------------------------------------
 echo "=== 1/4 Branch Ruleset (main-branch-protection) ==="
 
+# merge queue を使う。「マージ前にブランチを最新化」(strict_required_status_checks_policy)は
+# 並行 PR があるたびに最新化 → CI 再実行の連鎖を生むので使わず、キューが「main に積んだ状態」で
+# CI Pipeline を 1 回走らせてからマージする。CI 側は .github/workflows/ci.yml の `merge_group:`
+# トリガーが対応する。詳細は docs/deploy/github-ruleset.md の「merge queue」節。
+
 RULESET_JSON=$(cat << 'EOF'
 {
   "name": "main-branch-protection",
@@ -66,10 +71,23 @@ RULESET_JSON=$(cat << 'EOF'
     {
       "type": "required_status_checks",
       "parameters": {
-        "strict_required_status_checks_policy": true,
+        "strict_required_status_checks_policy": false,
         "required_status_checks": [
-          { "context": "CI Pipeline" }
+          { "context": "CI Pipeline" },
+          { "context": "Review converged" }
         ]
+      }
+    },
+    {
+      "type": "merge_queue",
+      "parameters": {
+        "merge_method": "SQUASH",
+        "grouping_strategy": "ALLGREEN",
+        "min_entries_to_merge": 1,
+        "max_entries_to_merge": 5,
+        "min_entries_to_merge_wait_minutes": 0,
+        "max_entries_to_build": 5,
+        "check_response_timeout_minutes": 60
       }
     }
   ],
