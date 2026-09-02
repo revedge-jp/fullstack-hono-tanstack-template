@@ -7,6 +7,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
+    // 本番の自動トレース(spans/timing/binding 操作)。ローカルの wrangler dev / vite dev は
+    // この設定に関係なく常にトレースを取り、/cdn-cgi/local/explorer で見られる(AGENTS.md 参照)
+    "traces": { "enabled": true },
   },
   "main": "app/server.ts",
   "assets": {
