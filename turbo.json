@@ -36,12 +36,6 @@
     },
     "lint:fix": { "cache": false },
     "client#lint:fix": { "cache": false, "dependsOn": ["^build"] },
-    // client#lint の ^build が @repo/db / @repo/logging の build(tsc が dist/ を書く)を起動し、
-    // 同時に走る各パッケージ自身の type-aware lint が書き込み途中の dist を読んで
-    // 理由不明の失敗になる(node_modules 更新直後に 2 回観測、再現率は低い)。
-    // 自身の build を先に終わらせて競合を消す。build は tsc -d のみで数百 ms
-    "@repo/db#lint": { "dependsOn": ["build"] },
-    "@repo/logging#lint": { "dependsOn": ["build"] },
     "test": {
       "cache": false,
       "dependsOn": ["^test"],
