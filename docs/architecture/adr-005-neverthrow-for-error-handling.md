@@ -130,7 +130,7 @@ return okAsync(input)
 
 ## 影響範囲
 
-- `CLAUDE.md` の共有パッケージ表・アーキテクチャ例を neverthrow ベースに更新
+- `AGENTS.md` の共有パッケージ表・アーキテクチャ例を neverthrow ベースに更新
 - `@repo/result` は廃止
 - `scripts/check/arch-guards.sh` に旧API検出ガード（`result.type ===` 禁止）と
   usecase.ts の chain 強制ガードを追加

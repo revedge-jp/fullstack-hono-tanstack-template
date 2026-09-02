@@ -172,7 +172,7 @@ alchemy.run.ts の経路で渡り、`wrangler secret put` の手動実行は不�
 - **features 配下**: `process.env` の直参照は禁止。`config.ts` 経由で `loadConfig()` の戻り値を受け取る。
 - **integrations 層**: 外部 SDK のラッパーは `process.env` を参照せず、呼び出し元からパラメータで受け取る。
 
-詳細は `CLAUDE.md` と `.claude/rules/api-service.md` を参照してください。
+詳細は `AGENTS.md` と `.claude/rules/api-service.md` を参照してください。
 
 ### 検証
 

@@ -4,9 +4,9 @@ paths:
   - "apps/client/**/*.tsx"
 ---
 
-# client 実装ルール（CLAUDE.md の補足)
+# client 実装ルール（AGENTS.md の補足)
 
-データ取得（SSR / useQuery）・mutation・認証パターンは CLAUDE.md を参照。
+データ取得（SSR / useQuery）・mutation・認証パターンは AGENTS.md を参照。
 
 ## actions / queries のテストは `test-helpers/api-mock.ts` を使う
 

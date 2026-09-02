@@ -1,6 +1,6 @@
 以下の手順でコードレビューを実施してください。
 
-**回答は必ず日本語で行ってください。**
+**回答は必ず日本語で行ってください。** 指摘の採否基準は `REVIEW.md` が正。
 
 ---
 
@@ -103,7 +103,7 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 - DTOやバリデーション定義（`XxxInput`）が `application/validators.ts` にあるか
 - 外部SDK（GCP等）が `src/integrations/` 以外で直接 import されていないか
 - `features/` 配下で `process.env` を直接参照していないか（`src/config.ts` 経由であるべき）
-- feature が他 feature を直接 import していないか（`features/A/application/` から `features/B/...` への直接 import は禁止。B の機能が必要なら A 側に `application/ports.ts` を定義し、`integrations/composition/` のアダプター経由で注入する。詳細: CLAUDE.md の「Feature-to-feature integration」節）
+- feature が他 feature を直接 import していないか（`features/A/application/` から `features/B/...` への直接 import は禁止。B の機能が必要なら A 側に `application/ports.ts` を定義し、`integrations/composition/` のアダプター経由で注入する。詳細: AGENTS.md の「Feature-to-feature integration」節）
 
 ### 3-B: ROP エラー型チェーン
 

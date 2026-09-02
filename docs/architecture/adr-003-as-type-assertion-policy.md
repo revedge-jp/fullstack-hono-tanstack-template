@@ -121,7 +121,7 @@ as を見つけたら:
 
 ## 影響範囲
 
-- CLAUDE.md の TypeScript スタイルガイド（`No as type assertions` の記述）はこの ADR を参照
+- AGENTS.md の TypeScript スタイルガイド（`No as type assertions` の記述）はこの ADR を参照
 
 ---
 

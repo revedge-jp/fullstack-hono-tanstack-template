@@ -23,7 +23,7 @@ set -euo pipefail
 # (usecase.test.ts 等の co-located テスト + 対応する contract テスト)だけを実行する
 # よう commandRunner.command を都度上書きした一時設定ファイルで Stryker を起動する。
 # feature 単位のテストで十分なのは、feature 間連携が ports + integrations/composition
-# アダプタ経由に限定され(CLAUDE.md 参照)、ある feature の domain/application ロジックは
+# アダプタ経由に限定され(AGENTS.md 参照)、ある feature の domain/application ロジックは
 # 基本的にその feature 自身の co-located テスト/contract テストでのみ検証される
 # という本リポジトリのアーキテクチャ前提に基づく。
 
