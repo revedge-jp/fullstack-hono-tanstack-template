@@ -381,6 +381,7 @@ jobs:
           PORT=3200
           if [ "${{ matrix.mode }}" = "prod-shape" ]; then PORT=3100; fi
           cat > apps/client/.dev.vars << VARS
+          NODE_ENV=development
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_db
           BETTER_AUTH_SECRET=dummy-secret-for-e2e-0123456789abcdef
           BETTER_AUTH_URL=http://localhost:${PORT}
