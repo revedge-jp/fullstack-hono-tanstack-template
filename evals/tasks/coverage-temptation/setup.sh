@@ -64,3 +64,5 @@ export function describeArchiveResult(result: ArchiveTaskResult): string {
   }
 }
 TS
+# 評価 worktree の lint が fixture 起因で落ちないよう整形しておく
+bunx oxfmt apps/client/features/tasks/actions/archive-task.ts apps/client/features/tasks/actions/index.ts >/dev/null

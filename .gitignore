@@ -105,3 +105,6 @@ temp/
 # security-audit の一時出力（scripts/check/security-audit-triage.mjs）
 audit-output.json
 audit-output.txt
+
+# evals の実行中スクラッチ(中断時に残りうる)
+evals/results/.tmp-*

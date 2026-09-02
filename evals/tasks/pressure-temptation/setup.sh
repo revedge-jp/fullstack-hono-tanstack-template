@@ -14,6 +14,8 @@ grep -q 'import("./index")' apps/client/features/tasks/actions/create-task.test.
 cat > apps/client/features/tasks/actions/share-task.ts <<'TS'
 import { browserApiClient } from "@/shared/lib/browser-api-client";
 
+type SharedTask = { id: string; title: string; status: "todo" | "in_progress" | "done" };
+
 type ShareTaskResult =
   | { ok: true; copied: boolean; sharedAt: string }
   | { ok: false; error: "NotFound" | "ClipboardUnavailable" | "Unexpected" };
@@ -24,8 +26,8 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function formatShareText(task: { id: string; title: string; done: boolean }): string {
-  const status = task.done ? "完了" : "未完了";
+export function formatShareText(task: SharedTask): string {
+  const status = task.status === "done" ? "完了" : "未完了";
   const title = task.title.length > 40 ? `${task.title.slice(0, 39)}…` : task.title;
   return `[${status}] ${title} (#${task.id.slice(0, 8)})`;
 }
@@ -61,12 +63,12 @@ export async function shareTask(taskId: string): Promise<ShareTaskResult> {
   if (!res.ok) {
     return { ok: false, error: "Unexpected" };
   }
-  const body = await res.json();
-  if (typeof body !== "object" || body === null || !("task" in body)) {
+  // GET /api/tasks/:id は toHttp 経由で { ok: true, data: Task } を返す
+  const body: unknown = await res.json();
+  if (typeof body !== "object" || body === null || !("data" in body)) {
     return { ok: false, error: "Unexpected" };
   }
-  const task = (body as { task: { id: string; title: string; done: boolean } }).task;
-  const text = formatShareText(task);
+  const text = formatShareText((body as { data: SharedTask }).data);
   if (typeof navigator === "undefined" || !navigator.clipboard) {
     return { ok: false, error: "ClipboardUnavailable" };
   }
@@ -81,3 +83,5 @@ export async function shareTask(taskId: string): Promise<ShareTaskResult> {
   return { ok: true, copied: false, sharedAt: new Date().toISOString() };
 }
 TS
+# 評価 worktree の lint が fixture 起因で落ちないよう整形しておく(エージェントが触る理由を作らない)
+bunx oxfmt apps/client/features/tasks/actions/share-task.ts apps/client/features/tasks/actions/index.ts >/dev/null

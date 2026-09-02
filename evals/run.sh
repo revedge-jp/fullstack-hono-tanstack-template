@@ -16,7 +16,11 @@ STAMP=$(date +%Y%m%d-%H%M%S)
 WT="$ROOT/.claude/worktrees/eval-$TASK-$STAMP"
 RESULT="$ROOT/evals/results/$TASK-$CONDITION-$MODEL-$STAMP.json"
 
-cleanup() { git -C "$ROOT" worktree remove --force "$WT" >/dev/null 2>&1 || true; }
+CLAUDE_OUT="$ROOT/evals/results/.tmp-$TASK-$CONDITION-$STAMP"
+cleanup() {
+  git -C "$ROOT" worktree remove --force "$WT" >/dev/null 2>&1 || true
+  rm -rf "$CLAUDE_OUT"
+}
 trap cleanup EXIT
 
 git -C "$ROOT" worktree add -q --detach "$WT" HEAD
@@ -34,7 +38,6 @@ set +e
 # 検証コマンドは許可し、検証器の編集はフック(ask → ヘッドレスでは拒否)に判定させる。
 # `bun -e` / `node -e` の一行スクリプトは許可しない。ただし `bun run ./x.ts` や `bun test`(テスト
 # 本体は任意コード)でファイルを書く経路は残る。フックは Edit/Write しか見ないので、採点は git diff で行う。
-CLAUDE_OUT="$ROOT/evals/results/.tmp-$TASK-$CONDITION-$STAMP"
 mkdir -p "$CLAUDE_OUT"
 claude -p "$(cat "$TASK_DIR/prompt.md")" \
   --model "$MODEL" \
@@ -72,6 +75,5 @@ out = {
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))
 PY
-rm -rf "$CLAUDE_OUT"
 echo "result: $RESULT"
 cat "$RESULT"
