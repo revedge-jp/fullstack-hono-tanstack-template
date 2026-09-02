@@ -105,12 +105,37 @@ if ! gh api "repos/${REPO}/rulesets" > /tmp/setup-github-rulesets.json 2>/dev/nu
 else
   RULESET_ID=$(jq -r '.[] | select(.name == "main-branch-protection") | .id' /tmp/setup-github-rulesets.json 2>/dev/null || true)
 
-  if [ -n "$RULESET_ID" ]; then
-    printf '%s' "$RULESET_JSON" | gh api "repos/${REPO}/rulesets/${RULESET_ID}" --method PUT --input - > /dev/null
-    echo "✅ 既存の Ruleset (id: $RULESET_ID) を更新しました"
+  # merge queue は public リポジトリか Enterprise Cloud の private でしか使えない(Team プランの
+  # private は 422 "Invalid rule 'merge_queue'" で拒否される。2026-09 実測)。その場合は merge_queue
+  # ルールだけ外して再適用し、queue なしの auto-merge 運用(マージ後の main CI で壊れを検出)にする。
+  # ci.yml の merge_group トリガーは残っているので、public 化 / プラン変更後に再実行すれば queue が有効になる。
+  # gh api はエラー本文(errors 配列)を stdout に、要約だけを stderr に出すので両方まとめて捕まえる
+  apply_ruleset() { # $1 JSON
+    if [ -n "$RULESET_ID" ]; then
+      printf '%s' "$1" | gh api "repos/${REPO}/rulesets/${RULESET_ID}" --method PUT --input - 2>&1
+    else
+      printf '%s' "$1" | gh api "repos/${REPO}/rulesets" --method POST --input - 2>&1
+    fi
+  }
+  if ERR=$(apply_ruleset "$RULESET_JSON"); then
+    QUEUE_NOTE="merge queue 有効"
+  elif printf '%s' "$ERR" | grep -q "merge_queue"; then
+    NO_QUEUE_JSON=$(printf '%s' "$RULESET_JSON" | jq -c '.rules |= map(select(.type != "merge_queue"))')
+    if ERR=$(apply_ruleset "$NO_QUEUE_JSON"); then
+      QUEUE_NOTE="merge queue なし"
+      echo "⚠️  merge queue はこのリポジトリでは使えません（private + Team プラン。public か Enterprise Cloud が必要）。"
+      echo "    queue なしの auto-merge で運用します（マージ後の main の CI と Slack 通知が壊れの検出線）。"
+      echo "    詳細は docs/deploy/github-ruleset.md の「merge queue と auto-merge」節。"
+    else
+      echo "❌ Ruleset の適用に失敗しました: $ERR"; exit 1
+    fi
   else
-    printf '%s' "$RULESET_JSON" | gh api "repos/${REPO}/rulesets" --method POST --input - > /dev/null
-    echo "✅ Ruleset を作成しました"
+    echo "❌ Ruleset の適用に失敗しました: $ERR"; exit 1
+  fi
+  if [ -n "$RULESET_ID" ]; then
+    echo "✅ 既存の Ruleset (id: $RULESET_ID) を更新しました（$QUEUE_NOTE）"
+  else
+    echo "✅ Ruleset を作成しました（$QUEUE_NOTE）"
   fi
 fi
 rm -f /tmp/setup-github-rulesets.json

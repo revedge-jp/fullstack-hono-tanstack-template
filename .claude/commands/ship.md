@@ -81,15 +81,19 @@ CONFIRMED の指摘が出たら修正して push し、もう 1 周。**CONFIRME
 ```bash
 gh pr edit <番号> --body-file <更新した本文>
 gh pr ready <番号>
-gh pr merge <番号> --auto
+gh pr merge <番号> --auto --squash
 ```
-（マージ方式は merge queue 側で squash に固定されているので `--squash` は付けない。
-`scripts/setup-github.sh` がルールセットを作れていない環境（private + Free プラン）では merge queue も
-auto-merge も無いので、CI 通過後に `gh pr merge <番号> --squash` を手で打つ）
+（merge queue が有効なリポジトリでは方式は queue 側が決めるので「strategy is set by the merge queue」の
+警告が出るが失敗ではない。queue が無いリポジトリ（private + Team プラン等）では `--squash` が必須。
+`scripts/setup-github.sh` がルールセットを作れていない環境（private + Free プラン）では auto-merge も
+無いので、CI 通過後に `gh pr merge <番号> --squash` を手で打つ）
 
 必須チェック `Review converged` が「レビュー収束:」行を検査するので、行が無いと auto-merge は
-発火しない。マージは merge queue が「main に積んだ状態」で CI を 1 回通してから行う
-（ブランチの最新化は不要。queue の説明は `docs/deploy/github-ruleset.md`）。
+発火しない。ブランチの最新化は不要（merge queue があれば queue が「main に積んだ状態」で CI を
+1 回通してからマージし、無ければマージ後の main の CI が壊れを検出する。`docs/deploy/github-ruleset.md`）。
+有効化後は `gh pr view <番号> --json mergeable -q .mergeable` が `MERGEABLE` になることを確認する
+（`UNKNOWN` は未計算なので数秒待って再取得。`CONFLICTING` なら rebase して push し直す。
+衝突で止まった PR は CI が走らず通知も出ないため、確認せずに放置すると誰も気づかない）。
 
 **例外（手動マージ）**: マイグレーション・auth・決済・検証器(`scripts/check/verifier-paths.txt`)に
 触る PR は auto-merge を使わず、ユーザーの確認を待つ。

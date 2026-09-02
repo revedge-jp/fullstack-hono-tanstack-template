@@ -42,8 +42,14 @@ gh auth login          # 未認証の場合
 
 - CI 側は `.github/workflows/ci.yml` の `merge_group:` トリガーが対応する。**これが無いとキューは
   永久に待つ**。`merge_group` では paths-filter を使わず全ジョブを回す
+- **merge queue は public リポジトリか Enterprise Cloud の private でしか使えない**（Team プランの
+  private は `merge_queue` ルールが 422 で拒否される）。`setup-github.sh` はその場合 queue ルールだけ
+  外して再適用し、queue なしの auto-merge 運用にする。最新化必須は無効のままなので、古い main で緑だった
+  PR が最新 main と組み合わさって壊れるケースは、マージ後の main の CI と `notify-main-failure`
+  （Slack）で検出する（staging デプロイは main の CI 成功後にしか走らない）。public 化 / プラン変更後に
+  スクリプトを再実行すれば queue が有効になる
 - PR は Draft で作り、`/code-review` が CONFIRMED ゼロで収束してから `gh pr ready` と
-  `gh pr merge --auto` を打つ（`.claude/commands/ship.md`）。`Review converged`
+  `gh pr merge --auto --squash` を打つ（`.claude/commands/ship.md`）。`Review converged`
   （`.github/workflows/review-converged.yml`、本文編集と Draft 解除でも再評価される）が本文の
   「レビュー収束:」行を検査し、必須チェックなので記録が無い PR は auto-merge が発火しない
 - キューに入った後に push すると弾かれる（入れ直し）。Renovate の automerge はキュー対応済み
