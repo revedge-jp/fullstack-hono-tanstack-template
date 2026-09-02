@@ -19,7 +19,9 @@
 | FSD（steiger） | client の Feature-Sliced Design | `bun run arch:fsd` | ✓ | ✓ |
 | 未使用コード（knip） | デッドコード/依存 | `bun run knip` | ✓ | ✓（PRコメントは非ブロック） |
 | 重複（jscpd） | コピペ重複（しきい値5%）。**テストコードも対象**（除外すると写経テストの増殖が測定すらされない — 派生プロダクトで実測20%に達した後から入れるのは困難なため、小さいうちから対象に含める） | `bun run dup:check` | ✗ | ✓ |
-| ガード自己テスト | ガード自身が壊れていないか | `bun run arch:selftest` | ✗ | ✓ |
+| ガード自己テスト | ガード自身（PreToolUse フック含む）が壊れていないか | `bun run arch:selftest` | ✗ | ✓ |
+| 指示ファイル参照整合 | AGENTS.md / `.claude/rules` 等のパス・`bun run`・見出し参照の実在 | `bun run check:instructions` | ✓（arch:check 内） | ✓ |
+| 検証器の変更理由 | `scripts/check/verifier-paths.txt` に当たる変更が PR 本文の「## 検証器の変更理由」を持つか | — | ✗ | ✓（`verifier-change` ジョブ） |
 | カバレッジ閾値（api） | domain/application の網羅（85%） | `bun run coverage:check` | ✗ | ✓ |
 | カバレッジ閾値（client） | actions/queries の網羅（80%） | `bun run coverage:check:client` | ✗ | ✓ |
 | ミューテーション | domain/application のテストの**質**（90%） | `cd apps/api-service && bun run mutation` | ✗ | ✓（PR 差分のみ、[ADR-007](../architecture/adr-007-mutation-testing-diff-scope.md)） |

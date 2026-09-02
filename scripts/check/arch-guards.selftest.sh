@@ -280,6 +280,25 @@ export const selftestDcDb = tasks;'
   rm -f "$D/application/__selftest_dc_cross_feature.ts" "$D/presentation/__selftest_dc_infra.ts" "$D/domain/__selftest_dc_db.ts"
 fi
 
+echo "=== 指示ファイル参照チェック自己テスト ==="
+mkfix ".claude/rules/__selftest_refs.md" \
+  '参照: `scripts/check/nope.sh` と `bun run no-such-script` と AGENTS.md の「存在しない見出し」'
+INSTR_OUT=$(node scripts/check/instruction-files.mjs 2>&1 || true)
+rm -f ".claude/rules/__selftest_refs.md"
+for expected in "nope.sh" "no-such-script" "存在しない見出し"; do
+  if printf '%s' "$INSTR_OUT" | grep -qF "$expected"; then
+    echo "✅ instruction-files: $expected を検出"
+  else
+    echo "❌ instruction-files: $expected を検出できませんでした"
+    FAIL=1
+  fi
+done
+
+echo "=== PreToolUse フック(検証器保護)自己テスト ==="
+if ! bash .claude/hooks/protect-verifiers.selftest.sh; then
+  FAIL=1
+fi
+
 echo ""
 if [ "$FAIL" = "0" ]; then
   echo "✅ ガード自己テスト: 全ガードが既知違反を検出"

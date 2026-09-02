@@ -4,7 +4,7 @@ set -euo pipefail
 # Options:
 #  - CI=true or CI_MODE=1 : 簡素(機械可読寄り)出力
 #  - NO_COLOR: 色無し
-#  - SKIP_FSD=1 / SKIP_DEPS=1 / SKIP_DC=1 / SKIP_GUARDS=1 / SKIP_KNIP=1 / SKIP_DUP=1 / SKIP_SELFTEST=1 : 各チェックをスキップ
+#  - SKIP_FSD=1 / SKIP_DEPS=1 / SKIP_DC=1 / SKIP_GUARDS=1 / SKIP_KNIP=1 / SKIP_DUP=1 / SKIP_INSTRUCTIONS=1 / SKIP_SELFTEST=1 : 各チェックをスキップ
 
 if [ "${CI:-}" = "true" ] || [ "${CI_MODE:-0}" = "1" ]; then PRETTY=0; else PRETTY=1; fi
 if [ -n "${NO_COLOR:-}" ] || [ "$PRETTY" = "0" ] || [ ! -t 1 ]; then
@@ -106,12 +106,19 @@ else
   warn "migration journal 順序チェックは SKIP_MIGRATION_ORDER=1 によりスキップ"
 fi
 
+# 8) 指示ファイル(AGENTS.md / .claude/rules 等)の参照が実在するか(詳細は instruction-files.mjs 冒頭)
+if [ "${SKIP_INSTRUCTIONS:-0}" != "1" ]; then
+  run_step_bg "Instructions" bun run check:instructions
+else
+  warn "指示ファイルチェックは SKIP_INSTRUCTIONS=1 によりスキップ"
+fi
+
 # バックグラウンドジョブの完了を待機
 for pid in "${PIDS[@]}"; do
   wait "$pid" || true
 done
 
-# 8) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
+# 9) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
 #    Guards と並列に走らせると同じ fixture パスを奪い合いフレーキーになる。
 #    並列バッチが完全に終わってから単独で実行する）
 if [ "${SKIP_SELFTEST:-0}" != "1" ]; then
@@ -169,9 +176,10 @@ Guards:構文/配置ガード
 Knip:未使用(knip)
 Dup:重複(jscpd)
 MigrationOrder:migration journal 順序
+Instructions:指示ファイルの参照整合
 Selftest:ガード自己テスト"
 
-for name in FSD Deps DC Guards Knip Dup MigrationOrder Selftest; do
+for name in FSD Deps DC Guards Knip Dup MigrationOrder Instructions Selftest; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")

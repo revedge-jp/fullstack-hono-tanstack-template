@@ -55,6 +55,11 @@ PR がある場合は PR 番号を渡す方がより確実。
 
 ## 編集方針
 
+- 検証器（一覧は `scripts/check/verifier-paths.txt` が正典）の編集は PreToolUse フック
+  （`.claude/hooks/protect-verifiers.sh`）で**ユーザー確認**が入り、PR では CI の `verifier-change`
+  ジョブが本文の「## 検証器の変更理由」節を要求する。ゲートに引っかかったときの既定はコードを
+  直すこと。`.env*` の読み書きはフックが拒否する（設定の正典は `.env.example`）。
+
 - 既存ファイルのインデント（タブ/スペース、幅）は必ず維持する。変換・混在をしない。
 - コメントは非自明な理由・前提・注意点のみ。行動説明コメントや自明なコメントは書かない。
 - 命名は `docs/dev/coding-standards.md` に従う（関数は動詞・変数は名詞・1〜2文字の短名や過度な省略語を避ける。ファイル名は kebab-case — `bun run check:kebab` で検査される）。

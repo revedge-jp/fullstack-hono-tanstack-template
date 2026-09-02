@@ -1,0 +1,22 @@
+# 検証器(ゲート・ガード・CI・フック・閾値)のパス一覧。bash の case パターン、1 行 1 パターン。
+# ここが唯一の正典で、次の 2 か所が読む:
+#   - .claude/hooks/protect-verifiers.sh  (Claude Code の Edit/Write をユーザー確認にする)
+#   - .github/workflows/ci.yml の verifier-change ジョブ (PR 本文に「検証器の変更理由」を要求する)
+# 判定は scripts/check/is-verifier-path.sh に集約している。
+scripts/check/*
+.github/workflows/*
+.claude/hooks/*
+.claude/settings.json
+dependency-cruiser.config.cjs
+.oxlintrc.json
+lefthook.yml
+.jscpd.json
+knip.json
+turbo.json
+bunfig.toml
+renovate.json
+commitlint.config.mjs
+.github/security-audit-allowlist.json
+apps/*/stryker.conf.*
+apps/*/stryker.config.*
+apps/*/.jscpd.json
