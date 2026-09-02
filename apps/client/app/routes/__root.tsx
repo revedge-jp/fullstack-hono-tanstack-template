@@ -3,6 +3,9 @@ import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanst
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import type { ReactNode } from "react";
 
+import { DefaultNotFoundComponent } from "@/components/patterns/default-not-found";
+import { FullScreenError } from "@/components/patterns/full-screen-error";
+
 import appCss from "../globals.css?url";
 
 type RouterContext = {
@@ -51,8 +54,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     ],
   }),
   component: RootComponent,
-  errorComponent: ErrorComponent,
-  notFoundComponent: NotFoundComponent,
+  errorComponent: FullScreenError,
+  // loader からの `throw notFound()` はここが受ける(getNotFoundBoundaryIndex は
+  // 「notFoundComponent を持つ最も近い祖先(無ければ root)」を boundary に選び、子ルートは
+  // 自前を持たないため常に __root になる)。**URL がどのルートにもマッチしない経路は別**で、
+  // router.tsx の defaultNotFoundComponent が受ける — 両方に同じコンポーネントを配線する
+  // 必要がある(詳しい根拠は router.tsx のコメント)。
+  notFoundComponent: DefaultNotFoundComponent,
   pendingComponent: PendingComponent,
 });
 
@@ -81,27 +89,6 @@ function RootDocument({ children }: { children: ReactNode }) {
         <Scripts />
       </body>
     </html>
-  );
-}
-
-function NotFoundComponent() {
-  return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">404</h1>
-      <p>ページが見つかりませんでした。</p>
-    </div>
-  );
-}
-
-function ErrorComponent({ error }: { error: Error }) {
-  return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold text-red-600">エラー</h1>
-      <p>問題が発生しました。時間をおいて再度お試しください。</p>
-      {/* 生のエラーメッセージは内部情報を含みうるため開発時のみ表示する。
-          サーバー側には requestId 付きの構造化ログが残る（app/server.ts / requestLogger） */}
-      {import.meta.env.DEV ? <p className="mt-2 text-sm opacity-70">{error.message}</p> : null}
-    </div>
   );
 }
 
