@@ -247,6 +247,27 @@ else
   exit 1
 fi
 
+echo "[guard] @hono/zod-validator の直接 import 禁止（shared/http/z-validator を通す）"
+# zValidator の 400 失敗を request_validation_failed として requestId 付きで残す共有ラッパー
+# (apps/api-service/src/shared/http/z-validator.ts)を全ルーターに強制する。
+# 本家を直接 import すると、その箇所のバリデーション 400 だけ理由が本番ログから追えなくなる。
+# 除外はラッパー自身のみ(そこだけが本家パッケージへの唯一の接点)。
+# 型のみの import(`import type { Hook } from ...`)はランタイムの zValidator を
+# 一切 import しないため対象外にする。
+ZV_VIOL=$(find apps/api-service/src -type f \( -name '*.ts' -o -name '*.tsx' \) \
+  ! -path '*/shared/http/z-validator.ts' -print0 | \
+  xargs -0 grep -nE "from ['\"]@hono/zod-validator['\"]" -- | \
+  grep -vE ':[0-9]+:[[:space:]]*import type ' || true)
+if [ -z "$ZV_VIOL" ]; then
+  echo "OK"
+else
+  echo "違反: @hono/zod-validator を直接 import せず、@app/shared/http/z-validator の zValidator を使ってください（400の診断ログが自動で付きます）"
+  echo "$ZV_VIOL" | while IFS= read -r line; do
+    echo "  • $line"
+  done
+  exit 1
+fi
+
 echo "[guard] 旧 @repo/result API (result.type ===) の使用禁止"
 LEGACY_RESULT_VIOL=$(find apps/api-service/src -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
   xargs -0 grep -nE '\.type\s*===\s*["'"'"'](ok|err)["'"'"']' -- || true)

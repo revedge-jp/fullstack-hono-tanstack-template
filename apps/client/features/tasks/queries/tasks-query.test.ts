@@ -8,7 +8,7 @@ const TASKS_PAGE = {
 };
 
 const api = createApiMock({ body: TASKS_PAGE });
-mock.module("hono/client", api.honoClientModule);
+mock.module("@/shared/lib/browser-api-client", api.browserApiClientModule);
 
 const { tasksQueryOptions } = await import("./tasks-query");
 

@@ -21,6 +21,7 @@ import { type AppConfig, loadConfig } from "./config";
 import { createContainer } from "./container";
 import { rateLimit } from "./middlewares/rate-limit";
 import { type RequestLogger, requestLogger } from "./middlewares/request-logger";
+import { createClientErrorsRouter } from "./routes/client-errors";
 import { createHealthRouter, type HealthDb } from "./routes/health";
 
 // buildApp が実行時に必要とする依存の構造的な型。本番の Container はこれに代入可能で、
@@ -54,6 +55,13 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
   // requestId を束ねた pino 子ロガーによる構造化アクセスログ（hono/logger の置き換え）。
   // ハンドラからは c.get("logger") でリクエスト相関つきロガーを参照できる。
   app.use("*", requestLogger(runtime.logger));
+  // デプロイ後の古いタブ検知(client の shared/lib/app-version.ts が全 API レスポンスの
+  // このヘッダを監視し、タブが最初に見た値と変わったら再読み込みバナーを出す)。
+  // ビルド時環境変数の配線が不要で、SSR/dev("dev" 固定)でも誤検知しない方式。
+  app.use("*", async (c, next) => {
+    c.header("x-app-version", config.version.gitSha);
+    await next();
+  });
   app.use("*", timing());
   // ハングしたハンドラが接続を占有し続けないよう上限を課す。超過時は HTTPException(504) を
   // 投げるので、下の onError が HTTPException をそのまま返せるようにしておくこと。
@@ -65,7 +73,7 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
       origin: config.corsOrigin,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-request-id"],
-      exposeHeaders: ["x-request-id"],
+      exposeHeaders: ["x-request-id", "x-app-version"],
       maxAge: 600,
       credentials: true,
     }),
@@ -87,6 +95,12 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
     "/api/auth/*",
     rateLimit({ windowMs: config.rateLimit.windowMs, max: config.rateLimit.max }),
   );
+  // クライアントエラー通報。認証の無い公開エンドポイントで、ブラウザがエラーごとに叩くため、
+  // ログ洪水を防ぐレート制限をかける(専用しきい値は設けず既存設定を流用)。
+  app.use(
+    "/api/client-errors/*",
+    rateLimit({ windowMs: config.rateLimit.windowMs, max: config.rateLimit.max }),
+  );
   // 二重ワイルドカード "/api/auth/**" は使わない: Hono の RegExpRouter は「同じ深さで
   // 静的セグメントと :param が競合する」ルート(例: 他featureの `/:id` に対する
   // `/新規セグメント` の追加)が1つでもアプリ全体に存在すると UnsupportedPathError を
@@ -101,6 +115,7 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
 
   const routes = app
     .route("/api/health", createHealthRouter({ db: runtime.db, info: toHealthInfo(config) }))
+    .route("/api/client-errors", createClientErrorsRouter())
     .route("/api", createAuthRouter({ getSession: runtime.getSession }))
     .route(
       "/api/tasks",

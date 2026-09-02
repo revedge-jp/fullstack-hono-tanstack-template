@@ -23,6 +23,7 @@ CLAUDE.md に載っていない細部の規約をまとめる。
 - `ports.ts` は `features/<feature>/application/ports.ts` にのみ配置可。
 - `createAuthedApp()` を使うファイルには `.use(requireAuth(...))` の登録が必須。
 - 旧 `@repo/result` API（`result.type ===`）の使用禁止。neverthrow の `result.isOk()` / `result.isErr()` を使う。
+- `@hono/zod-validator` の直接 import 禁止。`@app/shared/http/z-validator` の `zValidator` を使う（バリデーション 400 の診断ログ `request_validation_failed` が自動で付く）。
 
 ## 命名・型配置
 

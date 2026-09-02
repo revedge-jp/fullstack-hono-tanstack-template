@@ -1,10 +1,8 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { AppType } from "api-service";
-import { hc } from "hono/client";
+
+import { browserApiClient as apiClient } from "@/shared/lib/browser-api-client";
 
 import { type TasksPage, TasksListResponseSchema } from "./schemas";
-
-const apiClient = hc<AppType>("/");
 
 // クライアントサイドの再取得用 useQuery 定義。
 // 初回表示は SSR（loader + getTasksServerFn）で行い、mutation 後の更新は
