@@ -51,27 +51,43 @@ jobs:
             ~/.cache/bun
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
+      # bun audit は脆弱性を検出すると非0で終わるので set +e で受ける。
+      # 「検出したか」ではなく「人が見るべきものが残っているか」で分岐するため、
+      # 終了コードは使わず次の Triage ステップの判定に委ねる。
       - name: Run bun audit
         id: audit
         run: |
           set +e
           bun audit > audit-output.txt 2>&1
-          STATUS=$?
+          # JSON は機械判定用。人が読む用の audit-output.txt とは別に取る
+          # （--json は依存経路を持たないため、issue 本文には両方載せる）。
+          bun audit --json > audit-output.json 2>/dev/null
           set -e
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
-          echo "has_vulnerabilities=$([[ $STATUS -ne 0 ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      # 検出された advisory を .github/security-audit-allowlist.json と突き合わせ、
+      # 「人が見るべきものが残っているか」だけを判定する。レビュー済み・ランタイム非到達と
+      # 判断したものを毎週鳴らし続けると、本当に対応が要る advisory がその中に埋もれる
+      # （派生プロダクトで「3件とも対応不要」の放置中に、ランタイム到達する hono の
+      # CORS ReDoS が同じ出力に混ざっていた実例がある）。
+      - name: Triage against allowlist
+        id: triage
+        run: node scripts/check/security-audit-triage.mjs audit-output.json
 
       - name: Upload audit report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: bun-audit-report
-          path: audit-output.txt
+          path: |
+            audit-output.txt
+            audit-output.json
           retention-days: 30
 
       - name: Create or update issue if vulnerabilities found
-        if: steps.audit.outputs.has_vulnerabilities == 'true'
+        if: steps.triage.outputs.actionable == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TRIAGE_SUMMARY: ${{ steps.triage.outputs.summary }}
         with:
           script: |
             const fs = require('fs');
@@ -85,27 +101,30 @@ jobs:
             
             **実行日時**: ${new Date().toISOString()}
             
-            ### ⚠️ 脆弱性が検出されました
-            
-            \`bun audit\` により、依存関係に既知の脆弱性が見つかりました。
-            
+            ${process.env.TRIAGE_SUMMARY}
+
             <details>
-            <summary>詳細出力を表示</summary>
-            
+            <summary>bun audit の生出力（依存経路つき）</summary>
+
             \`\`\`
             ${auditOutput.slice(0, 60000)}
             \`\`\`
-            
+
             </details>
-            
+
             ### 対応方法
-            
-            1. \`bun audit\` を実行して詳細を確認
-            2. 可能であれば \`bun update\` で依存関係を更新
-            3. 更新できない場合は、代替パッケージの検討や影響範囲の評価を実施
-            
+
+            1. 上の「対応が必要な advisory」について、**そのパッケージが Cloudflare Worker の
+               バンドルに入り、攻撃者が制御できる入力を処理するか**を確認する
+            2. ランタイムに到達する → \`bun update <pkg>\` で修正版へ上げる（上げられなければ
+               代替パッケージ・影響緩和を検討）
+            3. ビルド・開発時にしか使わない → \`.github/security-audit-allowlist.json\` に
+               GHSA ID・経路・判断・再確認期限を書いて登録する。**パッケージ単位ではなく
+               advisory 単位**で、期限付きで登録すること（理由は同ファイルの \`$comment\`）
+
             ---
             *このissueは週次のセキュリティ監査により自動作成・更新されます。*
+            *レビュー済み・対応不要と判断した advisory はここには出ません（allowlist で抑制）。*
             `;
             
             // 既存のissueを検索
@@ -140,8 +159,11 @@ jobs:
               console.log(`Created new issue #${newIssue.number}`);
             }
 
-      - name: Close issue if no vulnerabilities
-        if: steps.audit.outputs.has_vulnerabilities == 'false'
+      # 「脆弱性ゼロ」だけでなく「残りは全て allowlist 済み」でも閉じる。
+      # 対応が済んだ（または全件トリアージし終えた）のに issue が開いたままだと、
+      # security ラベルの issue が常設のノイズになり、次に本物が来ても目が滑る。
+      - name: Close issue if nothing actionable
+        if: steps.triage.outputs.actionable == 'false'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
