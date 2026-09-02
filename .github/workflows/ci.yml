@@ -57,6 +57,38 @@ jobs:
             workflows:
               - '.github/workflows/**'
 
+  # 検証器(ゲート・ガード・CI・フック・閾値)に触る PR は本文に理由を要求する。
+  # エージェントがゲートに引っかかったとき「コードを直す」ではなく「ゲートを緩める」に流れるのを、
+  # 編集時(Claude Code の PreToolUse フック)だけでなくマージ時にも止める。Bash 経由・他エージェント・
+  # 手編集もここで同じ一覧(scripts/check/verifier-paths.txt)に当たる。
+  verifier-change:
+    name: Verifier change reason
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 検証器の変更に理由があるか
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          changed=$(git diff --name-only "$BASE_SHA"...HEAD)
+          [ -z "$changed" ] && { echo "変更なし"; exit 0; }
+          # shellcheck disable=SC2086
+          if ! hits=$(bash scripts/check/is-verifier-path.sh $changed); then
+            echo "検証器の変更なし"; exit 0
+          fi
+          echo "検証器に当たる変更:"; echo "$hits" | sed 's/^/  • /'
+          if printf '%s' "$PR_BODY" | grep -q '^## 検証器の変更理由'; then
+            echo "PR 本文に「## 検証器の変更理由」あり"; exit 0
+          fi
+          echo "::error::検証器(上記)を変更していますが、PR 本文に「## 検証器の変更理由」節がありません。閾値の引き下げ・除外の追加・ガードの削除がコードを直す代わりになっていないかを書いてください(一覧: scripts/check/verifier-paths.txt)"
+          exit 1
+
   # ワークフローファイルの構文・式を検証する。YAML としては valid でも GitHub Actions として
   # 無効なファイル（例: run の plain scalar 中の「: 」）は main に入って初めて
   # 「This run likely failed because of a workflow file issue」で発覚するため、PR の段階で検出する。
@@ -461,7 +493,7 @@ jobs:
   ci-status:
     name: CI Pipeline
     runs-on: ubuntu-latest
-    needs: [changes, ci, api-service-integration-tests, e2e-tests, workflow-lint]
+    needs: [changes, ci, api-service-integration-tests, e2e-tests, workflow-lint, verifier-change]
     if: always()
     steps:
       - name: Check CI status
@@ -472,6 +504,7 @@ jobs:
           fail=0
           for entry in \
             "Workflow lint:${{ needs.workflow-lint.result }}" \
+            "Verifier change:${{ needs.verifier-change.result }}" \
             "CI checks:${{ needs.ci.result }}" \
             "Integration tests:${{ needs.api-service-integration-tests.result }}" \
             "E2E tests:${{ needs.e2e-tests.result }}"; do

@@ -11,13 +11,17 @@
 // 誤検出を避けるため、glob(* ? { })・プレースホルダ(<xxx> / {xxx} / Xxx)・URL は対象外。
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(new URL("../..", import.meta.url).pathname);
+const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const APPS = readdirSync(join(ROOT, "apps"), { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
 const FILES = [
   "AGENTS.md",
   "CLAUDE.md",
   "REVIEW.md",
-  ...readdirSync(join(ROOT, "apps")).map((app) => `apps/${app}/AGENTS.md`),
+  ...APPS.map((app) => `apps/${app}/AGENTS.md`),
   ...readdirSync(join(ROOT, ".claude/rules")).map((f) => `.claude/rules/${f}`),
   ...readdirSync(join(ROOT, ".claude/commands")).map((f) => `.claude/commands/${f}`),
 ].filter((f) => existsSync(join(ROOT, f)));
@@ -36,12 +40,23 @@ for (const pkg of [
   }
 }
 
-const agentsHeadings = new Set(
-  readFileSync(join(ROOT, "AGENTS.md"), "utf8")
-    .split("\n")
-    .filter((l) => /^#{1,6} /.test(l))
-    .map((l) => l.replace(/^#+ /, "").trim()),
-);
+// コードフェンス内の `# コメント` を見出しと誤認しないよう、フェンスの外だけを見る
+const collectHeadings = (text) => {
+  const headings = [];
+  let inFence = false;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("```")) {
+      inFence = !inFence;
+    }
+    if (!inFence && /^#{1,6} /.test(line)) {
+      headings.push(line.replace(/^#+ /, "").trim());
+    }
+  }
+  return headings;
+};
+const agentsHeadings = collectHeadings(readFileSync(join(ROOT, "AGENTS.md"), "utf8"));
+// 「Testing」が「Testing Conventions」に一致しないよう、完全一致か「見出し (補足)」の補足省略だけ許す
+const hasHeading = (name) => agentsHeadings.some((h) => h === name || h.startsWith(`${name} (`));
 
 // スラッシュを含み、リポジトリ内の既知ディレクトリから始まるものだけを「パス」とみなす。
 // 裸のファイル名(`usecase.ts` 等)は構造説明で多用され実在確認に意味が無いので対象外。
@@ -77,20 +92,20 @@ for (const file of FILES) {
         resolve(dir, token),
         join(ROOT, token),
         join(ROOT, "apps", token),
-        ...readdirSync(join(ROOT, "apps")).map((a) => join(ROOT, "apps", a, token)),
-        ...readdirSync(join(ROOT, "apps")).map((a) => join(ROOT, "apps", a, "src", token)),
+        ...APPS.map((a) => join(ROOT, "apps", a, token)),
+        ...APPS.map((a) => join(ROOT, "apps", a, "src", token)),
       ];
       if (!candidates.some((c) => existsSync(c))) {
         violations.push(`${where}: \`${token}\` が実在しない`);
       }
     }
-    for (const m of line.matchAll(/`bun run ([a-z:-]+)`/g)) {
+    for (const m of line.matchAll(/`bun run ([\w:.-]+)/g)) {
       if (!scriptNames.has(m[1])) {
         violations.push(`${where}: \`bun run ${m[1]}\` に対応する scripts が無い`);
       }
     }
     for (const m of line.matchAll(/AGENTS\.md の「([^」]+)」/g)) {
-      if (![...agentsHeadings].some((h) => h === m[1] || h.startsWith(`${m[1]} `))) {
+      if (!hasHeading(m[1])) {
         violations.push(`${where}: AGENTS.md に見出し「${m[1]}」が無い`);
       }
     }

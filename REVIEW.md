@@ -12,8 +12,8 @@
 - 認証・認可の欠落や削除、`process.env` の直参照、feature 間の直接 import、domain 層への
   Zod / Drizzle / HTTP 混入（依存方向 `presentation → application → domain ← infrastructure`）
 - ROP のエラー型が usecase → presentation で潰れている・HTTP ステータス分岐が網羅されていない
-- 検証器（`scripts/check/**`・`dependency-cruiser.config.cjs`・`.oxlintrc.json`・`lefthook.yml`・
-  CI）の弱体化。閾値の引き下げ、除外の追加、ガードの削除は理由の記載が無ければ指摘する
+- 検証器（一覧は `scripts/check/verifier-paths.txt`）の弱体化。閾値の引き下げ、除外の追加、
+  ガードの削除は PR 本文の「## 検証器の変更理由」に理由が無ければ指摘する
 - 同じ役割のコードの再実装。既存ヘルパ（`createFakeApp`・`api-mock.ts`・`toHttp`・
   `zValidator` ラッパ等）を名指しで示す
 - 方針転換後に残った旧方針の記述（コメント・ドキュメント・写経元テンプレ）

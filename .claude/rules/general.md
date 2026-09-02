@@ -55,11 +55,10 @@ PR がある場合は PR 番号を渡す方がより確実。
 
 ## 編集方針
 
-- 検証器（`scripts/check/**`・`dependency-cruiser.config.cjs`・`.oxlintrc.json`・`lefthook.yml`・
-  `.github/workflows/**`・各種閾値ファイル）の編集は PreToolUse フックで**ユーザー確認**が入る
-  （`.claude/hooks/protect-verifiers.sh`）。ゲートに引っかかったときの既定はコードを直すこと。
-  検証器を緩めるなら理由を PR 本文に書く。`.env*` の読み書きはフックが拒否する（設定の正典は
-  `.env.example`）。
+- 検証器（一覧は `scripts/check/verifier-paths.txt` が正典）の編集は PreToolUse フック
+  （`.claude/hooks/protect-verifiers.sh`）で**ユーザー確認**が入り、PR では CI の `verifier-change`
+  ジョブが本文の「## 検証器の変更理由」節を要求する。ゲートに引っかかったときの既定はコードを
+  直すこと。`.env*` の読み書きはフックが拒否する（設定の正典は `.env.example`）。
 
 - 既存ファイルのインデント（タブ/スペース、幅）は必ず維持する。変換・混在をしない。
 - コメントは非自明な理由・前提・注意点のみ。行動説明コメントや自明なコメントは書かない。

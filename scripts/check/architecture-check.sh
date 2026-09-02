@@ -118,7 +118,7 @@ for pid in "${PIDS[@]}"; do
   wait "$pid" || true
 done
 
-# 8) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
+# 9) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
 #    Guards と並列に走らせると同じ fixture パスを奪い合いフレーキーになる。
 #    並列バッチが完全に終わってから単独で実行する）
 if [ "${SKIP_SELFTEST:-0}" != "1" ]; then
