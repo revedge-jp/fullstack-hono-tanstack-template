@@ -4,12 +4,16 @@
 set -euo pipefail
 TASK="${1:?task name}"
 CONDITION="${2:-hook}"
+# 普段の開発で使うモデルに固定する。~/.claude/settings.json の model(例: sonnet)に引きずられると
+# 「評価したモデル」と「実際に使うモデル」がずれ、結果が当てはまらない。Sonnet は安いので
+# ハーネス自体の動作確認(smoke)に使い、ルールの効果測定は EVAL_MODEL 既定の fable で行う。
+MODEL="${EVAL_MODEL:-fable}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TASK_DIR="$ROOT/evals/tasks/$TASK"
 [ -d "$TASK_DIR" ] || { echo "unknown task: $TASK" >&2; exit 2; }
 STAMP=$(date +%Y%m%d-%H%M%S)
 WT="$ROOT/.claude/worktrees/eval-$TASK-$STAMP"
-RESULT="$ROOT/evals/results/$TASK-$CONDITION-$STAMP.json"
+RESULT="$ROOT/evals/results/$TASK-$CONDITION-$MODEL-$STAMP.json"
 
 cleanup() { git -C "$ROOT" worktree remove --force "$WT" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -32,6 +36,7 @@ set +e
 CLAUDE_OUT="$ROOT/evals/results/.tmp-$TASK-$CONDITION-$STAMP"
 mkdir -p "$CLAUDE_OUT"
 claude -p "$(cat "$TASK_DIR/prompt.md")" \
+  --model "$MODEL" \
   --permission-mode acceptEdits \
   --allowedTools "Bash(bun run:*)" "Bash(bun test:*)" "Bash(bunx tsc:*)" "Bash(bunx oxlint:*)" "Bash(bunx oxfmt:*)" "Bash(node scripts/check:*)" "Bash(cd:*)" "Bash(cat:*)" "Bash(ls:*)" "Bash(grep:*)" "Bash(git diff:*)" "Bash(git status:*)" \
   --output-format json \
@@ -45,15 +50,17 @@ ELAPSED=$(( $(date +%s) - START ))
 
 SCORE=$(bash "$TASK_DIR/score.sh" 2>"$CLAUDE_OUT/score.err" || true)
 [ -n "$SCORE" ] || SCORE=$(python3 -c "import json,sys; print(json.dumps({'score_error': open(sys.argv[1]).read()[-2000:]}))" "$CLAUDE_OUT/score.err")
-python3 - "$CLAUDE_OUT/claude.json" "$SCORE" "$TASK" "$CONDITION" "$STAMP" "$CLAUDE_EXIT" "$ELAPSED" "$(git -C "$ROOT" rev-parse --short HEAD)" > "$RESULT" <<'PY'
+python3 - "$CLAUDE_OUT/claude.json" "$SCORE" "$TASK" "$CONDITION" "$STAMP" "$CLAUDE_EXIT" "$ELAPSED" "$(git -C "$ROOT" rev-parse --short HEAD)" "$MODEL" > "$RESULT" <<'PY'
 import sys, json
-raw, score, task, cond, stamp, cexit, elapsed, sha = sys.argv[1:]
+raw, score, task, cond, stamp, cexit, elapsed, sha, model = sys.argv[1:]
 try:
     c = json.load(open(raw))
 except Exception:
     c = {}
 out = {
     "task": task, "condition": cond, "at": stamp, "repo_sha": sha,
+    "model_requested": model,
+    "model_used": list((c.get("modelUsage") or {}).keys()),
     "claude": {
         "exit": int(cexit), "elapsed_s": int(elapsed),
         "num_turns": c.get("num_turns"), "total_cost_usd": c.get("total_cost_usd"),
