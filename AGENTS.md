@@ -291,6 +291,31 @@ const res = await getApiClient().api.xxx.$get({}, {
 });
 ```
 
+## Debugging: ローカルトレース（Local Explorer API）
+
+`bun run dev`（`vite dev`）と `wrangler dev` は、設定に関係なく**全リクエストの OpenTelemetry トレースと
+console ログをローカルに記録**する（`@cloudflare/vite-plugin` ≥ 1.50 / wrangler ≥ 4.118）。
+「なぜ 500 になったか」「どの binding 呼び出しが遅いか」は、`console.log` を仕込んで再実行する
+のではなく、まずここを読む。
+
+```bash
+# 1) dev サーバーを起動し、再現するリクエストを 1 回投げる
+curl -s http://localhost:3000/api/tasks -o /dev/null
+# 2) スキーマ(spans / logs テーブル定義と使えるカラム)は OpenAPI の description にある
+curl -s http://localhost:3000/cdn-cgi/local/explorer/api | jq '.paths["/local/observability/query"].post.description'
+# 3) 読み取り専用 SQL で問い合わせる(1 文の SELECT/WITH のみ、値は params で bind)
+curl -s -X POST -H 'content-type: application/json' \
+  http://localhost:3000/cdn-cgi/local/explorer/api/local/observability/query \
+  -d '{"sql":"SELECT * FROM spans WHERE parent_id IS NULL ORDER BY rowid DESC LIMIT 5"}'
+```
+
+- ブラウザ UI は `http://localhost:3000/cdn-cgi/local/explorer`（wrangler dev なら端末で `e`）
+- 本番の自動トレースは `wrangler.jsonc` / `alchemy.run.ts` の `observability.traces.enabled` で
+  有効化済み（Cloudflare ダッシュボードの Traces に出る）
+- テンプレート原本の `wrangler.jsonc` は `name` が `{{APP_NAME}}` のままなので、vite-plugin の
+  検証で dev サーバーが起動しない。`scripts/init-template.sh` で初期化するか、`scripts/test/test-e2e.sh`
+  と同じく一時的に置換する
+
 ## Shared Packages
 
 | Package | Purpose |

@@ -242,7 +242,7 @@ if (process.env.SKIP_WORKER !== "1") {
     compatibilityFlags: ["nodejs_compat"],
     adopt: true,
     url: true,
-    observability: { enabled: true },
+    observability: { enabled: true, traces: { enabled: true } }, // wrangler.jsonc と揃える
     // Logpush 転送は Worker 側のフラグと LogPushJob の両方が必要（下のブロック参照）
     logpush: logpushDestination !== undefined,
     bindings: {
