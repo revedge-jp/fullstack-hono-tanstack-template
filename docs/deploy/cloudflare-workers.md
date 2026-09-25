@@ -66,8 +66,8 @@ bash scripts/setup-deploy-env.sh production
 | `CLOUDFLARE_ACCOUNT_ID` | 同上 |
 | `PLANETSCALE_SERVICE_TOKEN_ID` | PlanetScale DB / Role の作成。発行時のトークン名は `<APP_NAME>-deploy` 推奨（staging / production で共有するトークンのため。**preview には共有せず**専用に発行する: preview は PR のコードをこの資格情報で実行する） |
 | `PLANETSCALE_SERVICE_TOKEN` | 同上 |
-| `ALCHEMY_PASSWORD` | Alchemy state 内 secrets の暗号化パスワード（`openssl rand -base64 32` で生成）。**stage ごとに別の値**にする（少なくとも production は共有しない）。既に deploy した stage の値は変えない |
-| `ALCHEMY_STATE_TOKEN` | Alchemy state store（CF 上の Durable Object）の認証トークン（任意の強い文字列。**全環境・ローカルで同一の値**にすること）。アカウント内の全 state を読み書きできるので、preview を使うなら production は別アカウントに置く（[Alchemy IaC ガイド](../dev/alchemy-iac.md#state-と資格情報の権限境界preview-を使う前に読む)） |
+| `ALCHEMY_PASSWORD` | Alchemy state 内 secrets の暗号化パスワード（`openssl rand -base64 32` で生成。プロジェクトごとに固有の値を推奨）。既に deploy した stage の値は変えない（復号できずデプロイが止まる） |
+| `ALCHEMY_STATE_TOKEN` | Alchemy state store（CF 上の Durable Object）の認証トークン（任意の強い文字列。**同じ Cloudflare アカウント内の全環境・ローカルで同一の値**、別アカウントには別の値）。同じアカウントの全プロジェクト・全 stage の state を読み書きできるので、preview を使うアカウントにはどのプロジェクトの production も置かない（[Alchemy IaC ガイド](../dev/alchemy-iac.md#state-と資格情報の権限境界preview-を使う前に読む)） |
 | `BETTER_AUTH_SECRET` | Better Auth のセッション署名鍵（`openssl rand -base64 32`） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth。作成時のクライアント名は `<APP_NAME>-<stage>` 推奨（staging / production で別クライアントにするため） |
 | `LOGPUSH_DESTINATION` | （オプション）Worker trace ログの Logpush 宛先 URI。**Workers Paid プラン必須**。宛先資格情報を含むため secret 扱い。未設定なら Logpush は無効 |

@@ -46,10 +46,8 @@
    - ダッシュボード → Organization settings → Service tokens で発行（DB 作成権限付き）
 3. **`.env` に設定**（`.env.example` の Infra セクション参照）
    - `APP_NAME` — Worker / Hyperdrive / DB の命名ベース
-   - `ALCHEMY_PASSWORD` — state 内 secrets の暗号化パスワード（stage ごとに別の値。`.env` には1つしか書けないので、
-     ローカルの `.env` には staging の値だけを置き、production のデプロイは CI（`deploy.yml`）に任せる。
-     ローカルの `.env` に production の資格情報を置かない — `.claude/rules/agent-permissions.md`）
-   - `ALCHEMY_STATE_TOKEN` — state store の認証トークン（**CI と同一の値**）
+   - `ALCHEMY_PASSWORD` — state 内 secrets の暗号化パスワード
+   - `ALCHEMY_STATE_TOKEN` — state store の認証トークン（**同じ Cloudflare アカウントの CI と同一の値**）
    - `PLANETSCALE_ORGANIZATION` / `PLANETSCALE_SERVICE_TOKEN_ID` / `PLANETSCALE_SERVICE_TOKEN`
    - `CUSTOM_DOMAIN` / `APP_ORIGIN` / `WORKERS_SUBDOMAIN` — 公開 URL（`BETTER_AUTH_URL` /
      `CORS_ORIGIN`）の解決元。この優先順（詳細は後述の「オプションリソース」）
@@ -58,7 +56,7 @@
 
 ```bash
 bun run infra:deploy:staging      # client をビルドして staging をデプロイ（DB がなければ作成）
-bun run infra:deploy:production   # production をデプロイ（通常は CI。ローカルからなら production の資格情報をその場で環境変数に渡す）
+bun run infra:deploy:production   # production をデプロイ
 bun run infra:destroy:staging     # staging のリソースを削除
 
 # ローカルでマイグレーションを流したい時: 接続 URL の取り出し口
@@ -91,9 +89,9 @@ staging / production との違い:
 - **state は `CloudflareStateStore`**（自アカウントの CF 上に立つ Durable Object）に置き、
   ローカルと CI で共有する。state service（Worker 名 `alchemy-state-service`）は
   **CF アカウントに1つを全プロジェクトで共用**し、内部では app 名 × stage で名前空間分離される。
-  したがって `ALCHEMY_STATE_TOKEN` は**アカウント共通のシークレット**（組織で一元管理して
-  全プロジェクトに同じ値を配る）、`ALCHEMY_PASSWORD` は **stage ごとに固有**（state 内 secrets の
-  暗号化鍵。値が違えば相互に復号できない）。権限の境界は下の「state と資格情報の権限境界」
+  したがって `ALCHEMY_STATE_TOKEN` は**アカウント共通のシークレット**（同じアカウントの全プロジェクトに
+  同じ値を配る。別アカウントには別の値）、`ALCHEMY_PASSWORD` は **プロジェクト個別**（state 内 secrets の
+  暗号化鍵）。権限の境界は下の「state と資格情報の権限境界」
 - stage は Alchemy の `--stage` フラグで分離され、state も stage ごとに独立（ただし名前空間の分離で、
   権限の分離ではない。次節）
 - **`infra:destroy` は DB を削除しない**: PlanetScale の `Database` / `Role` は `delete: false`
@@ -117,31 +115,29 @@ staging / production との違い:
 alchemy 0.93 の実装（`alchemy/workers/cloudflare-state-store.ts` と `alchemy/lib/state/cloudflare-state-store.js`）で
 確かめた事実:
 
-- state サービスの認可は `ALCHEMY_STATE_TOKEN` との一致だけで、全プロジェクト・全 stage の state は 1 つの
-  Durable Object に入っている。どの app / stage を読み書きするかはリクエスト本文の `chain` で呼び出し側が
-  決める。**このトークンを持つ実行環境は、アカウント内のすべての state を読み・書き換え・消せる**
-- state サービス自体は `alchemy-state-service` という Worker なので、同じアカウントで Workers を編集できる
-  `CLOUDFLARE_API_TOKEN` があれば差し替えられる（production の Worker そのものも差し替えられる）
-- state 内の secrets は `ALCHEMY_PASSWORD` から scrypt で作った鍵の AES-256-GCM で暗号化される。
-  このテンプレートでは **production DB のロールのパスワード**（Hyperdrive の接続情報）、`BETTER_AUTH_SECRET`
-  （漏れるとセッションを偽造できる）、`GOOGLE_CLIENT_SECRET` が入る。パスワードが同じなら復号できる。
-  既に deploy した stage の値を変えると、認証タグの検証で復号が失敗してデプロイが止まる
+- state サービス（`alchemy-state-service` Worker。workers.dev に公開される）の認可は `ALCHEMY_STATE_TOKEN` との
+  一致だけで、アカウント内の全プロジェクト・全 stage の state は 1 つの Durable Object に入っている。どの app / stage を
+  読み書きするかはリクエスト本文の `chain` で呼び出し側が決める。**このトークンを持つ実行環境は、同じアカウントの
+  すべてのプロジェクト・stage の state を読み・書き換え・消せる**。トークンが同じなら別アカウントの state サービスにも届く
+- state 内の secrets は `ALCHEMY_PASSWORD` から scrypt で作った鍵の AES-256-GCM で暗号化される。このテンプレート
+  では production DB ロールのパスワード（Hyperdrive の接続情報）、`BETTER_AUTH_SECRET`（漏れるとセッションを
+  偽造できる）、`GOOGLE_CLIENT_SECRET`、（設定時）`LOGPUSH_DESTINATION`（R2 のアクセスキー）が入る
+- Workers と Hyperdrive を編集できる `CLOUDFLARE_API_TOKEN` があれば、state サービスや production の Worker を
+  差し替えられ、production の Hyperdrive を別の Worker に bind して DB に届く（パスワードを知らなくてよい）
+
+したがって、同じアカウントの中では stage もプロジェクトも権限で分かれていない。`ALCHEMY_PASSWORD` を stage ごとに
+分けても、書き換え・削除・Hyperdrive 経由の DB アクセスは防げない。
 
 preview（`preview.yml`）は PR のコード（`bun install` の依存スクリプト・build・PR で書き換えられる
-`alchemy.run.ts`・migrate）を preview Environment の資格情報で実行する。その資格情報に上の 2 つが入る以上、
-PR のコードはアカウント内の state に届く（`.claude/rules/agent-permissions.md` の Rule of Two）。
-fork からの PR には secrets が渡らず、preview はラベルを付けた PR でしか動かないので、外部の第三者が直接は突けない。
-届くのはエージェントが書いた PR と、乗っ取られた依存パッケージ。
+`alchemy.run.ts`・migrate）を preview Environment の資格情報で実行する。fork からの PR には secrets が渡らず、
+ラベルを付けた PR でしか動かないので外部の第三者は直接は突けないが、エージェントが書いた PR と乗っ取られた
+依存パッケージは届く（`.claude/rules/agent-permissions.md` の Rule of Two）。
 
-対策（強い順）:
-
-1. **production を別の Cloudflare アカウントに置く**。state サービス・`ALCHEMY_STATE_TOKEN`・
-   `CLOUDFLARE_API_TOKEN` がすべて分かれ、preview / staging から production に届く資格情報が無くなる。
-   PR プレビューを使うならこれを前提にする
-2. 同じアカウントに置くなら、`ALCHEMY_PASSWORD` を stage ごとに別の値にする（少なくとも production は
-   他と共有しない）。production の secrets は復号されなくなるが、state の書き換え・削除（次の production
-   デプロイでの再作成・削除）と Worker の差し替えは防げない
-3. preview ラベルは、人がコードを読んで信頼できると判断した PR にだけ付ける
+- **preview を使うプロジェクトが 1 つでもある Cloudflare アカウントには、どのプロジェクトの production も置かない**。
+  production 用のアカウントでは `ALCHEMY_STATE_TOKEN`・`CLOUDFLARE_API_TOKEN`・PlanetScale のサービストークンを
+  すべてそのアカウント専用の値にする（トークンを共有すると、アカウントを分けても届く）
+- preview ラベルを付けた PR は、push のたびに再デプロイされる。人がコードを読んで信頼できると判断した PR に
+  だけ付け、読んでいない push が続くならラベルを外す
 
 ## オプションリソース（環境変数で opt-in）
 
