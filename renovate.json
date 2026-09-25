@@ -52,7 +52,7 @@
       "automerge": false
     },
     {
-      "description": "0.x の依存は minor でも破壊的変更が入りうる（semver では 0.93 → 0.94 が minor 扱いになる）ので、devDependencies でも自動マージしない（範囲内の patch は lockFileMaintenance で入る）",
+      "description": "0.x の依存は minor でも破壊的変更が入りうる（semver では 0.93 → 0.94 が minor 扱いになる）ので、devDependencies でも自動マージしない（範囲指定のものは、範囲内の patch が lockFileMaintenance で入る）",
       "matchCurrentVersion": "<1.0.0",
       "automerge": false
     },

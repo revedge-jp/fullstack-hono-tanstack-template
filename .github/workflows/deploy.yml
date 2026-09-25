@@ -191,11 +191,17 @@ jobs:
             echo "::notice::稼働中の版を特定できませんでした（初回デプロイ・停止中・手動デプロイで commit が dev 等）。このデプロイの smoke が失敗しても自動ロールバックはできません"
             exit 0
           fi
-          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$sha...refs/heads/main" --jq .status 2>/dev/null || true)
+          status=""
+          for attempt in 1 2 3; do
+            status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$sha...refs/heads/main" --jq .status 2>/dev/null) && break
+            status=""
+            [ "$attempt" -lt 3 ] && sleep 5
+          done
           case "$status" in
             identical|ahead)
               echo "sha=$sha" >> "$GITHUB_OUTPUT"
               echo "smoke 失敗時の戻り先: $sha" ;;
+            "") echo "::warning::稼働中の $sha が main に含まれるかを確かめられませんでした（compare API の失敗）。このデプロイの smoke が失敗しても自動ロールバックはできません" ;;
             *) echo "::warning::稼働中の $sha は main に含まれない（$status）ため、ロールバックの戻り先にしません" ;;
           esac
 

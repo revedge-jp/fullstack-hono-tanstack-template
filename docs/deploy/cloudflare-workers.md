@@ -114,7 +114,7 @@ gh label create preview --color 1D76DB --description "この PR に使い捨て�
 | ラベル付きのまま push | 再デプロイ（DB ブランチは使い回し、migration は差分適用） |
 | ラベルを外す / PR クローズ・マージ | 環境を丸ごと削除（DB ブランチも消える） |
 | 7日間更新なしで放置 | `preview-cleanup.yml` が自動削除しラベルを外す（毎日 06:00 JST） |
-| 削除に失敗して DB ブランチが残った | `preview-cleanup.yml` が staging DB の `pr-N` ブランチを見て、対応する PR が「ラベル付きの open」でなければ削除する |
+| 削除に失敗して DB ブランチが残った | `preview-cleanup.yml` が staging DB の `pr-N` ブランチを見て、対応する PR が「ラベル付きの open」でなく、最終更新から 2 時間以上たっていれば削除する（PR 側の削除が実行中・待機中の可能性があるため。削除の直前に PR の状態を読み直す） |
 
 削除のたびに `scripts/deploy/verify-preview-destroyed.sh` が DB ブランチ・Worker・Hyperdrive が
 実際に消えたかを API で確かめ、残っていればジョブを失敗させる（`alchemy destroy` は削除に失敗しても

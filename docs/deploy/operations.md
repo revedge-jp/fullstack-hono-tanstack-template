@@ -15,6 +15,7 @@
 次の場合は戻り先が無いので、手動で対応する:
 
 - 初回デプロイ、または直前から停止していた
+- 稼働中の版が main に含まれない、または含まれるかを確かめられなかった（compare API の失敗。ジョブに warning が出る）
 - 直前の版を手動デプロイ（`bun run infra:deploy:*`）した。`GIT_SHA` を渡さないと `commit` が `dev` になる
   （手動デプロイでも戻り先を残すなら `GIT_SHA=$(git rev-parse HEAD) bun run infra:deploy:staging`）
 

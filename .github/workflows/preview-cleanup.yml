@@ -148,10 +148,12 @@ jobs:
           # orphan は PR の最終更新から 2 時間は触らない（preview.yml の destroy が実行中・待機中の可能性がある）
           recent_cutoff=$(date -u -d "-2 hours" +%Y-%m-%dT%H:%M:%SZ)
           stale_cutoff=$(date -u -d "-${STALE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
+          # 終了コード: 0 = 破棄する / 1 = もう対象ではない / 2 = PR を読めない
           still_target() {
             local n=$1 kind=$2 info labeled_open updated
-            # 読めなければ消さない側に倒す（API の一時的な失敗で使用中の preview を消さない）
-            info=$(gh pr view "$n" --json state,labels,updatedAt 2>/dev/null) || return 1
+            # 読めなければ消さない側に倒す（API の一時的な失敗で使用中の preview を消さない）。ただし黙って
+            # 飛ばすと取り残しが誰にも見えないので、呼び出し側でジョブを赤にする
+            info=$(gh pr view "$n" --json state,labels,updatedAt 2>/dev/null) || return 2
             labeled_open=$(printf '%s' "$info" | jq -r '(.state == "OPEN") and any(.labels[]?; .name == "preview")')
             updated=$(printf '%s' "$info" | jq -r '.updatedAt // ""')
             if [ "$kind" = stale ]; then
@@ -164,7 +166,14 @@ jobs:
           for n in $STALE $ORPHANS; do
             kind=orphan
             case " $STALE " in *" $n "*) kind=stale ;; esac
-            if ! still_target "$n" "$kind"; then
+            target=0
+            still_target "$n" "$kind" || target=$?
+            if [ "$target" = 2 ]; then
+              echo "::warning::PR #$n の状態を読めないため pr-$n を破棄しませんでした（$kind）"
+              failed="$failed pr-$n(PR を読めない)"
+              continue
+            fi
+            if [ "$target" != 0 ]; then
               echo "==> pr-$n は条件を満たさなくなったので飛ばします（$kind）"
               continue
             fi
