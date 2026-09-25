@@ -64,7 +64,10 @@ else
       fi
     fi
     log "新規ブランチ $BRANCH で worktree を作成（分岐元: ${BASE}）"
-    git -C "$MAIN_ROOT" worktree add -b "$BRANCH" "$WT_PATH" "$BASE" >&2
+    # --no-track: 分岐元が origin/main（リモート追跡ブランチ）だと既定で upstream が origin/main に
+    # なり、引数なしの git push が push.default 次第で main を狙う・@{upstream} 基準の判定が main
+    # 基準になる。upstream は初回の git push -u で自分のリモートブランチに張る。
+    git -C "$MAIN_ROOT" worktree add --no-track -b "$BRANCH" "$WT_PATH" "$BASE" >&2
   fi
 fi
 
