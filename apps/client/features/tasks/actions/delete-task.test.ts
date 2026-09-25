@@ -16,11 +16,14 @@ describe("tasks.deleteTask action", () => {
     expect(api.state.lastParam).toEqual({ id: "task-1" });
   });
 
-  test("異常: API がエラーを返す場合 { ok: false, message } を返す", async () => {
+  test("異常: API のエラーコードは生のまま出さず日本語の文言に置き換える", async () => {
     api.state.ok = false;
     api.state.body = { ok: false, error: "NotFound" };
     const result = await deleteTask({ id: "unknown" });
-    expect(result).toEqual({ ok: false, message: "NotFound" });
+    expect(result).toEqual({
+      ok: false,
+      message: "タスクが見つかりません。既に削除された可能性があります",
+    });
   });
 
   test("異常: エラーレスポンスの形が想定外の場合は既定メッセージ", async () => {
@@ -28,5 +31,14 @@ describe("tasks.deleteTask action", () => {
     api.state.body = null;
     const result = await deleteTask({ id: "task-1" });
     expect(result).toEqual({ ok: false, message: "タスクの削除に失敗しました" });
+  });
+
+  test("異常: 通信に失敗しても reject せず { ok: false, message } を返す", async () => {
+    api.state.callError = new TypeError("Failed to fetch");
+    const result = await deleteTask({ id: "task-1" });
+    expect(result).toEqual({
+      ok: false,
+      message: "通信に失敗しました。接続を確認して再度お試しください",
+    });
   });
 });

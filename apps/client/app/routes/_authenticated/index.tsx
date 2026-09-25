@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/")({
 });
 
 function HomePage() {
-  const { user } = authenticatedRoute.useLoaderData();
+  const { user } = authenticatedRoute.useRouteContext();
 
   return (
     <CenteredPage>

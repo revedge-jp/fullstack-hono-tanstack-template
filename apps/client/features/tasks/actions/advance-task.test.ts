@@ -16,11 +16,11 @@ describe("tasks.advanceTask action", () => {
     expect(api.state.lastParam).toEqual({ id: "task-1" });
   });
 
-  test("異常: API がエラーを返す場合 { ok: false, message } を返す", async () => {
+  test("異常: API のエラーコードは生のまま出さず日本語の文言に置き換える", async () => {
     api.state.ok = false;
     api.state.body = { ok: false, error: "AlreadyDone" };
     const result = await advanceTask({ id: "task-1" });
-    expect(result).toEqual({ ok: false, message: "AlreadyDone" });
+    expect(result).toEqual({ ok: false, message: "このタスクは既に完了しています" });
   });
 
   test("異常: エラーレスポンスの形が想定外の場合は既定メッセージ", async () => {
@@ -28,5 +28,14 @@ describe("tasks.advanceTask action", () => {
     api.state.body = "not-json-shape";
     const result = await advanceTask({ id: "task-1" });
     expect(result).toEqual({ ok: false, message: "タスクの更新に失敗しました" });
+  });
+
+  test("異常: 通信に失敗しても reject せず { ok: false, message } を返す", async () => {
+    api.state.callError = new TypeError("Failed to fetch");
+    const result = await advanceTask({ id: "task-1" });
+    expect(result).toEqual({
+      ok: false,
+      message: "通信に失敗しました。接続を確認して再度お試しください",
+    });
   });
 });

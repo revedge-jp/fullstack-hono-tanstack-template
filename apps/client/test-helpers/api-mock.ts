@@ -26,6 +26,10 @@ type ApiMockState = {
   ok: boolean;
   status: number;
   body: unknown;
+  // 設定すると呼び出し自体がこの値で reject する（fetch の失敗 = オフライン等の再現）
+  callError: unknown;
+  // true にすると json() が reject する（JSON でない本文 = エッジの 502 HTML 等の再現）
+  jsonFails: boolean;
   // 呼び出しの観測点。最後の呼び出しの内容を記録する。
   lastPath: string | undefined; // 例: "api.tasks.$post"
   lastJson: unknown;
@@ -38,6 +42,8 @@ const initialState = (): ApiMockState => ({
   ok: true,
   status: 200,
   body: undefined,
+  callError: undefined,
+  jsonFails: false,
   lastPath: undefined,
   lastJson: undefined,
   lastQuery: undefined,
@@ -70,10 +76,18 @@ export function createApiMock(overrides: Partial<ApiMockState> = {}) {
         state.lastQuery = callArgs?.query;
         state.lastParam = callArgs?.param;
         state.lastHeaders = opts?.init?.headers;
+        if (state.callError !== undefined) {
+          return Promise.reject(state.callError);
+        }
         return Promise.resolve({
           ok: state.ok,
           status: state.status,
-          json: async () => state.body,
+          json: async () => {
+            if (state.jsonFails) {
+              throw new SyntaxError("Unexpected token '<'");
+            }
+            return state.body;
+          },
         });
       },
     });
