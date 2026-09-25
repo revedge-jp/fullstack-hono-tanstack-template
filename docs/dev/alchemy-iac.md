@@ -136,14 +136,18 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
 - **preview を使うプロジェクトが 1 つでもある Cloudflare アカウントには、どのプロジェクトの production も置かない**。
   production 用のアカウントの `ALCHEMY_STATE_TOKEN` と `CLOUDFLARE_API_TOKEN` はそのアカウント専用の値にする
   （同じ値を使うと、アカウントを分けても公開 URL・API 経由で届く）
-- PlanetScale のサービストークンは CF アカウントに紐づかず、発行時の権限のままだと組織の全 DB を削除できる。
-  preview Environment には production の DB に届くトークンを置かない（preview 用を別に発行する。preview に要る
-  最小の権限は未検証なので、下の「既知の制約」の付与から絞れる範囲で絞る）
+- PlanetScale も同じ考え方で、**production の DB は staging / preview のトークンが届かない場所に置く**。確実なのは
+  production を別の PlanetScale org に置き、その org のトークンを production の Environment にだけ置くこと。
+  理由: preview は同じアカウントの staging の state を書き換えられ、次の staging デプロイは staging のトークンで
+  その state を reconcile する（宣言に無いエントリは orphan として削除され、Database の `output.name` を差し替えると
+  その DB が改名される）。staging のトークンが「既知の制約」の付与（全 DB への read/write/delete）のままだと、
+  これで production の DB が消える・改名される。トークンを Environment ごとに別発行するだけでは防げない
+  （DB 単位に権限を絞って防げるかは未検証）
 - preview ラベルを付けた PR は、push のたびに再デプロイされる。人がコードを読んで信頼できると判断した PR に
   だけ付け、読んでいない push が続くならラベルを外す
 - この節が扱うのは、preview（PR のコード）が同じアカウントの state・Worker に届く場合だけ。次の 2 つは
   この節の対策では塞がらない: GitHub の Environment（PR がワークフローを足して `environment: production` を
-  参照する）と、未マージのコミットへの `v*` タグ push（`deploy.yml` が祖先を確かめずにそのコミットを
+  参照する）と、未マージのコミットへの `vX.Y.Z` タグ push（`deploy.yml` が祖先を確かめずにそのコミットを
   production の資格情報で動かす）
 
 ## オプションリソース（環境変数で opt-in）
