@@ -48,6 +48,22 @@ SSR を止める効果は無い。
 無効化する。自前の `isActive` に一本化したいときは、対象の `<Link>` に
 `activeOptions={{ exact: true }}` を明示する。
 
+## 既存のリーフページの子パスへ新規ルートを足すときは `_` を付ける — 付け忘れは「エラーにならず表示が変わらない」
+
+`tasks.$taskId.tsx` のような**既に単体のリーフページとして存在する**ファイルに対し、その URL の下の
+階層（例: `/tasks/$taskId/edit`）を新規ルートとして足すとき、ファイル名を素直に `tasks.$taskId.edit.tsx`
+とすると、TanStack Router のファイルベースルーティングはこれを親（`tasks.$taskId.tsx`）の**子ルート**と
+してネストする。親の component は `<Outlet />` を持たない（リーフなので当然）ため、新ルートへ遷移しても
+**親の内容が表示されたまま変わらない**。
+
+**typecheck・lint・test のどれも検知しない。** ルートは `routeTree.gen.ts` に正しく登録され、`to=` の型
+検証も通り、component も存在する — ただし決して呼ばれない。
+
+回避策は親セグメントの末尾に `_` を付けたファイル名にすること（`tasks.$taskId_.edit.tsx`）。これは
+「親レイアウトへネストしない」明示指定で、`_` は URL には出ない（`createFileRoute` に渡すパス文字列には
+残る）。新規ルートを足したら、typecheck だけでなく**実際にブラウザで遷移して表示が変わること**を確かめる。
+出典: revedge-jp/chiryonavi#1184（実機で遷移して初めて発見し、デバッグに数手番を要した）。
+
 ## UI 文言のリネームは Playwright ロケーターの部分一致衝突を全ファイル横断で確認する
 
 `page.getByRole("link", { name: "..." })` 等の `name` は既定で**部分一致**(substring)なため、
