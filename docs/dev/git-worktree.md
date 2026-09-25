@@ -98,9 +98,11 @@ git log origin/main
 
 Claude Code の worktree は、作ったセッションの中なら `ExitWorktree`（remove）で消す。WorktreeRemove フックが
 ポートの登録と `wt_<name>` DB も片付ける。前のセッションで残した worktree（`ExitWorktree` の対象外）は、main の
-ルートからフックを直接流す（ディレクトリが既に無くても worktree 登録の prune から続きを片付ける）:
+ルートからフックを直接流す（ディレクトリが既に無くても続きを片付ける）。**フックは `git worktree remove --force`
+で消すので、未コミット・未追跡の変更は確認なしに失われる**。先に status を見て、残すものはコミットしておく:
 
 ```bash
+git -C <worktree の絶対パス> status --short   # 何も出ないことを確かめる
 echo '{"worktree_path":"<worktree の絶対パス>"}' | bash .claude/hooks/worktree-remove.sh
 ```
 
