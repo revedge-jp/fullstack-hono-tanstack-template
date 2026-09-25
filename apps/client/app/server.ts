@@ -38,6 +38,15 @@ if (typeof globalThis.addEventListener === "function") {
 type CFContext = { waitUntil: (p: Promise<unknown>) => void } | undefined;
 type CFBindings = Record<string, string | { connectionString: string } | undefined>;
 
+// 未設定は本番扱い（api-service の config.ts と同じ fail-closed）。開発扱いに倒すと、NODE_ENV を
+// 渡し忘れたデプロイで 500 の本文にスタックが出て、CSP が緩み、HSTS が付かない。
+// ローカルは .env（.dev.vars）の NODE_ENV=development で明示する。development / test 以外
+// （"staging" や空文字などの想定外の値）も本番側に倒す。
+export function isProductionEnv(env: { NODE_ENV?: string } | undefined): boolean {
+  const nodeEnv = env?.NODE_ENV;
+  return nodeEnv !== "development" && nodeEnv !== "test";
+}
+
 // SSR（非 /api/*）レスポンス用のセキュリティヘッダー。/api/* は Hono 側の secureHeaders() が担う。
 // 静的アセット（CF assets バインディング直配信）には付かないが、CSP が意味を持つのは HTML なので十分。
 export function withSecurityHeaders(
@@ -169,7 +178,7 @@ export default {
     const { app: honoApp, end } = initHonoApp(env ?? {});
     const cleanup = () => end().catch(() => undefined);
     const waitUntil = (p: Promise<unknown>) => ctx?.waitUntil(p) ?? void p;
-    const isProd = env?.NODE_ENV === "production";
+    const isProd = isProductionEnv(env);
 
     try {
       // /api/* は直接 Hono にディスパッチし、TanStack Start を完全にバイパスする。

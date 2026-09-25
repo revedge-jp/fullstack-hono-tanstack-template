@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { createInProcessApiClient } from "@/shared/lib/api-client";
 
-import server, { isNonHtmlPageRequest, releaseAfterResponse, withSecurityHeaders } from "./server";
+import server, {
+  isNonHtmlPageRequest,
+  isProductionEnv,
+  releaseAfterResponse,
+  withSecurityHeaders,
+} from "./server";
 
 // 「Response オブジェクトを返した時点」で cleanup を走らせると、ストリーミング
 // レスポンスの送信中に裏で実行中のクエリのDB接続が閉じられ、同時リクエストが多い環境で
@@ -214,5 +219,23 @@ describe("withSecurityHeaders", () => {
     expect(csp).toContain("'unsafe-eval'");
     expect(csp).toContain("ws: wss:");
     expect(res.headers.get("Strict-Transport-Security")).toBeNull();
+  });
+});
+
+describe("isProductionEnv（SSR のエラー本文・CSP・HSTS の切り替え）", () => {
+  test("NODE_ENV 未設定・env 無しは本番扱い（fail-closed）", () => {
+    expect(isProductionEnv({})).toBe(true);
+    expect(isProductionEnv(undefined)).toBe(true);
+    expect(isProductionEnv({ NODE_ENV: "production" })).toBe(true);
+  });
+
+  test("想定外の値（staging・空文字）も本番扱い", () => {
+    expect(isProductionEnv({ NODE_ENV: "staging" })).toBe(true);
+    expect(isProductionEnv({ NODE_ENV: "" })).toBe(true);
+  });
+
+  test("development / test と明示したときだけ開発扱い", () => {
+    expect(isProductionEnv({ NODE_ENV: "development" })).toBe(false);
+    expect(isProductionEnv({ NODE_ENV: "test" })).toBe(false);
   });
 });
