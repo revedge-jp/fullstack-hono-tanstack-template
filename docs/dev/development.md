@@ -54,7 +54,7 @@ apps/client/
 
 - 基本はルートの `loader` + `createServerFn` でサーバーサイド取得し、初回表示のローディングを無くす
 - ユーザー操作で動的に変わるデータのみ TanStack Query の `useQuery` を使う
-- パターンの詳細は [AGENTS.md](../../AGENTS.md#architecture-client) を参照
+- パターンの詳細は [apps/client/AGENTS.md](../../apps/client/AGENTS.md#architecture-client) を参照
 
 ### shadcn/ui
 
