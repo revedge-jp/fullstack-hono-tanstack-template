@@ -88,7 +88,7 @@ export function createFakeApp(overrides: FakeAppOverrides = {}) {
     });
 
   const user = overrides.user ?? DEFAULT_USER;
-  const getSession = overrides.getSession ?? (() => okAsync(user));
+  const getSession = overrides.getSession ?? (() => okAsync({ user, setCookieHeaders: [] }));
 
   const db: HealthDb = overrides.db ?? { execute: () => Promise.resolve([]) };
 

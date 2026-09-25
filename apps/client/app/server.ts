@@ -96,6 +96,25 @@ export function withSecurityHeaders(
   });
 }
 
+// Set-Cookie は 1 つずつ別のヘッダーとして足す（カンマで結合すると Expires の日付と区別できない）
+export function withForwardedSetCookies(
+  response: Response,
+  setCookieHeaders: readonly string[],
+): Response {
+  if (setCookieHeaders.length === 0) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  for (const value of setCookieHeaders) {
+    headers.append("set-cookie", value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // レスポンスボディの送信完了(またはキャンセル)後に DB 接続を解放する。
 // 「Response オブジェクトを返した時点」で cleanup を走らせると、ストリーミング応答
 // (SSR)や送信途中のボディの裏で実行中のクエリの接続が閉じられ、同時リクエストが
@@ -190,11 +209,20 @@ export default {
       // SSR の loader/createServerFn が api-service をインプロセスで呼べるよう、
       // Hono RPC クライアントを AsyncLocalStorage で注入する（背景と設計意図は
       // shared/lib/api-client.ts を参照）。
-      const response = await runWithApiClient(createInProcessApiClient(honoApp, requestId), () =>
-        Promise.resolve(handler(request)),
+      // in-process で呼んだ API の Set-Cookie（セッション延長）を集めて外側のレスポンスに付ける。
+      // 付けられるのは handler がレスポンスを返すまでに呼ばれた分だけ（セッション検証は beforeLoad で
+      // 先に済むので含まれる）。ストリーミング中に後から呼ばれた分は、ヘッダーを送った後なので付かない
+      const forwardedSetCookies: string[] = [];
+      const apiClient = createInProcessApiClient(honoApp, requestId, (setCookieHeaders) =>
+        forwardedSetCookies.push(...setCookieHeaders),
       );
+      const response = await runWithApiClient(apiClient, () => Promise.resolve(handler(request)));
       return releaseAfterResponse(
-        withSecurityHeaders(response, isProd, requestId),
+        withSecurityHeaders(
+          withForwardedSetCookies(response, forwardedSetCookies),
+          isProd,
+          requestId,
+        ),
         cleanup,
         waitUntil,
       );

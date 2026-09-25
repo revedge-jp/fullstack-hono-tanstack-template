@@ -19,7 +19,15 @@ type HonoAppLike = {
 
 const storage = new AsyncLocalStorage<ApiClient>();
 
-export function createInProcessApiClient(app: HonoAppLike, requestId?: string): ApiClient {
+// onSetCookie は in-process で呼んだ API の Set-Cookie を受け取る。api-service はセッション検証のついでに
+// 有効期限を延ばした session_token と cookieCache を Set-Cookie で返すが、ここで呼んだ応答はブラウザに
+// 届かないので、呼び出し側（server.ts）が集めて外側のレスポンスに付ける。付けないと、SSR だけで
+// 画面を行き来している間は cookie が延びず、サインインから 7 日で切れる。
+export function createInProcessApiClient(
+  app: HonoAppLike,
+  requestId?: string,
+  onSetCookie?: (setCookieHeaders: string[]) => void,
+): ApiClient {
   const injected: Record<string, string> = {};
   // SSR 起点の API 呼び出しを outer リクエストと同じ requestId で相関させる
   // （api-service の requestId ミドルウェアは既存の x-request-id ヘッダーを尊重する）
@@ -33,14 +41,19 @@ export function createInProcessApiClient(app: HonoAppLike, requestId?: string): 
   // 失われる）。最終的な RequestInit にマージすることで、どの呼び出し方でも注入ヘッダーが
   // 生き残る。
   return hc<AppType>("http://internal", {
-    fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+    fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       for (const [key, value] of Object.entries(injected)) {
         if (!headers.has(key)) {
           headers.set(key, value);
         }
       }
-      return app.request(input, { ...init, headers });
+      const response = await app.request(input, { ...init, headers });
+      const setCookieHeaders = response.headers.getSetCookie();
+      if (setCookieHeaders.length > 0) {
+        onSetCookie?.(setCookieHeaders);
+      }
+      return response;
     },
   });
 }

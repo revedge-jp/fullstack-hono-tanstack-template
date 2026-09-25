@@ -24,7 +24,10 @@ function createTestApp(overrides?: {
   listActivities?: (input: {
     ownerId: string;
   }) => ResultAsync<{ items: (typeof mockActivity)[] }, "Unexpected">;
-  getSession?: () => ResultAsync<AuthUser, "Unauthorized" | "Unexpected">;
+  getSession?: () => ResultAsync<
+    { user: AuthUser; setCookieHeaders: string[] },
+    "Unauthorized" | "Unexpected"
+  >;
 }) {
   const activity = {
     recordActivity: () => okAsync({ item: { id: mockActivity.id } }),
@@ -34,7 +37,8 @@ function createTestApp(overrides?: {
     "/api/activities",
     createActivityRouter({
       activity,
-      getSession: overrides?.getSession ?? (() => okAsync(mockUser)),
+      getSession:
+        overrides?.getSession ?? (() => okAsync({ user: mockUser, setCookieHeaders: [] })),
     }),
   );
 }

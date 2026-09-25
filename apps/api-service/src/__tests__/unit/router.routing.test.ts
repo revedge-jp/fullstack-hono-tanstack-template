@@ -11,7 +11,7 @@ const mockUser: AuthUser = {
   name: "Test User",
 };
 
-const noop = () => okAsync(mockUser);
+const noop = () => okAsync({ user: mockUser, setCookieHeaders: [] });
 
 function createTestApp() {
   return new Hono().route("/api", createAuthRouter({ getSession: noop }));
