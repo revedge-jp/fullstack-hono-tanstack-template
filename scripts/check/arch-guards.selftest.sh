@@ -99,6 +99,11 @@ expect_guard "throw 禁止（プロパティキーと並んでも throw 文は�
   'export const selftestOptions = { throw: true };
 export function selftestThrow() { throw new Error("x"); }' \
   "__selftest_throw_key.ts:2:"
+expect_guard "throw 禁止（同じ行に \`throw:\` があっても throw 文は検出）" \
+  guard_no_throw \
+  "$D/application/__selftest_throw_key_same_line.ts" \
+  'export function selftestThrow() { throw new Error("x"); } // throw: 後で ROP へ移す' \
+  "__selftest_throw_key_same_line.ts:1:"
 THROW_KEY_NEG="$D/application/__selftest_throw_key_only.ts"
 mkfix "$THROW_KEY_NEG" 'export const selftestOptions = { throw: true };'
 throw_key_out=$(run_guard guard_no_throw 2>&1)

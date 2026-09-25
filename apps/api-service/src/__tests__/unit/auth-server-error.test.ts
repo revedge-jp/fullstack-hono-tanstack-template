@@ -87,6 +87,8 @@ describe("Better Auth のルーター例外 — onAPIError.throw で Hono の on
     expect(unhandled).toHaveLength(1);
     const logged = JSON.stringify(unhandled[0]?.[0]);
     expect(logged).toContain("Failed query: insert into");
+    // メッセージは SQL 文だけなので、DB 停止かスキーマ不整合かは cause の code で見分ける
+    expect(unhandled[0]?.[0]).toMatchObject({ causeCode: "ECONNREFUSED" });
     expect(logged).not.toContain("params:");
     expect(logged).not.toContain("codeVerifier");
     // Better Auth 内部のロガーが同じ例外を別のログに載せていないことも見る

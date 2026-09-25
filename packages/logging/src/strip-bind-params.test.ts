@@ -20,18 +20,28 @@ describe("stripBindParams", () => {
 
 describe("stripBindParamsFromStack", () => {
   test("メッセージ部分のバインド値だけを切り落とし、フレームは残す", () => {
-    const stack = `Error: ${QUERY}\nparams: id-1,secret\n    at query (db.ts:1:1)\n    at run (app.ts:2:2)`;
-    expect(stripBindParamsFromStack(stack)).toBe(
+    const message = `${QUERY}\nparams: id-1,secret`;
+    const stack = `Error: ${message}\n    at query (db.ts:1:1)\n    at run (app.ts:2:2)`;
+    expect(stripBindParamsFromStack(stack, message)).toBe(
       `Error: ${QUERY}\n    at query (db.ts:1:1)\n    at run (app.ts:2:2)`,
     );
   });
 
-  test("フレームが無ければ末尾まで切り落とす", () => {
-    expect(stripBindParamsFromStack(`Error: ${QUERY}\nparams: secret`)).toBe(`Error: ${QUERY}`);
+  test("バインド値に改行と `at ` が含まれてもフレームと誤認しない", () => {
+    const message = `${QUERY}\nparams: Taro\n    at SECRET-in-param,u1`;
+    const stack = `Error: ${message}\n    at query (db.ts:1:1)`;
+    const stripped = stripBindParamsFromStack(stack, message);
+    expect(stripped).toBe(`Error: ${QUERY}\n    at query (db.ts:1:1)`);
+    expect(stripped).not.toContain("SECRET-in-param");
   });
 
-  test("マーカーが無ければそのまま返す", () => {
+  test("stack 中にメッセージが見つからなければメッセージだけを返す", () => {
+    const stack = "Error: rewritten\nparams: secret\n    at run (app.ts:2:2)";
+    expect(stripBindParamsFromStack(stack, `${QUERY}\nparams: secret`)).toBe(QUERY);
+  });
+
+  test("バインド値が無ければ stack をそのまま返す", () => {
     const stack = "Error: boom\n    at run (app.ts:2:2)";
-    expect(stripBindParamsFromStack(stack)).toBe(stack);
+    expect(stripBindParamsFromStack(stack, "boom")).toBe(stack);
   });
 });

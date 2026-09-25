@@ -162,13 +162,14 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
           method: c.req.method,
           path: new URL(c.req.url).pathname,
           err: message,
+          causeCode: readCauseCode(err),
         },
         "unhandled error",
       );
 
       if (config.nodeEnv !== "production") {
         const stack = err instanceof Error ? err.stack : undefined;
-        const detail = stack === undefined ? message : stripBindParamsFromStack(stack);
+        const detail = stack === undefined ? message : stripBindParamsFromStack(stack, err.message);
         return c.json(
           {
             ok: false,
@@ -183,6 +184,16 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
     });
 
   return routes;
+}
+
+// DrizzleQueryError のメッセージは SQL 文だけで、DB 停止(ECONNREFUSED)・テーブル欠落(42P01)・
+// 制約違反(23505)等の区別は cause にしかない。cause.message は入力値を埋め込むことがある
+// (`invalid input syntax for type uuid: "…"`)ので、値を含まない code だけを残す。
+function readCauseCode(err: unknown): string | undefined {
+  if (!(err instanceof Error) || typeof err.cause !== "object" || err.cause === null) {
+    return undefined;
+  }
+  return "code" in err.cause && typeof err.cause.code === "string" ? err.cause.code : undefined;
 }
 
 function toHealthInfo(config: BuildConfig) {

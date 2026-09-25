@@ -2,7 +2,6 @@
 // (OAuth の codeVerifier・state・メールアドレス等)。pino の redact はキー単位でしか効かず
 // 文字列の中身には届かないため、ログやレスポンスに載せる前に文字列として切り落とす。
 const BIND_PARAMS_MARKER = "\nparams:";
-const STACK_FRAME_LINE = /\n\s+at /;
 
 /**
  * メッセージからバインド値(`\nparams:` 以降)を切り落とす。SQL 文は残す。
@@ -13,15 +12,19 @@ export function stripBindParams(message: string): string {
 }
 
 /**
- * stack の先頭はメッセージの複製なので、そこに含まれるバインド値だけを切り落とし、
- * 呼び出しフレーム(`at …` の行)は残す。フレームが見つからなければ末尾まで切り落とす。
+ * stack の先頭はメッセージの複製なので、その部分だけをバインド値を落としたメッセージに置き換え、
+ * 呼び出しフレームは残す。フレームの始まりを stack の文字列(`at …` の行)から探すと、バインド値
+ * 自体が改行と `at ` を含むときに誤認するため、既知のメッセージの位置で切る。stack 中にメッセージが
+ * 見つからない(生成後に message が書き換えられた等)ときは、安全側に倒してメッセージだけを返す。
  */
-export function stripBindParamsFromStack(stack: string): string {
-  const markerIndex = stack.indexOf(BIND_PARAMS_MARKER);
-  if (markerIndex === -1) {
-    return stack;
+export function stripBindParamsFromStack(stack: string, message: string): string {
+  const messageIndex = stack.indexOf(message);
+  if (messageIndex === -1) {
+    return stripBindParams(message);
   }
-  const rest = stack.slice(markerIndex + BIND_PARAMS_MARKER.length);
-  const frameIndex = rest.search(STACK_FRAME_LINE);
-  return stack.slice(0, markerIndex) + (frameIndex === -1 ? "" : rest.slice(frameIndex));
+  return (
+    stack.slice(0, messageIndex) +
+    stripBindParams(message) +
+    stack.slice(messageIndex + message.length)
+  );
 }
