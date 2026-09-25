@@ -305,6 +305,18 @@ expect_guard "スタイル規約: shared/ 配下も走査する" \
   'export const SelftestUi = () => <p className="text-zinc-500">x</p>;' \
   "違反 [raw-palette]"
 
+expect_guard "スタイル規約: 文章の中央揃え（text-center）" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-sm text-center">x</p>;' \
+  "違反 [centered-text]"
+
+expect_guard "スタイル規約: バリアント付きの text-center" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-left md:text-center">x</p>;' \
+  "違反 [centered-text]"
+
 # コメントも検査対象（禁止クラス名を書いたコメントは変更履歴なので書かない）。
 # 行内・行全体のどちらのコメントも検出することを確認する。
 expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
@@ -356,7 +368,8 @@ mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
 export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
 export const D = () => <p>© 2026 → 次へ</p>;
-export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /></svg>;'
+export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /></svg>;
+export const F = () => <div className="flex items-center justify-center text-left">x</div>;'
 # style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
 mkfix "apps/client/components/__selftest/selftest-style-ok.tsx" \
   'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'
