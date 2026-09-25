@@ -5,8 +5,10 @@ on:
     branches: [main]
     tags:
       - 'v*.*.*'
+  # base ブランチで絞らない。PR を積み重ねる（B の base を A のブランチにする）と、
+  # [main, develop] に限定した場合 B は CI なしで進み、A のマージで base が main に
+  # 付け替わるまで壊れに気づけない。push は main とタグだけなので二重実行は起きない。
   pull_request:
-    branches: [main, develop]
   # merge queue が作る一時ブランチ(main + キュー内の PR)で CI Pipeline を走らせる。
   # これが無いとキューは永久に待つ。詳細は docs/deploy/github-ruleset.md
   merge_group:
