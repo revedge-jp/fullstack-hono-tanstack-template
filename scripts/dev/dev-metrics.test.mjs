@@ -11,6 +11,12 @@ import {
 } from "./dev-metrics.mjs";
 
 describe("本文の記録行の読み取り", () => {
+  test("往復行が無く収束行だけの PR は指摘なしで収束した 1 周、どちらも無ければ記録なし", () => {
+    expect(parseRounds("レビュー収束: 最終周 CONFIRMED 0")).toBe(1);
+    expect(parseRounds("レビュー往復: 3周\nレビュー収束: 最終周 CONFIRMED 0")).toBe(3);
+    expect(parseRounds("規約以前の本文")).toBeNull();
+  });
+
   test("レビュー往復: 行頭の行だけを周回数として読む", () => {
     expect(parseRounds("概要\n\nレビュー往復: 3周（主な指摘: x）")).toBe(3);
     expect(parseRounds("本文中の「レビュー往復: 2周」という言及")).toBeNull();
@@ -38,10 +44,16 @@ describe("本文の記録行の読み取り", () => {
     expect(prType("Update README")).toBe("other");
   });
 
-  test("指摘対応のコミットは見出しの印で数える", () => {
+  test("指摘対応のコミットは件名（1 行目）の印で数え、本文で触れているだけのものは数えない", () => {
+    const longSubject = `fix: ${"長い件名".repeat(20)}（コードレビュー指摘）\n\n本文`;
     expect(
-      countReviewFixCommits(["feat: 本体", "fix: 直す（コードレビュー指摘）", "docs: 追記"]),
-    ).toBe(1);
+      countReviewFixCommits([
+        "feat: 本体",
+        "fix: 直す（コードレビュー指摘）",
+        longSubject,
+        "docs: 追記\n\n前回のコードレビュー指摘への補足",
+      ]),
+    ).toBe(2);
   });
 });
 
@@ -85,6 +97,17 @@ describe("PR ごとの記録", () => {
     expect(labeled("needs-rebase").stalledByConflict).toBe(true);
     expect(labeled("bug").stalledByConflict).toBe(false);
   });
+});
+
+test("コミット・タイムラインが 100 件を超えた PR には打ち切りの印が付く", () => {
+  expect(toPrRecord(node({})).truncated).toBe(false);
+  expect(
+    toPrRecord(node({ commits: { pageInfo: { hasNextPage: true }, nodes: [] } })).truncated,
+  ).toBe(true);
+  expect(
+    toPrRecord(node({ timelineItems: { pageInfo: { hasPreviousPage: true }, nodes: [] } }))
+      .truncated,
+  ).toBe(true);
 });
 
 describe("集計", () => {

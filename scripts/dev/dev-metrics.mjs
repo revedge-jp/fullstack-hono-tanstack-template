@@ -7,10 +7,10 @@
 //   gh の認証（読み取りのみ）を使う。書き込みはしない。
 //
 // 入力にしている記録（.claude/commands/ship.md と review-full.md の規約）:
-//   レビュー往復: N周（主な指摘: …）            … 周回数（必須の行）
+//   レビュー往復: N周（主な指摘: …）            … 周回数。無くても「レビュー収束:」行があれば 1 周（指摘なしで収束）
 //   レビュー検出: ①N ②N ③N                      … レビュアー別の CONFIRMED 件数（任意。③を測るため）
 //   原因PR: #N                                   … 不具合修正の PR で、原因を入れた PR（任意。取りこぼしを測るため）
-//   コミット見出しの「コードレビュー指摘」         … 指摘対応のコミット（squash 前のコミットを API から読む）
+//   コミット件名の「コードレビュー指摘」           … 指摘対応のコミット（squash 前のコミットを API から読む）
 //   needs-rebase ラベル                            … main との衝突で止まった（conflicting-prs.yml が付ける）
 
 import { execFileSync } from "node:child_process";
@@ -19,9 +19,14 @@ import { pathToFileURL } from "node:url";
 const REBASE_LABEL = "needs-rebase";
 const REVIEW_FIX_MARKER = "コードレビュー指摘";
 
+// ship.md は往復が無ければ往復行を書かない規約なので、収束行だけの PR は指摘なしで収束した 1 周として数える
+// （規約以前の、どちらの行も無い PR だけを「記録なし」にする）。
 export function parseRounds(body) {
   const match = /^レビュー往復:\s*(\d+)\s*周/m.exec(body ?? "");
-  return match ? Number(match[1]) : null;
+  if (match) {
+    return Number(match[1]);
+  }
+  return /^レビュー収束:/m.test(body ?? "") ? 1 : null;
 }
 
 // ③をスキップした周は "③-" と書く（数えない）。記録が無ければ null。
@@ -48,8 +53,10 @@ export function prType(title) {
   return match ? match[1] : "other";
 }
 
-export function countReviewFixCommits(headlines) {
-  return headlines.filter((headline) => headline.includes(REVIEW_FIX_MARKER)).length;
+// 件名（メッセージの 1 行目）で数える。GraphQL の messageHeadline は長い件名を途中で切って残りを本文へ回すため、
+// 末尾に付ける印が分断されて数え落とす（実測で 35 件中 5 件）。
+export function countReviewFixCommits(messages) {
+  return messages.filter((message) => message.split("\n")[0].includes(REVIEW_FIX_MARKER)).length;
 }
 
 const hoursBetween = (from, to) => (Date.parse(to) - Date.parse(from)) / 3_600_000;
@@ -68,12 +75,16 @@ export function toPrRecord(node) {
     detections: parseDetections(node.body),
     causePrs: parseCausePrs(node.body),
     reviewFixCommits: countReviewFixCommits(
-      (node.commits?.nodes ?? []).map((commit) => commit.commit.messageHeadline),
+      (node.commits?.nodes ?? []).map((commit) => commit.commit.message),
     ),
     leadHours: hoursBetween(node.createdAt, node.mergedAt),
     waitHours: hoursBetween(readyAt, node.mergedAt),
     stalledByConflict: timeline.some(
       (item) => item.__typename === "LabeledEvent" && item.label?.name === REBASE_LABEL,
+    ),
+    // コミット・タイムラインは1 PR あたり 100 件までしか読まない。超えた PR は数え落としがありうるので印を付ける
+    truncated: Boolean(
+      node.commits?.pageInfo?.hasNextPage || node.timelineItems?.pageInfo?.hasPreviousPage,
     ),
   };
 }
@@ -159,6 +170,7 @@ export function summarize(records) {
       .map((record) => record.number),
     detections: detectionTotals,
     escapes,
+    truncated: records.filter((record) => record.truncated).map((record) => record.number),
   };
 }
 
@@ -202,6 +214,11 @@ export function renderMarkdown(summary, records, days) {
       ? "- 取りこぼし（マージ後に不具合が見つかった PR）: 記録なし（修正 PR 本文の「原因PR:」行）"
       : `- 取りこぼし: ${summary.escapes.length} 件（${summary.escapes.map((escape) => `#${escape.cause} → 修正 #${escape.fixedBy}`).join(", ")}）`,
   );
+  if (summary.truncated.length > 0) {
+    lines.push(
+      `- 注意: 履歴が 100 件を超え、指摘対応コミット・Ready・ラベルを数え落としている可能性がある PR: ${summary.truncated.map((n) => `#${n}`).join(", ")}`,
+    );
+  }
   const heavy = records
     .filter((record) => record.rounds !== null && record.rounds >= 3)
     .sort((a, b) => b.rounds - a.rounds)
@@ -229,8 +246,9 @@ const QUERY = `query($search: String!, $cursor: String) {
     nodes {
       ... on PullRequest {
         number title body createdAt mergedAt
-        commits(first: 100) { nodes { commit { messageHeadline } } }
-        timelineItems(first: 100, itemTypes: [READY_FOR_REVIEW_EVENT, LABELED_EVENT]) {
+        commits(first: 100) { pageInfo { hasNextPage } nodes { commit { message } } }
+        timelineItems(last: 100, itemTypes: [READY_FOR_REVIEW_EVENT, LABELED_EVENT]) {
+          pageInfo { hasPreviousPage }
           nodes {
             __typename
             ... on ReadyForReviewEvent { createdAt }
