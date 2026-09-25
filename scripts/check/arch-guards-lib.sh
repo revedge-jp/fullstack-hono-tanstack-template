@@ -61,6 +61,7 @@ ARCH_GUARDS=(
   guard_actions_pinned_sha
   guard_no_id_token_write
   guard_client_styles
+  guard_ui_copy
   guard_feature_structure
 )
 
@@ -502,6 +503,13 @@ guard_client_styles() {
   # semantic トークンの迂回と AI slop の定型パターンは typecheck・lint・test を通過するため、
   # ここで検出する。規則と除外（components/ui）の理由は client-styles.mjs 冒頭に書いてある。
   node scripts/check/client-styles.mjs
+}
+
+guard_ui_copy() {
+  echo "[guard] client の日本語文言（AI が書く文章に出やすい語・誇張表現・全角ダッシュ）"
+  # 文として正しいので typecheck・lint・test を通過する。判定は .textlintrc.json、文字列の取り出し方と
+  # ダッシュだけ正規表現で見る理由は ui-copy.mjs 冒頭に書いてある。
+  node scripts/check/ui-copy.mjs
 }
 
 guard_feature_structure() {

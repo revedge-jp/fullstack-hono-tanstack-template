@@ -13,6 +13,8 @@ package.json
 .claude/settings.json
 dependency-cruiser.config.cjs
 .oxlintrc.json
+# textlint の設定: scripts/check/ui-copy.mjs（arch:guards）が UI 文言の判定に使う。allows を足すとガードが緩む
+.textlintrc.json
 lefthook.yml
 .jscpd.json
 knip.json

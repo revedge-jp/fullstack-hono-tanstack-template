@@ -16,6 +16,8 @@
 | 依存方向（dependency-cruiser） | 内部レイヤ境界・feature間の直接依存禁止 | `bun run arch:dc` | ✓ | ✓ |
 | 構文/配置ガード（grep） | npm 依存禁止・domain 純粋性・責務漏れ | `bun run arch:guards` | ✓ | ✓ |
 | feature 構造完全性 | 必須の層・co-located テスト・配線の有無 | `bun run check:feature` | ✓（guards 内） | ✓ |
+| UI 文言（textlint） | client の日本語文言に AI が書く文章に出やすい語・誇張・全角ダッシュが無いか | `bun run check:ui-copy` | ✓（guards 内） | ✓ |
+| 文書の文体（textlint） | 指示ファイル・docs の同じ語彙と構造。**まだ強制しない**（既存の指摘を直してからゲートにする） | `bun run lint:prose` | ✗ | ✗ |
 | FSD（steiger） | client の Feature-Sliced Design | `bun run arch:fsd` | ✓ | ✓ |
 | 未使用コード（knip） | デッドコード/依存 | `bun run knip` | ✗（lefthook が `SKIP_KNIP=1` で飛ばす） | PR コメントのみ（Unlisted binaries / Unresolved imports だけ落とす） |
 | 重複（jscpd） | コピペ重複（しきい値5%）。**テストコードも対象**（除外すると写経テストの増殖が測定すらされない — 派生プロダクトで実測20%に達した後から入れるのは困難なため、小さいうちから対象に含める） | `bun run dup:check` | ✗ | ✓ |
@@ -102,6 +104,7 @@
 | **カバレッジ**（< 閾値） | 対象層（domain/application or client actions/queries）に未テストの分岐。低い順にファイルが表示される |
 | **arch-guards 違反** | 層をまたぐ依存・npm 依存の持ち込み・domain への漏れ。メッセージに違反ファイルが出る。設計を直す（回避しない） |
 | **feature 構造** | 必須の層・`usecase.test.ts`・contract テスト・container/app への配線が欠落 |
+| **UI 文言** | 出力の語を、何がどうなるかを書く言葉に置き換える（`.claude/rules/client.md` の「UI 文言の書き方」）。画面の用語として必要な語だけ `.textlintrc.json` の `allows` に足す |
 | **jscpd**（重複率超過） | 本物のコピペは共通化。意図的テンプレ重複は `// jscpd:ignore-start` 〜 `// jscpd:ignore-end` |
 | **knip** | 未使用の export/file/依存。消すか、設定（`knip.json`）で除外 |
 | **ガード自己テスト** | ガードそのものが既知違反を検出できなくなっている（正規表現の書き間違い等）。ガードの実装を疑う |

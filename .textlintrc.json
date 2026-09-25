@@ -1,0 +1,14 @@
+{
+  "filters": {
+    "comments": true
+  },
+  "rules": {
+    "preset-ai-words-ja": {
+      "no-ai-words": {
+        "dictionaryPath": "./scripts/check/ai-words.json",
+        "allows": ["ゲート"]
+      }
+    },
+    "@textlint-ja/preset-ai-writing": true
+  }
+}
