@@ -384,5 +384,10 @@ else
   exit 1
 fi
 
+echo "[guard] client のスタイル規約（既定パレット・任意値・dark: の手書き・AI slop）"
+# semantic トークンの迂回と AI slop の定型パターンは typecheck・lint・test を通過するため、
+# ここで検出する。規則と除外（components/ui）の理由は client-styles.mjs 冒頭に書いてある。
+node scripts/check/client-styles.mjs
+
 echo "[guard] feature 構造の完全性（必須の層・co-located テスト・配線）"
 node scripts/check/feature-structure.mjs

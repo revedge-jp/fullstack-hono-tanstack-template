@@ -146,6 +146,84 @@ expect_guard "UI からの processXxx 直接 import 禁止" \
 export const SelftestUi = processFoo;' \
   "UI コンポーネントから processXxx を直接 import できません"
 
+# client のスタイル規約(client-styles.mjs)は規則ごとに 1 件ずつ既知違反を置く。
+expect_guard "スタイル規約: 既定パレット色の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-sm text-zinc-500">x</p>;' \
+  "違反 [raw-palette]"
+
+expect_guard "スタイル規約: important 付き既定パレット色の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-zinc-500!">x</p>;' \
+  "違反 [raw-palette]"
+
+expect_guard "スタイル規約: 任意プロパティの禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="[color:#7c3aed]">x</p>;' \
+  "違反 [arbitrary-property]"
+
+expect_guard "スタイル規約: 任意値の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="w-[347px]">x</div>;' \
+  "違反 [arbitrary-value]"
+
+expect_guard "スタイル規約: dark: 手書きの禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="bg-card dark:bg-muted">x</div>;' \
+  "違反 [manual-dark-variant]"
+
+expect_guard "スタイル規約: 数字始まりのバリアントが続く dark: の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="dark:2xl:bg-card">x</div>;' \
+  "違反 [manual-dark-variant]"
+
+expect_guard "スタイル規約: グラデーション背景の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="bg-linear-to-r from-primary to-accent">x</div>;' \
+  "違反 [gradient]"
+
+expect_guard "スタイル規約: グラデーション文字の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <h1 className="bg-clip-text text-transparent">x</h1>;' \
+  "違反 [gradient-text]"
+
+expect_guard "スタイル規約: すりガラスの禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="backdrop-blur-md">x</div>;' \
+  "違反 [glassmorphism]"
+
+expect_guard "スタイル規約: 絵文字の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p>🚀 Launch</p>;' \
+  "違反 [emoji]"
+
+# コメントも検査対象（禁止クラス名を書いたコメントは変更履歴なので書かない）。
+# 行内・行全体のどちらのコメントも検出することを確認する。
+expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-muted-foreground">x</p>; // 旧 text-zinc-500' \
+  "違反 [raw-palette]"
+
+expect_guard "スタイル規約: 行全体のコメント中の禁止クラス" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  '// 以前は bg-linear-to-r だった
+export const SelftestUi = () => <p className="text-muted-foreground">x</p>;' \
+  "違反 [gradient]"
+
+# 逆向き（誤検出）の回帰テスト: 正当なコードで client-styles.mjs が通ることを確認する。
+mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
+  'export const labels = { light: "Light", dark: "Dark" };
+export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
+export const D = () => <p>© 2026 → 次へ</p>;'
+if STYLE_OK_OUT=$(node scripts/check/client-styles.mjs 2>&1); then
+  echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号）を誤検出しない"
+else
+  echo "❌ スタイル規約: 正当なコードを誤検出しました"
+  printf '%s\n' "$STYLE_OK_OUT"
+  FAIL=1
+fi
+rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx"
+
 expect_guard "@hono/zod-validator 直接 import 禁止" \
   "$D/presentation/__selftest_zv.ts" \
   'import { zValidator } from "@hono/zod-validator"; export const selftestZv = zValidator;' \

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { CenteredPage } from "@/components/layout/centered-page";
 import { CreateTaskForm, getTasksServerFn, TaskList, tasksQueryOptions } from "@/features/tasks";
 
 // ページ位置を URL の search param（?cursor=...）で表現する。
@@ -30,14 +31,14 @@ function TasksPage() {
   const { data: tasks } = useQuery({ ...tasksQueryOptions(cursor), initialData: initialTasks });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
+    <CenteredPage>
       <main className="flex w-full max-w-md flex-col gap-4 p-4">
         <h1 className="text-2xl font-bold">タスク</h1>
         <CreateTaskForm />
         <TaskList items={tasks.items} />
         <div className="flex items-center justify-between">
           {cursor ? (
-            <Link to="/tasks" className="text-sm text-zinc-500 underline">
+            <Link to="/tasks" className="text-sm text-muted-foreground underline">
               ← 最初のページ
             </Link>
           ) : (
@@ -47,16 +48,16 @@ function TasksPage() {
             <Link
               to="/tasks"
               search={{ cursor: tasks.nextCursor }}
-              className="text-sm text-zinc-500 underline"
+              className="text-sm text-muted-foreground underline"
             >
               次のページ →
             </Link>
           )}
         </div>
-        <Link to="/" className="text-sm text-zinc-500 underline">
+        <Link to="/" className="text-sm text-muted-foreground underline">
           ← home
         </Link>
       </main>
-    </div>
+    </CenteredPage>
   );
 }

@@ -45,7 +45,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-zinc-500">タスクはまだありません。</p>;
+    return <p className="text-sm text-muted-foreground">タスクはまだありません。</p>;
   }
 
   return (
@@ -63,7 +63,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
           >
             <div className="flex flex-col">
               <span className="text-sm font-medium">{task.title}</span>
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-muted-foreground">
                 {STATUS_LABEL[task.status] ?? task.status}
               </span>
             </div>
