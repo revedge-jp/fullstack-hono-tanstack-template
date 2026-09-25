@@ -293,6 +293,37 @@ expect_guard "スタイル規約: 行全体のコメント中の禁止クラス"
 export const SelftestUi = () => <p className="text-muted-foreground">x</p>;' \
   "違反 [gradient]"
 
+# client の日本語文言(ui-copy.mjs)は検出の経路ごとに 1 件ずつ既知違反を置く。
+expect_guard "UI 文言: AI が書く文章に出やすい語（プリセットの辞書）" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <p>この設定が効きます</p>;' \
+  "\"効く\" は"
+
+expect_guard "UI 文言: 追加の辞書（scripts/check/ai-words.json）" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <p aria-label="シームレスな連携">x</p>;' \
+  "\"シームレス\" は"
+
+expect_guard "UI 文言: 誇張表現" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const selftestCopy = (count: number) => `${count} 件の革命的な改善`;' \
+  "違反 [@textlint-ja/ai-writing/no-ai-hype-expressions]"
+
+expect_guard "UI 文言: 全角ダッシュ" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const selftestCopy = "保存しました——一覧に戻ります";' \
+  "違反 [fullwidth-dash]"
+
+expect_guard "UI 文言: 前後に空白のある全角ダッシュ" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const selftestCopy = "保存しました — 一覧に戻ります";' \
+  "違反 [fullwidth-dash]"
+
 # 逆向き（誤検出）の回帰テスト: 正当なコードで client-styles.mjs が通ることを確認する。
 mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
@@ -306,6 +337,23 @@ else
   FAIL=1
 fi
 rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx"
+
+# 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、文をつないでいないダッシュ（空欄の「—」・括弧の中・
+# 区切り線・数字の範囲）では ui-copy.mjs が落ちない。ダッシュの例は日本語を含めて、ダッシュの判定まで届くようにしている。
+mkfix "apps/client/features/__selftest/ui/selftest-copy-ok.tsx" \
+  '// この設定が効く（コメントは画面に出ない）
+export const SelftestUi = () => <td>—</td>;
+export const selftestUnset = "未設定（—）";
+export const selftestDivider = "──── または ────";
+export const selftestRange = "1—3 件";'
+if COPY_OK_OUT=$(node scripts/check/ui-copy.mjs 2>&1); then
+  echo "✅ UI 文言: 正当なコード（コメント・文をつないでいないダッシュ）を誤検出しない"
+else
+  echo "❌ UI 文言: 正当なコードを誤検出しました"
+  printf '%s\n' "$COPY_OK_OUT"
+  FAIL=1
+fi
+rm -f "apps/client/features/__selftest/ui/selftest-copy-ok.tsx"
 
 expect_guard "@hono/zod-validator 直接 import 禁止" \
   guard_no_direct_zod_validator \

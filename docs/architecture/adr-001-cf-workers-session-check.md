@@ -56,7 +56,7 @@ Worker 自身への Service Binding を設定し、内部 RPC として呼び出
 `AsyncLocalStorage` で serverFn に渡し、アプリケーション層を直接呼ぶ。
 
 - ✅ HTTP ラウンドトリップなし・オーバーヘッド最小
-- ❌ **アプリケーション層への入口が2本になる**: presentation 層（認証ミドルウェア・
+- ❌ **アプリケーション層の呼び出し方が2通りになる**: presentation 層（認証ミドルウェア・
   zValidator・アクセスログ）をバイパスするため、serverFn 側で認可チェック等を
   手書きで再現する義務が feature ごとに発生する
 - ❌ client が api-service の container 型に結合する
@@ -76,15 +76,15 @@ server.ts (fetch handler)
 ```
 
 - ✅ HTTP ラウンドトリップなし（`app.request` は同一 isolate 内の関数呼び出し）
-- ✅ **SSR 経路もブラウザ経路と同じ presentation 層を通る**: 認証ミドルウェア・
-  バリデータ・アクセスログが一元化され、入口が1本になる
-- ✅ Hono RPC の型（`AppType`）がそのまま効く。client と api-service の結合は
+- ✅ **SSR からの呼び出しもブラウザからの呼び出しと同じ presentation 層を通る**: 認証ミドルウェア・
+  バリデータ・アクセスログが一元化され、呼び出し方が1通りになる
+- ✅ Hono RPC の型（`AppType`）がそのまま使える。client と api-service の結合は
   RPC 契約のみ
 - ✅ テストヘルパー（`createFakeApp` + `hc` with `app.request`）と同じ確立された
   パターン
 - ✅ `AsyncLocalStorage` は CF Workers (`nodejs_compat_v2`) で正式サポート
 - ✅ ALS 未設定の環境（素の vite / node 実行）では同一オリジン HTTP ループバックに
-  フォールバック（`getApiClient` が吸収し、serverFn のコードは1経路のまま）
+  フォールバック（`getApiClient` が吸収し、serverFn のコードは1通りのまま）
 - ⚠️ Request/Response の生成と JSON シリアライズのコストが乗るが、SSR read 1回あたり
   マイクロ秒〜ミリ秒オーダーで実害なし
 
@@ -109,7 +109,7 @@ Browser → CF Worker (server.ts)
                   → auth feature の usecase
 ```
 
-この経路は **全実行モードで唯一**である。vite dev / vite preview / wrangler dev / 本番の
+この処理の流れは **全実行モードで唯一**である。vite dev / vite preview / wrangler dev / 本番の
 いずれも `@cloudflare/vite-plugin` により `server.ts` が worker エントリとして動くため、
 ALS は常に設定される（各モードでプローブ計測し、旧 `/api/$` キャッチオール経由の
 HTTP ループバックフォールバックがどのモードでも発火しないことを確認済み — 2026-07-05）。
@@ -133,9 +133,9 @@ apps/api-service/src/app.ts          # createApp が AppType（RPC 契約）を 
 
 - `nodejs_compat_v2` フラグが必要（`async_hooks` のため）。これは Hyperdrive 使用にも必要なので追加コストはない。
 - SSR からの呼び出しも api-service のアクセスログに記録される（method/path/status）。
-  1画面の SSR で複数 serverFn が走るとログ行数はその分増える。
+  1画面の SSR で複数 serverFn が実行されるとログ行数はその分増える。
 - mutation は従来どおりブラウザから同一オリジンの API を直接呼ぶ（cookie 自動同送・
-  1ホップ・SSR 先読み不要のため）。この ADR は SSR read 経路のみを対象とする。
+  1ホップ・SSR 先読み不要のため）。この ADR は SSR での read のみを対象とする。
 - Hyperdrive 接続は outer request の `initHonoApp` が作ったものを serverFn も共有する。
   `/api/*` 直アクセスのリクエストとは別接続になる（それぞれ `initHonoApp` が呼ばれる）が、
   これは正しい動作。

@@ -1,8 +1,8 @@
 # テストガイド
 
-新機能追加時に「どこに何のテストを書くか」の入口です。
-**書くべきテストの一覧とテストヘルパの使い方は各アプリの AGENTS.md が正典**で、ここには複製しません。
-正典実装は `tasks` feature — 迷ったら下の表の実物を開いてパターンを踏襲してください。
+新機能追加時に「どこに何のテストを書くか」の案内です。
+**書くべきテストの一覧とテストヘルパの使い方は各アプリの AGENTS.md に書いてあり**、ここには複製しません。
+手本にする実装は `tasks` feature — 迷ったら下の表の実物を開いてパターンを踏襲してください。
 
 - api-service: [`apps/api-service/AGENTS.md`](../../apps/api-service/AGENTS.md#testing-conventions) の
   「Testing Conventions」（`createFakeApp`・in-memory リポジトリ・What tests to write）

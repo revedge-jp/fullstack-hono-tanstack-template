@@ -10,7 +10,7 @@ paths:
 
 # 環境変数の追加・変更チェックリスト
 
-正典は `docs/dev/environment-variables.md`。追加・変更時は必ず同ドキュメントのフローに従い、以下を漏れなく更新する。
+手順の本体は `docs/dev/environment-variables.md`。追加・変更時は必ず同ドキュメントのフローに従い、以下をすべて更新する。
 
 ## 設計原則
 
@@ -35,7 +35,7 @@ paths:
   `loadConfig(env)` で読んだ値を使うので、**client 側で `process.env` を読まず**、必要な値は
   api-service の `config.ts` に足して loader / serverFn 経由で受け取る
 - ブラウザに出す値を build 時定数にするときだけ `VITE_` 接頭辞（現状は `import.meta.env.DEV` のみ使用）。
-  バンドルに焼き込まれるので機密は絶対に含めない。実行環境ごとに変わる値は `VITE_` ではなく
+  バンドルに埋め込まれるので機密は絶対に含めない。実行環境ごとに変わる値は `VITE_` ではなく
   route の loader（サーバー側）から返す
 - Docker: `docker-compose.yml` ではコンテナ名・ポート・ボリューム名等を `${VAR:-default}` 形式で上書き可能にし、`.env.example` に例を載せる
 

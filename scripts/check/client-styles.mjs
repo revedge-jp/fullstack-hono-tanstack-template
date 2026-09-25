@@ -16,12 +16,12 @@
 //
 // components/ui（shadcn の生成物）は対象外: オーバーレイの半透明の黒や data-[...] 系の任意値を
 // 正当に使い、shadcn CLI の更新で上書きされるため。
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
+
+import { collectClientSources } from "./client-sources.mjs";
 
 const ROOTS = ["apps/client/app", "apps/client/features", "apps/client/components"];
-const EXCLUDED_DIRS = ["apps/client/components/ui"];
-const EXCLUDED_FILES = [/\.test\.tsx?$/, /\.spec\.tsx?$/, /routeTree\.gen\.ts$/];
 
 const PALETTE_NAMES =
   "red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white";
@@ -119,34 +119,7 @@ const RULES = [
   },
 ];
 
-const isDir = (path) => existsSync(path) && statSync(path).isDirectory();
-
-function collectFiles(dir) {
-  if (!isDir(dir) || EXCLUDED_DIRS.includes(dir)) {
-    return [];
-  }
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    if (isDir(path)) {
-      return collectFiles(path);
-    }
-    if (!/\.tsx?$/.test(name) || EXCLUDED_FILES.some((re) => re.test(name))) {
-      return [];
-    }
-    return [path];
-  });
-}
-
-// 走査対象の移動・改名でガードが黙って無効にならないよう、対象が無ければ失敗させる。
-const missingRoots = ROOTS.filter((root) => !isDir(root));
-const files = ROOTS.flatMap(collectFiles);
-if (missingRoots.length > 0 || files.length === 0) {
-  console.log(`走査対象が見つかりません: ${missingRoots.join(", ") || "（ファイル 0 件）"}`);
-  console.log(
-    "client のディレクトリ構成を変えたら scripts/check/client-styles.mjs の ROOTS を更新してください",
-  );
-  process.exit(1);
-}
+const files = collectClientSources(ROOTS, "scripts/check/client-styles.mjs");
 
 const violations = [];
 for (const file of files) {

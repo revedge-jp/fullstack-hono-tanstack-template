@@ -86,7 +86,7 @@ graph LR
 - 必要な GitHub Environment Secrets / Variables の一覧は
   [デプロイガイド](../deploy/cloudflare-workers.md)を参照（Cloudflare / PlanetScale / Alchemy / アプリの各シークレット）
 - GitHub Environments（staging / production）の Variables に `SMOKE_BASE_URL` を設定すると、
-  デプロイ直後に `/api/health` と `/` の smoke チェックが走る（未設定なら skip）
+  デプロイ直後に `/api/health` と `/` の smoke チェックが実行される（未設定なら skip）
 - アプリの環境変数・シークレットは `alchemy.run.ts` の `bindings` で管理
   （`apps/client/wrangler.jsonc` はローカル dev 専用）
 

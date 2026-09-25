@@ -10,13 +10,13 @@ push 前の統合チェックを一括実行します。
   - Lint（oxlint + oxfmt --check）: `turbo run lint`
   - Typecheck（TypeScript）: `turbo run typecheck`
   - Tests: `TEST_DATABASE_URL` の DB に drizzle-kit migrate を当てた上で `turbo run test` を実行（api-service は
-    integration も走るので DB が必要）
+    integration も実行されるので DB が必要）
   - Architecture: FSD（steiger）・循環/孤立（madge）・dependency-cruiser・arch-guards・knip（`SKIP_KNIP=1` で省略。
     pre-push は省略している）
   - その他: ファイル名（kebab-case）・migration journal の順序・api-service の `process.env` 直参照・`scripts/` のテスト・
     非推奨コードの検索（警告のみ）
 - 既定の変更影響フィルタ: `...[origin/main]`（turbo filter）
-- どのゲートが pre-push / CI のどちらで走るかは [品質ゲート ガイド](quality-gates.md) を参照
+- どのゲートが pre-push / CI のどちらで実行されるかは [品質ゲート ガイド](quality-gates.md) を参照
 
 使い方:
 
@@ -67,7 +67,7 @@ cd apps/api-service && bun run lint:fix
 現在のブランチを `origin/main` に追従させ、依存やDB、型チェックまで整えます。
 
 - `main` 上: fast-forward pull のみ
-- その他のブランチ: 既定で rebase。`SYNC_STRATEGY=merge` を指定すると no-ff マージ
+- その他のブランチ: デフォルトで rebase。`SYNC_STRATEGY=merge` を指定すると no-ff マージ
 - 実行前に未コミット変更がないことを要求
 - 追従後に以下を自動実行
   - `bun install`（LEFTHOOK=0 で lefthook フック抑止）

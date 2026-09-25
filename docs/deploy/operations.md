@@ -1,6 +1,6 @@
 # 運用ガイド（ロールバック・マイグレーション規律・通知・レート制限）
 
-デプロイ後の「壊れたことに気づけて、戻せる」状態を保つための運用ルール集。
+デプロイ後の「障害に気づけて、戻せる」状態を保つための運用ルール集。
 セットアップ手順は [cloudflare-workers.md](./cloudflare-workers.md) を参照。
 
 ---
@@ -51,13 +51,13 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 
 ## 障害通知
 
-このテンプレートには能動的な通知経路が組み込まれていない。実プロジェクト化したら
+このテンプレートには能動的な通知の仕組みが組み込まれていない。実プロジェクト化したら
 以下の 3 点を設定すること:
 
 1. **Worker 失敗の検知**: Cloudflare Notifications には **Workers 専用の error rate /
    CPU limit 超過の通知カテゴリが存在しない**（通知カテゴリ一覧を確認済み。最も近い
    `Origin Error Rate Alert` はリバースプロキシ配下の従来型オリジン向けで Workers には
-   効かない）。ダッシュボード設定だけでは検知できないため、Worker の失敗イベントを拾う
+   適用されない）。ダッシュボード設定だけでは検知できないため、Worker の失敗イベントを拾う
    **Tail Worker** を別途デプロイして Slack 等へ転送する。実装時の要点:
    - `outcome=canceled` は検知対象に含めない（大半はクライアントのタブ閉じ/画面遷移で
      サーバー異常ではない。混ぜると通知が「大体無視してよい」ものになる）
@@ -68,7 +68,7 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
    即座に届くよう、リポジトリの Watch 設定 or Slack の GitHub App（`/github subscribe owner/repo workflows`）を設定。
    Slack webhook を CI から直接使う場合、webhook 用 Secret は **リポジトリレベル** に
    登録すること（Environment を持たない通知ジョブから Environment Secret は空に見え、
-   無言でスキップされて「設定したのに永遠に届かない」状態になる）
+   エラーを出さずにスキップされて「設定したのに永遠に届かない」状態になる）
 3. **（必要になったら）Logpush**: `observability.enabled: true` のログはダッシュボードで
    閲覧できるが保持が短い。長期保存・検索が必要になったら Environment Secret
    `LOGPUSH_DESTINATION` を設定する（Alchemy が Worker の logpush フラグと LogPushJob を
@@ -81,7 +81,7 @@ SSR 側のエラーは `apps/client/app/server.ts` が observability に出す�
 ブラウザ内で完結するエラー（UI クラッシュ・unhandledrejection 等）はそのままではどこにも届かない。
 そこで Sentry 等の第三者サービスを使わず、自オリジンの api-service へ自前で通報している。
 
-- **経路**: `window.onerror` / `unhandledrejection` のグローバル捕捉、React error boundary
+- **通報の流れ**: `window.onerror` / `unhandledrejection` のグローバル捕捉、React error boundary
   （`ErrorFallbackContent` の effect から `reportReactError`）、握りつぶすエラーの明示通報
   （`reportHandledError`）→ `POST /api/client-errors` → Cloudflare Workers observability のログ
 - **送信側**（`apps/client/shared/lib/report-client-error.ts`）: 送る項目は message / stack /
@@ -97,7 +97,7 @@ SSR 側のエラーは `apps/client/app/server.ts` が observability に出す�
 
 ## レート制限
 
-アプリ層の簡易レート制限（`apps/api-service/src/middlewares/rate-limit.ts`）は次の 2 経路にだけ
+アプリ層の簡易レート制限（`apps/api-service/src/middlewares/rate-limit.ts`）は次の 2 つのパスにだけ
 かかっている（`app.ts`）:
 
 - `/api/auth/*` — OAuth エンドポイントの総当たり・過剰アクセス対策
@@ -105,18 +105,18 @@ SSR 側のエラーは `apps/client/app/server.ts` が observability に出す�
 
 どちらも IP（`CF-Connecting-IP`）ごとの固定ウィンドウで、しきい値は共通の
 `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`（既定 60 秒あたり 20 リクエスト）。超えると 429 と
-`Retry-After` を返す。カウントは経路ごとに別々に持つ。
+`Retry-After` を返す。カウントはパスごとに別々に持つ。
 
 カウントは `app.ts` のモジュールスコープ（isolate 単位）に置いている。Workers はアプリを
 リクエストごとに組み立て直すので、ミドルウェアの中にカウントを持たせると毎回 0 から数え直して
-一度も制限が効かない（`rate-limit.ts` の `RateLimitStore` 参照）。
+一度も制限がかからない（`rate-limit.ts` の `RateLimitStore` 参照）。
 
 ただしカウントは **isolate のメモリにしか持たない**ため、次の限界がある:
 
 - Workers の isolate をまたいで共有されない。リクエストが複数の isolate に振り分けられると
   各 isolate が独立に数えるので、実効レートは isolate 数倍に緩む
 - isolate の破棄・再デプロイでカウントが消える
-- 上の 2 経路以外（`/api/health` など）には何もかからない
+- 上の 2 つのパス以外（`/api/health` など）には何もかからない
 
 したがって、アプリ層の制限は「単一クライアントの暴走を抑える」程度のもので、公開エンドポイント
 全体の濫用対策は **Cloudflare 側**で行う:

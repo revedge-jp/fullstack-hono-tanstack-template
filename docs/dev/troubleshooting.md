@@ -56,7 +56,7 @@ docker exec -it app_postgres psql -U postgres -c "CREATE DATABASE app_db;"
 
 ### 型エラー
 
-#### 症状: APIの型が古い / client 側で `AppType` の推論が壊れる
+#### 症状: APIの型が古い / client 側で `AppType` の推論が正しくない
 
 ```
 Property 'xxx' does not exist on type ...

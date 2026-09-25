@@ -230,8 +230,8 @@ export function makeCreatePostStep(deps: { postsRepository: PostsRepository }) {
 
 ## api-service（クリーンアーキテクチャ）
 
-feature の構成・依存方向・ROP のパターンは [`apps/api-service/AGENTS.md`](../../apps/api-service/AGENTS.md) が
-正典（依存方向は dependency-cruiser が強制する）。ここでは層ごとの要点だけ示す。
+feature の構成・依存方向・ROP のパターンは [`apps/api-service/AGENTS.md`](../../apps/api-service/AGENTS.md) に
+書いてある（依存方向は dependency-cruiser が強制する）。ここでは層ごとの要点だけ示す。
 
 ### 層の責務
 
@@ -290,7 +290,7 @@ import { SomeEmailClient } from "some-email-sdk";  // NG
 
 ## client（FSD）
 
-構成・データ取得・mutation・認証のパターンは [`apps/client/AGENTS.md`](../../apps/client/AGENTS.md) が正典。
+構成・データ取得・mutation・認証のパターンは [`apps/client/AGENTS.md`](../../apps/client/AGENTS.md) に書いてある。
 
 ### 依存ルール
 
@@ -313,7 +313,7 @@ import { SomeEmailClient } from "some-email-sdk";  // NG
 
 機械検証は 2 層で行う:
 - **静的**: oxlint の `jsx-a11y` プラグイン（`.oxlintrc.json`）— `alt` 欠落・不正な ARIA role 等を pre-commit / `bun run lint` で検出
-- **実行時**: axe-core による E2E スキャン（`apps/client/tests/e2e/a11y.spec.ts`）— コントラスト比・ラベルの結び付き等を検査。`bun run test:e2e --project=a11y` で単体実行可
+- **実行時**: axe-core による E2E スキャン（`apps/client/tests/e2e/a11y.spec.ts`）— コントラスト比・ラベルの結び付き等をチェック。`bun run test:e2e --project=a11y` で単体実行可
 
 ### 基本ルール
 
@@ -460,7 +460,7 @@ bun run knip
 ## 関連ドキュメント
 
 - [開発ガイド](development.md) - 開発環境の詳細
-- [機能追加の入口](adding-features.md) - feature を足すときに読む正典と参照実装の案内
+- [機能追加の手引き](adding-features.md) - feature を足すときに読む規約と参照実装の案内
 - [ドメインモデル設計](../architecture/domain-model.md) - DDD/ROPの詳細
 - [api-service README](../../apps/api-service/README.md) - 単体での起動・エンドポイント一覧
 - [client README](../../apps/client/README.md) - クライアント側の詳細

@@ -1,7 +1,7 @@
 # 開発ガイド
 
-各アプリケーション・パッケージの入口をまとめたページです。規約・構成・コード例は正典（各アプリの
-`AGENTS.md` と参照実装）にあり、ここには複製しません。このページに残しているのは、正典に無い
+各アプリケーション・パッケージの案内をまとめたページです。規約・構成・コード例は規約の本体（各アプリの
+`AGENTS.md` と参照実装）にあり、ここには複製しません。このページに残しているのは、規約の本体に無い
 背景・理由と、コマンドの補足だけです。
 
 ## 目次
@@ -19,7 +19,7 @@ TanStack Start（SSR + CSR）のフロントエンド。Feature-Sliced Design �
 Hono RPC（`hc<AppType>`）で型付きに呼ぶ。
 
 - 起動・ディレクトリ構成・API 呼び出し・shadcn/ui: [apps/client/README.md](../../apps/client/README.md)
-- 規約の正典（データ取得の SSR / クライアント使い分け・認証・Hono RPC・テスト）: [apps/client/AGENTS.md](../../apps/client/AGENTS.md)
+- 規約の本体（データ取得の SSR / クライアント使い分け・認証・Hono RPC・テスト）: [apps/client/AGENTS.md](../../apps/client/AGENTS.md)
 - 参照実装: `apps/client/features/tasks`
 
 ## Server
@@ -27,7 +27,7 @@ Hono RPC（`hc<AppType>`）で型付きに呼ぶ。
 Hono の REST API。クリーンアーキテクチャと ROP（neverthrow）で書く。
 
 - 概要・エンドポイント一覧・単体起動: [apps/api-service/README.md](../../apps/api-service/README.md)
-- 規約の正典（依存方向・feature 構成・usecase の書き方・テスト）: [apps/api-service/AGENTS.md](../../apps/api-service/AGENTS.md)
+- 規約の本体（依存方向・feature 構成・usecase の書き方・テスト）: [apps/api-service/AGENTS.md](../../apps/api-service/AGENTS.md)
 - 参照実装: `apps/api-service/src/features/tasks`
 - 機能追加・外部 SDK の置き場所: [機能追加ガイド](adding-features.md)
 - `as` の許容範囲: [ADR-003](../architecture/adr-003-as-type-assertion-policy.md)（例外は 4 パターンのみ）、
@@ -66,7 +66,7 @@ Drizzle ORM + PostgreSQL。スキーマ・マイグレーション・`@repo/db` 
 | 場所 | バージョン | 理由 |
 |---|---|---|
 | ルート `package.json` | `6.0.3`（安定版） | dependency-cruiser / knip が TypeScript の **JS コンパイラ API** を必要とする。ネイティブ版（7.x / tsgo）にすると **depcruise が 0 modules で静かに空回りする**（`bun run arch:selftest` がこれを検出する）。TS 7.1 の安定プログラマティック API と各ツールの対応を待って統一する（#26） |
-| 各ワークスペース | `7.0.2`（ネイティブ tsgo） | `tsc --noEmit` の typecheck が大幅に高速。コンパイラ API は使わないため問題ない |
+| 各ワークスペース | `7.0.2`（ネイティブ tsgo） | `tsc --noEmit` の typecheck が高速。コンパイラ API は使わないため問題ない |
 
 ツールチェーン互換問題が出た場合は、各ワークスペースの `typescript` を `6.0.3` に
 揃えれば安定版に戻せる（typecheck が遅くなる以外の影響はない）。
@@ -80,11 +80,11 @@ Drizzle ORM + PostgreSQL。スキーマ・マイグレーション・`@repo/db` 
 
 ### arch-guards にガードを足す
 
-構文/配置ガード（`bun run arch:guards`）の検査の本体は `scripts/check/arch-guards-lib.sh` の関数（`guard_xxx`）で、
+構文/配置ガード（`bun run arch:guards`）のチェックの本体は `scripts/check/arch-guards-lib.sh` の関数（`guard_xxx`）で、
 `arch-guards.sh` は `ARCH_GUARDS` の順に呼ぶだけ。**ガードを足すときは、関数を足して `ARCH_GUARDS` の `guard_feature_structure` より前に並べ、
 `arch-guards.selftest.sh` に既知の違反を検出するケースを `expect_guard` で1つ足す**（自己テストは
 その関数だけを直接呼ぶので速い）。関数は `run_guard` 経由で、条件の中ではなく素の文として呼ぶ
-（`if` や `||` の中で呼ぶと関数内の `set -e` が効かなくなり、途中の失敗を素通りする。
+（`if` や `||` の中で呼ぶと関数内の `set -e` が無効になり、途中で失敗しても止まらずに先へ進む。
 ライブラリ冒頭の説明を参照）。
 
 ## 環境変数
