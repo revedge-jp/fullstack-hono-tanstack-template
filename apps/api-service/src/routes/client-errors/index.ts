@@ -2,17 +2,10 @@ import { createApp } from "@app/factory";
 import { zValidator } from "@app/shared/http/z-validator";
 import { z } from "zod";
 
-// クライアント(ブラウザ)で発生した JS エラーの通報受け口。
-// サーバー(SSR)側エラーは app/server.ts が observability に出しているが、ハイドレーション後に
-// ブラウザ内で完結するエラー(UIクラッシュ・unhandledrejection 等)は従来どこにも届かない。
-//
-// 設計方針:
-// - 認証を要さない(サインイン画面など未認証状態でもエラーは起きる)。dev-auth と
-//   同じく createApp() を直接使う(createAuthedApp/requireAuth は付けない)。
-// - 個人情報を第三者へ出さないため、DB には保存せず observability ログにのみ流す。
-//   ペイロードのフィールドは限定し、長さも上限を課す(PII の一次スクラブは呼び出し元 client で
-//   行い、ここは受け入れ上限の防御に徹する)。
-// - 濫用(公開エンドポイントへのログ洪水)防止のレート制限は app.ts のマウント側で付与する。
+// クライアント(ブラウザ)で発生した JS エラーの通報受け口。未認証画面でもエラーは起きるので
+// 認証を要さず、DB には保存せず observability ログにのみ流す。ここはフィールドの限定と長さの上限に
+// 徹し、PII の一次スクラブは呼び出し元 client、レート制限は app.ts のマウント側が担う。
+// 設計の全体像は docs/deploy/operations.md の「クライアント（ブラウザ）エラーの通報」。
 
 const MAX_MESSAGE_LENGTH = 1000;
 const MAX_STACK_LENGTH = 4000;

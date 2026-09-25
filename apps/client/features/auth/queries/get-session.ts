@@ -30,16 +30,10 @@ export const getSessionServerFn = createServerFn().handler(
   },
 );
 
-// _authenticated の beforeLoad は全ナビゲーションで必ず実行される（未認証リダイレクトを全経路に
-// 無条件で効かせるため。_authenticated.tsx 参照）。そこで getSessionServerFn を直接 await すると、
-// 遷移のたびに /api/me への往復が発生する。queryClient 経由にして、beforeLoad 自体は毎回実行した
-// まま、実際の取得だけを下の SESSION_STALE_TIME_MS（30 秒）でデデュープする。
-// 呼ぶ側は fetchQuery を使う（ensureQueryData は古いキャッシュをそのまま返し、セッション切れを
-// 見逃す。_authenticated.tsx 参照）。
-// サインアウト時は queryClient.clear() でこのキャッシュも破棄される（sign-out-button.tsx）。
-//
-// staleTime は全体の既定に頼らず明示する（全体の既定はハイドレーション直後の再取得を避けるための値で、
-// 変わると「セッション切れを何秒で検出するか」まで黙って変わるため）。
+// _authenticated の beforeLoad は全ナビゲーションで実行されるので、/api/me への往復を queryClient
+// 経由で SESSION_STALE_TIME_MS だけデデュープする（認証ガードの全体像は apps/client/AGENTS.md の
+// 「Auth pattern」）。staleTime を全体の既定に頼らず明示するのは、既定が変わると「セッション切れを
+// 何秒で検出するか」まで黙って変わるため。
 const SESSION_STALE_TIME_MS = 30_000;
 
 export function sessionQueryOptions() {

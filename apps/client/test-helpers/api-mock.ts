@@ -1,10 +1,6 @@
 // actions / queries のテストが毎回手書きしていたモック雛形
 // (`let mockOk / mockBody / lastJson` + `mock.module("hono/client", ...)`)の共通化。
-//
-// 背景: この雛形は放置すると feature の数だけ写経される(派生プロダクトの実測で
-// actions テストの21%・queries テストの25%が同一雛形の写経、計4,100行に達した)。
-// 行カバレッジゲート(80%)の下では写経テストが閾値を満たす最安の方法になるため、
-// ヘルパを先に用意して「書き始めが import + 2行」になる状態を保つ。
+// 放置すると雛形が feature の数だけ写経されるため、書き始めを import + 2行に保つ(.claude/rules/client.md)。
 //
 // 使い方(テストファイル側。`mock.module` は SUT の import より前に、
 // テストファイル自身で呼ぶ必要がある — bun:test の制約。戻り値が Promise を含む型なので

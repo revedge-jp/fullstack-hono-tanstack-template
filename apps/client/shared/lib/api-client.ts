@@ -8,17 +8,10 @@ export type SessionUser = { id: string; email: string; name: string };
 
 export type ApiClient = ReturnType<typeof hc<AppType>>;
 
-// SSR の serverFn から api-service を呼ぶための Hono RPC クライアントを注入する。
-//
-// 背景(ADR-001): CF Workers + Static Assets では、同一オリジンへの fetch() サブリクエストは
-// Worker の fetch ハンドラーを経由せずアセットハンドラーに落ちて 404 になるため、
-// HTTP ループバックが使えない。そこで server.ts がリクエストごとに構築した Hono アプリの
-// app.request（インプロセスの関数呼び出し。ネットワークに出ないため上記制約に触れない）を
-// fetch として束ねた hc クライアントを AsyncLocalStorage で serverFn に注入する。
-//
-// container を直接呼ばず HTTP 境界を通すのは意図的: presentation 層の認証ミドルウェア・
-// バリデータ・アクセスログを SSR 経路でも通すことで、ブラウザからの経路と意味論を揃え、
-// アプリケーション層への入口を1本に保つため。
+// SSR の serverFn から api-service を呼ぶための Hono RPC クライアントを注入する。CF Workers では
+// 同一オリジンへの HTTP ループバックが使えないため、server.ts がリクエストごとに構築した Hono アプリの
+// app.request を fetch として束ねた hc クライアントを AsyncLocalStorage で渡す。container を直接呼ばず
+// HTTP 境界を通す理由（認証・バリデータ・アクセスログを SSR 経路にも通す）を含め、経緯は ADR-001 の案 D。
 
 type HonoAppLike = {
   request: (input: RequestInfo | URL, requestInit?: RequestInit) => Response | Promise<Response>;

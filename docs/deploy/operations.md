@@ -75,6 +75,26 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
    作成し R2 や外部集約先に送る。Workers Paid 必須 —
    [Alchemy IaC ガイド](../dev/alchemy-iac.md#オプションリソース環境変数で-opt-in)）
 
+## クライアント（ブラウザ）エラーの通報
+
+SSR 側のエラーは `apps/client/app/server.ts` が observability に出すが、ハイドレーション後に
+ブラウザ内で完結するエラー（UI クラッシュ・unhandledrejection 等）はそのままではどこにも届かない。
+そこで Sentry 等の第三者サービスを使わず、自オリジンの api-service へ自前で通報している。
+
+- **経路**: `window.onerror` / `unhandledrejection` のグローバル捕捉、React error boundary
+  （`ErrorFallbackContent` の effect から `reportReactError`）、握りつぶすエラーの明示通報
+  （`reportHandledError`）→ `POST /api/client-errors` → Cloudflare Workers observability のログ
+- **送信側**（`apps/client/shared/lib/report-client-error.ts`）: 送る項目は message / stack /
+  パス / バージョン等に限定し、送信前に既知の PII パターンをスクラブする。時間窓でのレート制限と
+  同一エラーの抑制もここで行う
+- **受け口**（`apps/api-service/src/routes/client-errors/index.ts`）:
+  - 認証を要さない（サインイン画面など未認証状態でもエラーは起きる）。`createAuthedApp` /
+    `requireAuth` を付けず `createApp()` を直接使う
+  - 個人情報を第三者へ出さないため DB には保存せず、observability ログにのみ流す。PII の一次スクラブは
+    送信側の責務で、受け口はフィールドの限定と長さの上限による防御に徹する
+  - 公開エンドポイントへのログ洪水を防ぐレート制限は、`app.ts` のマウント側で `/api/client-errors/*` に
+    付けている
+
 ## レート制限
 
 アプリ層にはレート制限を実装していない（Better Auth の既定レート制限が `/api/auth/*` に
