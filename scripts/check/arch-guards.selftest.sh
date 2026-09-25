@@ -446,17 +446,26 @@ else
 fi
 rm -rf "$SELFTEST_ACTION_DIR"
 # (4) 本体が途中の違反で止まること。(3) は最後の検査の違反なので、本体の set -e が外れて「全検査を
-#     最後まで回し、最後の検査の終了コードで終わる」状態でも通ってしまう。最初の検査にだけ引っかかる
-#     fixture を置き、1件目で止まる（見出しが1つだけ）ことを確かめる
-FIRST_GUARD="${ARCH_GUARDS[0]}"
+#     最後まで回し、最後の検査の終了コードで終わる」状態でも通ってしまう。guard_export_star にだけ
+#     引っかかる fixture を置き、本体がその検査で止まる（見出しの数 = その検査の位置）ことを確かめる。
+#     位置は ARCH_GUARDS から求めるので、並べ替えや先頭への追加では誤検出しない
+STOP_GUARD="guard_export_star"
+stop_index=0
+for guard in "${ARCH_GUARDS[@]}"; do
+  stop_index=$((stop_index + 1))
+  [ "$guard" = "$STOP_GUARD" ] && break
+done
 mkfix "$D/application/__selftest_export_star.ts" 'export * from "./nope";'
-first_out=$(bash scripts/check/arch-guards.sh 2>&1)
-first_rc=$?
-first_headers=$(printf '%s\n' "$first_out" | grep -c '^\[guard\]')
-if [ "$FIRST_GUARD" = "guard_export_star" ] && [ "$first_rc" -ne 0 ] && [ "$first_headers" -eq 1 ]; then
-  echo "✅ arch-guards.sh が最初の検査の違反で止まる"
+stop_out=$(bash scripts/check/arch-guards.sh 2>&1)
+stop_rc=$?
+stop_headers=$(printf '%s\n' "$stop_out" | grep -c '^\[guard\]')
+if ! printf '%s' "$stop_out" | grep -qF "export * の使用が禁止"; then
+  echo "❌ arch-guards.sh: $STOP_GUARD が export * の違反を検出しませんでした（検査が壊れているか、ARCH_GUARDS から外れている）"
+  FAIL=1
+elif [ "$stop_rc" -ne 0 ] && [ "$stop_headers" -eq "$stop_index" ]; then
+  echo "✅ arch-guards.sh が途中の違反（${STOP_GUARD}、${stop_index} 番目）で止まる"
 else
-  echo "❌ arch-guards.sh: 最初の検査（$FIRST_GUARD）の違反で exit=$first_rc、実行した検査 ${first_headers}（1件目で止まるはず。set -e が外れていないか）"
+  echo "❌ arch-guards.sh: ${stop_index} 番目の $STOP_GUARD の違反で exit=$stop_rc、実行した検査 ${stop_headers}（そこで止まるはず。本体の set -e が外れていないか）"
   FAIL=1
 fi
 rm -f "$D/application/__selftest_export_star.ts"
