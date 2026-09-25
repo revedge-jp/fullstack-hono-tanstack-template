@@ -25,8 +25,10 @@ Observability データセットに入る。そのためこの規約は両方に
     `onError` へ再送出している（同ファイルの `createAuth`）。外すと上と同じ漏れ方をする
   - Hono の `onError` の `err` は `stringifyErrorSafe` を通すので、DrizzleQueryError のメッセージに
     埋め込まれたバインド値（`\nparams: …`）は切り落とされる。redact はキー単位で文字列の中身に届かない。
-    DB 障害の種別は `readCauseCode` で cause の `code` だけを `causeCode` に添える（cause.message は入力値を含みうる）。
-    `makeVerifySession`（`features/auth/infrastructure/session.ts`）も同じ形
+    DB 障害の種別は `readCauseCode` で cause の `code` だけを `causeCode` に添える（cause.message は入力値を含みうる）
+  - `auth.api.getSession` を直接呼ぶ経路（`features/auth/infrastructure/session.ts`）: Better Auth は DB 障害を
+    内蔵ロガー（上の委譲先）で記録してから APIError(500) に包み直して投げる。受け側は `readAuthApiError` で
+    `statusCode` / `bodyCode` 等の識別子だけを足し、Error 本体は上と同じく `stringifyErrorSafe` を通す
   - postgres.js: `onnotice` に pino を委譲（`packages/database/src/index.ts`）。
     未設定だと DB の NOTICE が素の `console.log` に出る
 - **`error` / `err` キーは「5xx・未捕捉例外」専用**。Cloudflare はこの2つのキーの値を

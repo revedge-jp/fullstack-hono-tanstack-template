@@ -3,6 +3,7 @@ import { authAccounts, authSessions, authUsers, authVerifications, type Database
 import { stringifyErrorSafe } from "@repo/logging";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { isAPIError } from "better-auth/api";
 
 // Better Auth の出力のうち生の console に出る経路は2つあり、どちらもこのアプリの pino を
 // 通らないため、(1) @repo/logging の redact が効かない、(2) 生の console.error はメッセージ全文が
@@ -146,6 +147,23 @@ export function toBetterAuthLoggerOption(logger: AuthLogger) {
         toLogMessage(message),
       );
     },
+  };
+}
+
+/**
+ * `auth.api.*` の reject が Better Auth の APIError なら、値を含まない識別子だけを返す。
+ * getSession は APIError 以外の例外(DB 障害の DrizzleQueryError 等)を内蔵ロガーで記録したうえで
+ * APIError(INTERNAL_SERVER_ERROR) に包み直して投げるので、呼び出し側に届くのは通常こちら。
+ */
+export function readAuthApiError(error: unknown) {
+  if (!(error instanceof Error) || !isAPIError(error)) {
+    return undefined;
+  }
+  return {
+    name: error.name,
+    status: readPrimitiveField(error, "status"),
+    statusCode: readPrimitiveField(error, "statusCode"),
+    bodyCode: readBodyCode(error),
   };
 }
 
