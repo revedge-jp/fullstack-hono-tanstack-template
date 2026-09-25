@@ -14,6 +14,8 @@ paths:
 手書きしない**。`createApiMock()`（+ serverFn なら `reactStartModule` / `reactStartServerModule`）を
 使う — 書き始めは import + `mock.module` 2行で済む。手書き雛形は feature の数だけ写経され、
 派生プロダクトの実測で actions テストの21%・queries テストの25%（計4,100行）に達した。
+行カバレッジゲート（80%）の下では写経テストが閾値を満たす最安の方法になるので、ヘルパを先に用意して
+書き始めの手数で写経に負けない状態を保っている。
 実例: `features/tasks/actions/create-task.test.ts` / `features/tasks/queries/get-tasks.test.ts`。
 
 ## actions は `toActionResult`（`shared/lib/action-error.ts`）を通す

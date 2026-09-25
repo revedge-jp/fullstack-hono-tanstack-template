@@ -176,16 +176,9 @@ const hyperdrive = await Hyperdrive("hyperdrive", {
 
 // Hyperdrive の origin 接続数上限を是正する。alchemy の HyperdriveProps には
 // origin_connection_limit を設定するプロパティが存在しないため、Cloudflare API を直接叩く。
-//
-// 【背景】Cloudflare のデフォルトは 60 だが、PlanetScale の小さいクラスタ（例: PS-5）の
-// 実際の direct 接続上限（約25、クラスタサイズに応じて変動）を上回っている。Cloudflare 自身の
-// ドキュメントも「Hyperdrive の接続数上限は origin DB の上限より低く設定すべき」と明記している —
-// Hyperdrive の接続プール上限は「ソフトリミット」（ネットワーク障害時の高可用性確保のため
-// 設定値を超えて接続を張ることがある）で、Hyperdrive 側の上限が DB 側の上限より高いと、
-// DB 側の接続枠が先に枯渇し、PlanetScale Console からの緊急接続すら張れなくなる。
-// DB の実枠のうち Hyperdrive には一部だけ割り当て、残りは PlanetScale 内部プロセス・保守
-// 作業（Console 等）用に残す。クラスタサイズを変えたら「ティア上げ → max_connections 再測定 →
-// この値を引き上げ」の順で見直すこと（逆順は接続枯渇障害の再現になる）。
+// 値は DB 側の実際の接続上限より低く保つ（既定の 60 では PlanetScale の接続枠を先に枯渇させる）。
+// クラスタサイズを変えたときは見直しの順序を誤ると接続枯渇障害になる — 背景と手順は
+// docs/dev/alchemy-iac.md の「Hyperdrive の origin_connection_limit」。
 const HYPERDRIVE_ORIGIN_CONNECTION_LIMIT = 15;
 {
   const cfApi = await createCloudflareApi();

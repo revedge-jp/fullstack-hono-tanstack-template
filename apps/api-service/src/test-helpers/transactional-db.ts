@@ -2,35 +2,14 @@ import { afterEach, beforeEach } from "bun:test";
 
 import { createDb, type Database } from "@repo/db";
 
-// integration テストを BEGIN → ROLLBACK で包む共有 fixture。
-// 移植元: revedge-jp/chiryonavi#1152（同リポジトリ issue #1109 で実測）。
+// integration テストを BEGIN → ROLLBACK で包む共有 fixture。各テストの直前に外側トランザクションを
+// 開いたまま保留し（「開始した」ことを表す Promise だけ resolve して本体は宙に浮かせる）、テスト本体には
+// その tx を `getDb()` で渡す。afterEach で保留中の Promise を reject するとコールバックが例外で終わり、
+// drizzle が ROLLBACK を発行する。
 //
-// 【なぜ手動 delete が要らなくなるか】各テストの直前に外側トランザクションを開いたまま
-// 保留し（「開始した」ことを表す Promise だけ resolve して本体は宙に浮かせる）、テスト本体は
-// `getDb()` が返すその tx を唯一の DB ハンドルとして使う。afterEach で保留中の Promise を
-// reject すると `db.transaction()` のコールバックが例外で終わり、drizzle が ROLLBACK を
-// 発行する — その時点でテスト中に行った insert/update/delete は全て取り消される。
-//
-// 【リポジトリ自身が db.transaction() を張っても安全】drizzle-orm の postgres-js アダプタは、
-// 既に `PostgresJsTransaction` になっている値（= ここで注入する tx）に対する `.transaction(cb)`
-// 呼び出しを自動的に SAVEPOINT へマップする。そのため `createTasksRepository({ db: getDb() })`
-// のように tx をリポジトリへそのまま渡してよく、リポジトリ内部の `db.transaction()` は
-// savepoint として安全にネストする。
-//
-// 【意図的に DB エラーを起こすアサーションは savepoint で包むこと】PostgreSQL はトランザクション内で
-// エラーが起きるとそのトランザクション全体を「中断」状態にし、ROLLBACK か savepoint 境界に
-// 達するまで以降の全クエリを失敗させる（25P02 current transaction is aborted）。制約違反を
-// 確かめた後に同じテストでクエリを続けるなら、エラーを起こす処理を `getDb().transaction(fn)` で
-// 包んで savepoint 単位に閉じ込める。
-//
-// 【now() はトランザクション開始時刻で固定される】1テスト内で作った行の `defaultNow()` 列は
-// すべて同じ値になる。時刻順に依存するテスト（keyset ページネーション等）は時刻の列を明示して
-// シードすること。任せると全行が同時刻になり、時刻での絞り込みが一度も通らないまま緑になる。
-//
-// 【テスト本体と beforeEach では rawDb / $client を使わない】createDb は接続が1本（max: 1、
-// ADR-002）で、テスト中はそれをこの fixture のトランザクションが握っている。ルートの接続を通る
-// クエリは afterEach で接続が空くまで待たされ、テストのタイムアウトで落ちる（原因の読めない
-// タイムアウトになる）。
+// 使い方と落とし穴（リポジトリ内の transaction() は SAVEPOINT になる・DB エラーを起こすアサーションは
+// savepoint で包む・now() が固定される・テスト本体で rawDb を使うとタイムアウトする）は
+// .claude/rules/api-service.md の「integration テストは手書きの後始末を書かない」。
 export function createTransactionalDb(databaseUrl: string): {
   // beforeEach 完了後〜afterEach 開始前（= テスト本体）以外で呼ぶと undefined。呼び出し側
   // （常に *.test.ts）で `getDb()!` として受け取る — 非 null アサーションは *.test.ts でのみ

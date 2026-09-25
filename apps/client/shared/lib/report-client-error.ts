@@ -1,10 +1,6 @@
-// クライアント(ブラウザ)側 JS エラーの自前通報。
-// 第三者(Sentry 等)へ利用者情報を出さないため、送るのは message / stack / パス / バージョンのみに
-// 限定し、送信前に既知の PII パターンをスクラブする。宛先は自オリジンの api-service
-// (/api/client-errors)で、そこから Cloudflare Workers observability のログに流れる。
-//
-// window.onerror / unhandledrejection のグローバル捕捉に加え、React error boundary
-// (ErrorFallbackContent の effect)からも reportReactError を呼ぶ。
+// クライアント(ブラウザ)側 JS エラーの自前通報(宛先は自オリジンの /api/client-errors)。第三者へ
+// 利用者情報を出さないため、送る項目を限定し、送信前に既知の PII パターンをスクラブする。経路の全体像は
+// docs/deploy/operations.md の「クライアント（ブラウザ）エラーの通報」。
 //
 // 送信は意図的に生の fetch を使う(アプリ標準の hc<AppType> クライアントは使わない)。この
 // モジュールはエラー処理経路そのもので動くため、通報が新たなエラーを生まないよう依存を最小化し、

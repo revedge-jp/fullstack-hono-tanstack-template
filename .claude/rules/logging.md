@@ -30,7 +30,7 @@ Observability データセットに入る。そのためこの規約は両方に
 - **`error` / `err` キーは「5xx・未捕捉例外」専用**。Cloudflare はこの2つのキーの値を
   `$metadata.error` に取り込み、ダッシュボードの既定フィルタ `exists($metadata.error)` が
   それを「Errors」として数える。warn 以下（業務上の拒否、fail-open の失敗）でこのキーを使うと
-  本物の異常が埋もれる。4xx の理由は `errorCode`、その他は `reason` / `detail` 等でよい。
+  本物の異常が埋もれる（実測では 1 日の Errors の大半が正常な 401 だった）。4xx の理由は `errorCode`、その他は `reason` / `detail` 等でよい。
 - 安全網として `@repo/logging` が warn 以下のログの `error` / `err` を `failure` へ退避する。
   **`failure` はその退避先の予約キー**なので別の意味に使わない。Error オブジェクトは `err` に
   載せてよい（pino の既定シリアライザがスタックを直列化するのはこのキーだけで、退避後も形は保たれる）。
@@ -45,6 +45,9 @@ Cloudflare の `$metadata.error` の立ち方は**2つの別系統**になる。
 
 - **pino 経由**（数値 `level` を含むオブジェクト）: `error` / `err` キーがあるときだけ立つ。
   `console.log/warn/error` のどれで出したかは無関係。副作用として `$metadata.level` は常に null。
+  取り込まれるのはこの2キー「だけ」で、`errorCode` / `errCode` / `error_code` / `exception` /
+  `reason` / `resultCode` / `failure` / `errors` / `code` / `message` / `detail` は載らない
+  （4xx の `errorCode` や退避先の `failure` はこれを根拠にしている）。
 - **生の console**（数値 `level` なし）: `console.error` は**何を渡しても**立つ（生文字列・複数引数・
   JSON文字列・Error インスタンス・`msg` だけのオブジェクト、すべてメッセージ全文が入る）。
   `console.warn` は `error`/`err` があっても立たない。`console.log` は `error`/`err` のときだけ立つ。

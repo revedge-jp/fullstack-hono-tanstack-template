@@ -25,20 +25,11 @@ function isCloudflareWorkersRuntime(): boolean {
 const WARN_LEVEL = 40;
 const ERROR_LEVEL = 50;
 
-// Cloudflare Workers Observability は、ログ JSON の `error` / `err` キーの値を
-// `$metadata.error` に取り込む。ダッシュボードの既定フィルタ `exists($metadata.error)` は
-// それを「Errors」として数えるため、warn 以下のログ(業務上の拒否・fail-open の失敗など、
-// ユーザー操作には影響しないもの)がこの2つのキーを使うと、本物の異常(5xx・未捕捉例外)が
-// その中に埋もれる(実測で1日あたり大半が正常な401だった)。
-//
-// マップされるのはこの2キー「だけ」であることは使い捨て Worker を本番アカウントへ
-// 一時デプロイして実測済み。error / err は載り、errorCode / errCode / error_code /
-// exception / reason / resultCode / failure / errors / code / message / detail は載らない。
-//
-// 各呼び出し箇所の規約でこれを守るのは現実的でない(pino の `err` はスタックを直列化する
-// 既定シリアライザのキーでもあり、自然に使われる)ため、ログ生成の出口で一元的に退避させる。
-// 退避先の `failure` はこの関数の予約キー。level が 50 以上のログは意図的に対象外
-// (5xx・未捕捉例外は `$metadata.error` に載って検知されるべき)。
+// Cloudflare Workers Observability はログの `error` / `err` キー(この2キーだけ)を「Errors」として
+// 数えるため、warn 以下のログがこれを使うと本物の異常(5xx・未捕捉例外)が埋もれる(規約と実測結果は
+// .claude/rules/logging.md)。各呼び出し箇所の規約で守るのは現実的でない(pino の `err` はスタックを
+// 直列化する既定シリアライザのキーでもあり、自然に使われる)ため、ログ生成の出口で予約キー `failure` へ
+// 一元的に退避させる。level が 50 以上のログは意図的に対象外(`$metadata.error` に載って検知されるべき)。
 //
 // **この退避は Workers 用 stream にしか無い**(下の pino-pretty / stdout の分岐は通らない)。
 // CF Observability の都合による対策であり、他のログシンクでは不要なため。

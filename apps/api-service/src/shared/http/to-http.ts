@@ -13,14 +13,9 @@ type ErrorLogger = {
 // エラー応答の理由をアクセスログと同じ requestId で相関できるよう構造化ログに残す。
 // アクセスログには status しか残らず、本番で「なぜ 400/409 になったか」を後から特定できない
 // ため。5xx は想定外(バグの兆候)なので error、4xx は業務上の拒否なので warn に分ける。
-//
-// フィールド名を 4xx と 5xx で変えているのは Cloudflare Workers Observability の都合。
-// CF は `error` / `err` キーの値を `$metadata.error` に取り込み、ダッシュボードの既定フィルタ
-// `exists($metadata.error)` がそれを「Errors」として数える。4xx も `error` で出すと、
-// 正常な 401(未ログイン訪問)だけで Errors が埋まり、本物の異常(5xx)がその中に埋もれる。
-// 4xx は業務上の拒否であって異常ではないので、取り込み対象外の `errorCode` に載せる
-// (このキーが対象外であることは実測済み — packages/logging/src/create-logger.ts の
-// コメント参照)。4xx の検索性は `msg: "request_error"` + `status` + `errorCode` で担保する。
+// 4xx を `error` ではなく `errorCode` に載せるのは、CF Observability が `error` / `err` を
+// 「Errors」として数え、正常な 401 だけで本物の異常が埋もれるため(.claude/rules/logging.md)。
+// 4xx の検索性は `msg: "request_error"` + `status` + `errorCode` で担保する。
 function logErrorResponse(c: Context, errorCode: string, status: number): void {
   const logger: ErrorLogger | undefined = c.get("logger");
   if (!logger) {
