@@ -26,59 +26,23 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
 - **Database** (`packages/database`): Drizzle ORM + PostgreSQL (via `@repo/db`)
 - **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/external/auth.ts`
 - **Testing**: `bun test` (native, no vitest/jest)
+- **Error handling**: `neverthrow`（`Result` / `ResultAsync`）で ROP — see [ADR-005](docs/architecture/adr-005-neverthrow-for-error-handling.md)
 - **Linter/Formatter**: oxlint + oxfmt（oxc）
 - **Quality strategy**: "generation vs verification" — see [品質ゲート ガイド](docs/dev/quality-gates.md) / [ADR-006](docs/architecture/adr-006-ai-era-quality-strategy.md)
 
 ## Commands
 
-### Development
-```bash
-bun run dev           # Start all apps (Turborepo)
-bun run build         # Build all
-bun run typecheck     # TypeScript check across workspace
-bun run lint          # oxlint + oxfmt --check (all)
-bun run lint:fix      # oxlint --fix + oxfmt
-```
+一覧は `package.json` の `scripts`（ルートと `apps/*`）を見る。ここには名前から分からないことだけ書く。
 
-### Testing
-```bash
-# From repo root or app directory
-bun run test                        # All tests
-bun run test:unit                   # Unit tests (no DB)
-bun run test:integration            # Integration tests (requires DB)
-bun run test:contract               # API contract tests
-bun run test:watch                  # Watch mode (api-service only)
-
-# Run a single test file
-cd apps/api-service && bun test src/features/auth/application/get-session/usecase.test.ts
-```
-
-### Database
-```bash
-bun run db:up         # Start dev DB (Docker)
-bun run db:generate   # drizzle-kit generate (create migration files)
-bun run db:migrate    # drizzle-kit migrate (apply migrations)
-bun run db:studio     # Drizzle Studio
-```
-
-### Architecture Checks
-```bash
-bun run arch:check    # All architecture/dependency checks (incl. jscpd + guard self-test)
-bun run dep:cycles    # Detect circular dependencies
-bun run knip          # Detect unused exports / dependencies
-bun run check:feature # Feature structure completeness (required layers/tests/wiring)
-bun run check:instructions # AGENTS.md / .claude/rules 等の参照(パス・bun run・見出し)が実在するか
-```
-
-### Quality Gates (see [quality-gates.md](docs/dev/quality-gates.md) for full detail)
-```bash
-bun run coverage:check         # api-service domain/application coverage threshold (85%)
-bun run coverage:check:client  # client actions/queries coverage threshold (80%)
-cd apps/api-service && bun run mutation:diff  # Mutation testing (PR diff only, same as CI; ADR-007)
-cd apps/api-service && bun run mutation       # Mutation testing full audit (domain/application, break 90%)
-bun run dup:check              # Duplicate code detection (jscpd, threshold 5%)
-bun run arch:selftest          # Verify arch-guards actually catch known violations
-```
+- `git push` の pre-push フックが `bun run check-all`（lint / typecheck / 全テスト / アーキテクチャ検査）を回す。
+  テストは DB を使うので、DB が無いと push できない（worktree なら `.claude/rules/general.md` の worktree 節）
+- 途中の確認は `bun run typecheck` と `bun run arch:check`、DB 不要のテストは `bun run test:unit`。
+  1 ファイルだけなら `cd apps/api-service && bun test <file>`
+- `bun run test:integration` は `.env` の `TEST_DATABASE_URL` にマイグレーションを当ててから走る
+- mutation testing は `cd apps/api-service && bun run mutation:diff`（CI と同じく PR の差分だけ。コミット済みの
+  差分しか見ない）
+- DB: `bun run db:up`（Docker で起動）→ スキーマを変えたら `bun run db:generate` → `bun run db:migrate`
+- 各ゲートの閾値と全体像は [品質ゲート ガイド](docs/dev/quality-gates.md)
 
 ## Debugging: ローカルトレース（Local Explorer API）
 
@@ -104,14 +68,6 @@ curl -s -X POST -H 'content-type: application/json' \
 - テンプレート原本の `wrangler.jsonc` は `name` が `{{APP_NAME}}` のままなので、vite-plugin の
   検証で dev サーバーが起動しない。`scripts/init-template.sh` で初期化するか、`scripts/test/test-e2e.sh`
   と同じく一時的に置換する
-
-## Shared Packages
-
-| Package | Purpose |
-|---|---|
-| `neverthrow` (npm) | ROP: `Result`, `ResultAsync`, `ok()`, `err()`, `okAsync()`, `errAsync()` — see [ADR-005](docs/architecture/adr-005-neverthrow-for-error-handling.md) |
-| `@repo/db` | Drizzle client instance + schema |
-| `@repo/logging` | Pino-based logger |
 
 ## Testing Conventions
 
