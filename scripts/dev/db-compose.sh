@@ -1,17 +1,38 @@
 #!/usr/bin/env bash
 #
-# bun run db:up / db:down 系の入口。compose を動かす前に、compose が解決するコンテナ・volume が
+# bun run db:up / db:down 系の入口。compose を動かす前に、compose が起動・削除する DB のコンテナ・volume が
 # 別の compose プロジェクトの持ち物でないかを確かめる（scripts/lib/compose-ownership.sh）。
 # 既定名のまま他プロジェクトと衝突していると、up は他プロジェクトの DB の volume をマウントし、
 # down -v はそれを消しうるため、その場合は compose を動かさずに止める。
 #
-# 使い方: bash scripts/dev/db-compose.sh <docker compose の引数...>
-#   例: bash scripts/dev/db-compose.sh up -d postgres postgres-test --wait
+# 使い方: bash scripts/dev/db-compose.sh <preset> [追加の docker compose 引数...]
+#   preset: up / down / up-test / down-test / up-all（package.json の db:* と1対1）
+#
+# 判定対象はプリセットで決める。compose の引数を解析して「どのサービスに触るか」を推測しない —
+# フラグの値（--pull missing / --no-attach postgres-test 等）をサービス指定と取り違え、判定を
+# 素通りさせる穴が引数の形ごとに出る（PR レビューで2周続けて踏んだ）。
+# - 追加の引数が渡されたら、何に触るか分からないので全サービスを判定する
+# - サービスを絞るプリセットは、依存先（depends_on で一緒に起動するもの）まで compose 自身に解決させる
+# - down は宣言した全 volume を消すので、常に全サービスを判定する
 
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+
+preset="${1:-}"
+[ $# -gt 0 ] && shift
+case "$preset" in
+  up) compose_args=(up -d) scope=() ;;
+  down) compose_args=(down -v) scope=() ;;
+  up-test) compose_args=(up -d postgres-test) scope=(postgres-test) ;;
+  down-test) compose_args=(rm -sf postgres-test) scope=(postgres-test) ;;
+  up-all) compose_args=(up -d postgres postgres-test --wait) scope=(postgres postgres-test) ;;
+  *)
+    echo "使い方: bash scripts/dev/db-compose.sh <up|down|up-test|down-test|up-all> [追加の引数...]" >&2
+    exit 1
+    ;;
+esac
 
 for tool in docker jq; do
   if ! command -v "$tool" >/dev/null 2>&1; then
@@ -24,31 +45,13 @@ done
 # shellcheck source=../lib/compose-ownership.sh
 source "$ROOT/scripts/lib/compose-ownership.sh"
 
-# up / rm でサービス名が指定されていれば、そのサービスと**依存先**（depends_on で一緒に起動するもの）
-# だけを判定する。全サービスを見ると、触らない pgadmin の衝突で db:up:test まで止まる（scripts/worktree.sh
-# の手動 worktree は pgadmin の名前を main から引き継ぐので、ここで必ず止まっていた）。
-# - 位置引数は実在のサービス名と突き合わせる。フラグの値（--pull missing の missing 等）だけが残って
-#   実在のサービスが1つも無いときは全サービスを判定する（絞り込むと何も判定されず素通りになる）
-# - 依存先は compose 自身に解決させる（`config --format json <svc>` は依存先を含めて返す）
-# - down は宣言した全 volume を消すので、常に全サービスを判定する
 services=()
-case "${1:-}" in
-  up | rm)
-    all_services="$(docker compose config --services 2>/dev/null || true)"
-    named=()
-    for arg in "${@:2}"; do
-      if printf '%s\n' "$all_services" | grep -qxF -- "$arg"; then
-        named+=("$arg")
-      fi
-    done
-    if [ "${#named[@]}" -gt 0 ]; then
-      while IFS= read -r svc; do
-        [ -n "$svc" ] && services+=("$svc")
-      done < <(docker compose config --format json "${named[@]}" 2>/dev/null | jq -r '.services | keys[]')
-      # 解決に失敗して空になったら、安全側に倒して全サービスを判定する
-    fi
-    ;;
-esac
+if [ $# -eq 0 ] && [ "${#scope[@]}" -gt 0 ]; then
+  while IFS= read -r svc; do
+    [ -n "$svc" ] && services+=("$svc")
+  done < <(docker compose config --format json "${scope[@]}" 2>/dev/null | jq -r '.services | keys[]')
+  # 依存先の解決に失敗して空になったら、全サービスを判定する（安全側）
+fi
 
 rc=0
 foreign="$(compose_foreign_resources "$ROOT" ${services[@]+"${services[@]}"})" || rc=$?
@@ -57,9 +60,9 @@ if [ "$rc" -eq 2 ]; then
   exit 1
 fi
 if [ -n "$foreign" ]; then
-  echo "❌ DB コンテナ / volume の名前が別プロジェクトと衝突しているため、docker compose $1 を実行しません" >&2
+  echo "❌ DB コンテナ / volume の名前が別プロジェクトと衝突しているため、docker compose ${compose_args[0]} を実行しません" >&2
   printf '%s\n' "$foreign" | print_foreign_resources
   exit 1
 fi
 
-exec docker compose "$@"
+exec docker compose "${compose_args[@]}" "$@"
