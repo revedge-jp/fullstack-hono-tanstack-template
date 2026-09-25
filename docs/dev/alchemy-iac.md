@@ -141,10 +141,10 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
   最小の権限は未検証なので、下の「既知の制約」の付与から絞れる範囲で絞る）
 - preview ラベルを付けた PR は、push のたびに再デプロイされる。人がコードを読んで信頼できると判断した PR に
   だけ付け、読んでいない push が続くならラベルを外す
-- この節が扱うのは preview（PR のコード）から同じアカウントの state・Worker に届く経路だけ。GitHub の
-  Environment（PR がワークフローを足して `environment: production` を参照する）と、未マージのコミットへの
-  `v*` タグ push（`deploy.yml` が祖先を確かめずにそのコミットを production の資格情報で動かす）から production の
-  資格情報に届く経路は、この節の対策では塞がらない
+- この節が扱うのは、preview（PR のコード）が同じアカウントの state・Worker に届く場合だけ。次の 2 つは
+  この節の対策では塞がらない: GitHub の Environment（PR がワークフローを足して `environment: production` を
+  参照する）と、未マージのコミットへの `v*` タグ push（`deploy.yml` が祖先を確かめずにそのコミットを
+  production の資格情報で動かす）
 
 ## オプションリソース（環境変数で opt-in）
 
