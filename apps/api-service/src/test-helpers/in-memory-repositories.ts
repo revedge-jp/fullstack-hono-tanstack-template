@@ -61,12 +61,16 @@ export function createInMemoryTasksRepository(
       const t = store.get(id);
       return okAsync(t && t.ownerId === ownerId ? t : null);
     },
-    // Drizzle 実装は id と ownerId の両方で絞り、更新するのは status と updatedAt だけ。
-    // 所有者が違えば NotFound（他人のタスクを上書きしない）、updatedAt は更新時刻にする。
-    update: (task) => {
+    // Drizzle 実装は id と ownerId と読んだ時点の status で絞り、更新するのは status と updatedAt だけ。
+    // 所有者が違えば NotFound（他人のタスクを上書きしない）、status が変わっていれば Conflict、
+    // updatedAt は更新時刻にする。
+    update: (task, expected) => {
       const current = store.get(task.id);
       if (!current || current.ownerId !== task.ownerId) {
         return errAsync("NotFound" as const);
+      }
+      if (current.status !== expected.status) {
+        return errAsync("Conflict" as const);
       }
       const updated = reconstituteTask({ ...current, status: task.status, updatedAt: new Date() });
       store.set(updated.id, updated);

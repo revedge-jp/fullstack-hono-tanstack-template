@@ -111,7 +111,8 @@ describe("tasks.create usecase", () => {
       expect(r.value.item.id).toBe(ID_1);
     }
     expect(warned).toHaveLength(1);
-    expect(warned[0]?.obj).toEqual({ err: "Unexpected", taskId: ID_1 });
+    // fail-open の失敗は warn。err / error キーは 5xx 専用なので reason に載せる（.claude/rules/logging.md）
+    expect(warned[0]?.obj).toEqual({ reason: "Unexpected", taskId: ID_1 });
     expect(warned[0]?.msg).toBe("activity の記録に失敗しました");
   });
 });

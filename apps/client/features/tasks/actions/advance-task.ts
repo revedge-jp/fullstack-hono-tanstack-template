@@ -6,6 +6,7 @@ export function advanceTask(input: { id: string }): Promise<ActionResult> {
   return toActionResult(() => apiClient.api.tasks[":id"].$patch({ param: { id: input.id } }), {
     messages: {
       AlreadyDone: "このタスクは既に完了しています",
+      Conflict: "他の操作でタスクの状態が変わりました。再読み込みしてからやり直してください",
       NotFound: "タスクが見つかりません。削除された可能性があります",
     },
     fallback: "タスクの更新に失敗しました",

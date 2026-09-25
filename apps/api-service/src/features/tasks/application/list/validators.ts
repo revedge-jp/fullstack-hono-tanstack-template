@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+import { z } from "zod";
 
 import { decodeTaskCursor, type TaskCursor } from "./cursor";
 
@@ -20,6 +21,11 @@ export function validateListTasks(input: ListTasksInput): Result<ListTasksValida
 
   const decoded = decodeTaskCursor(input.cursor);
   if (decoded.isErr()) {
+    return err("Invalid" as const);
+  }
+  // tasks.id は uuid 列なので、UUID でない id をリポジトリに渡すと PostgreSQL の 22P02 で 500 になる
+  // （in-memory 実装は文字列比較で通ってしまい、contract テストでは見えない）。改ざん・破損したカーソルとして 400 にする
+  if (!z.uuid().safeParse(decoded.value.id).success) {
     return err("Invalid" as const);
   }
   return ok({ ownerId: input.ownerId, limit, after: decoded.value });

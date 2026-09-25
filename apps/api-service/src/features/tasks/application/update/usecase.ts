@@ -6,7 +6,7 @@ import { makeGetTaskStep } from "../get/steps";
 import { makeAdvanceTaskStep } from "./steps";
 
 type AdvanceTaskInput = { id: string; ownerId: string };
-type AdvanceTaskError = "AlreadyDone" | "NotFound" | "Unexpected";
+type AdvanceTaskError = "AlreadyDone" | "NotFound" | "Conflict" | "Unexpected";
 
 export function makeAdvanceTask(deps: { tasksRepository: TasksRepository }) {
   const getTaskStep = makeGetTaskStep(deps);

@@ -61,7 +61,7 @@ export function createTasksRouter(deps: {
         id: c.req.valid("param").id,
         ownerId: c.get("user").id,
       });
-      return toHttp(c, result, { AlreadyDone: 409, NotFound: 404, Unexpected: 500 });
+      return toHttp(c, result, { AlreadyDone: 409, Conflict: 409, NotFound: 404, Unexpected: 500 });
     })
     .delete("/:id", taskIdParam, async (c) => {
       const result = await deps.tasks.deleteTask({

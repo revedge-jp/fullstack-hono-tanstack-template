@@ -81,7 +81,10 @@ describe("tasks.list usecase", () => {
   });
 
   test("正常: cursor を渡すとデコードされた after がリポジトリに届く", async () => {
-    const after = { createdAt: new Date("2026-07-04T08:00:00Z"), id: "task-2" };
+    const after = {
+      createdAt: new Date("2026-07-04T08:00:00Z"),
+      id: "5f0c2b8e-3d4a-4c1e-9b7a-2e6d8f1a0c93",
+    };
     let receivedAfter: { createdAt: Date; id: string } | undefined;
     const tasksRepository = buildRepo({
       list: (input) => {
@@ -93,7 +96,7 @@ describe("tasks.list usecase", () => {
 
     const r = await usecase({ ownerId: "user-1", cursor: encodeTaskCursor(after) });
     expect(r.isOk()).toBe(true);
-    expect(receivedAfter?.id).toBe("task-2");
+    expect(receivedAfter?.id).toBe(after.id);
     expect(receivedAfter?.createdAt.toISOString()).toBe(after.createdAt.toISOString());
   });
 
@@ -106,6 +109,24 @@ describe("tasks.list usecase", () => {
     const usecase = makeListTasks({ tasksRepository });
 
     const r = await usecase({ ownerId: "user-1", cursor: "!!!broken!!!" });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error).toBe("Invalid");
+    }
+  });
+
+  // tasks.id は uuid 列。UUID でない id を持つカーソル（改ざん・破損）をリポジトリへ渡すと、Drizzle 実装は
+  // PostgreSQL の 22P02 で 500 になる（in-memory 実装は文字列比較で通るので contract テストでは見えない）
+  test("異常: id が UUID でない cursor は Invalid を返す（DB には触れない）", async () => {
+    const tasksRepository = buildRepo({
+      list: () => {
+        throw new Error("list should not be called for a non-uuid cursor");
+      },
+    });
+    const usecase = makeListTasks({ tasksRepository });
+
+    const cursor = encodeTaskCursor({ createdAt: new Date("2026-07-04T08:00:00Z"), id: "x" });
+    const r = await usecase({ ownerId: "user-1", cursor });
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error).toBe("Invalid");

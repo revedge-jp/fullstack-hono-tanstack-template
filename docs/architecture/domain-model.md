@@ -56,6 +56,9 @@ done -> (AdvanceTaskCommand) -> Err("AlreadyDone")
 
 - コマンド処理でバリデーションエラーが発生した場合は `Result<_, "Invalid">` を返却し、状態遷移は行われない。
 - インフラ層で一意制約違反（同一 owner + title）を検知した場合は `Result<_, "Conflict">` を返却する。
+- `AdvanceTaskCommand` は読んだ時点の status を条件に更新する（楽観ロック）。読んでから書くまでに
+  他のリクエストが status を変えていたら `Result<_, "Conflict">`（409）を返し、古い読み取りで
+  `done` を `in_progress` へ巻き戻さない。
 - 状態遷移の不変条件は DB の CHECK 制約（`tasks_status_check`）でも二重に強制される（ADR-004）。
 
 ## トレーサビリティ

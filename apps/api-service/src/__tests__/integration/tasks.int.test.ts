@@ -62,7 +62,10 @@ describe("TasksRepository (実DB)", () => {
       expect(fetched.value?.id).toBe(task.id);
     }
 
-    const updated = await tasksRepository.update({ ...task, status: "in_progress" });
+    const updated = await tasksRepository.update(
+      { ...task, status: "in_progress" },
+      { status: "todo" },
+    );
     expect(updated.isOk()).toBe(true);
     if (updated.isOk()) {
       expect(updated.value.status).toBe("in_progress");
