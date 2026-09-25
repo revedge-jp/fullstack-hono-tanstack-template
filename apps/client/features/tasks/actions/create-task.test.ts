@@ -31,6 +31,13 @@ describe("tasks.createTask action", () => {
     expect(result).toEqual({ ok: false, message: "タスクの作成に失敗しました" });
   });
 
+  test("異常: 本文が JSON でない（エッジの 502 等）場合は既定メッセージ", async () => {
+    api.state.ok = false;
+    api.state.jsonFails = true;
+    const result = await createTask({ title: "Write docs" });
+    expect(result).toEqual({ ok: false, message: "タスクの作成に失敗しました" });
+  });
+
   test("異常: 通信に失敗しても reject せず { ok: false, message } を返す", async () => {
     api.state.callError = new TypeError("Failed to fetch");
     const result = await createTask({ title: "Write docs" });

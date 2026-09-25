@@ -1,6 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { toActionResult } from "./action-error";
+const reported: { error: unknown; context: string }[] = [];
+await mock.module("./report-client-error", () => ({
+  reportHandledError: (error: unknown, context: string) => reported.push({ error, context }),
+}));
+
+const { toActionResult } = await import("./action-error");
 
 type Body = { ok: true } | { ok: false; error: "Conflict" | "Unexpected" };
 
@@ -14,6 +19,10 @@ const options = {
 };
 
 describe("toActionResult", () => {
+  beforeEach(() => {
+    reported.length = 0;
+  });
+
   test("正常: レスポンスが ok なら { ok: true }", async () => {
     expect(await toActionResult(respond(true, { ok: true }), options)).toEqual({ ok: true });
   });
@@ -57,6 +66,9 @@ describe("toActionResult", () => {
         json: (): Promise<Body> => Promise.reject(new SyntaxError("Unexpected token '<'")),
       });
     expect(await toActionResult(request, options)).toEqual({ ok: false, message: "失敗しました" });
+    expect(reported).toEqual([
+      { error: expect.any(SyntaxError), context: "action response is not JSON" },
+    ]);
   });
 
   test("異常: 呼び出し自体が reject（通信失敗）しても reject せず通信エラーの文言を返す", async () => {
@@ -66,5 +78,17 @@ describe("toActionResult", () => {
       ok: false,
       message: "通信に失敗しました。接続を確認して再度お試しください",
     });
+    expect(reported).toEqual([{ error: expect.any(TypeError), context: "action request failed" }]);
+  });
+
+  test("異常: API が返したエラー（4xx/5xx の JSON）は通報しない（サーバー側で記録済み）", async () => {
+    await toActionResult(respond(false, { ok: false, error: "Conflict" }), options);
+    await toActionResult(respond(false, { ok: false, error: "Unexpected" }), options);
+    expect(reported).toEqual([]);
+  });
+
+  test("異常: プロトタイプのキー名（toString 等）のコードでも関数を拾わず fallback", async () => {
+    const result = await toActionResult(respond(false, { ok: false, error: "toString" }), options);
+    expect(result).toEqual({ ok: false, message: "失敗しました" });
   });
 });

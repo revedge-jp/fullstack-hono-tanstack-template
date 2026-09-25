@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { reportHandledError } from "./report-client-error";
+
 // API のエラーレスポンス `{ ok: false, error: string }`（api-service の toHttp / 各ミドルウェア）。
 const ActionErrorResponseSchema = z.object({ ok: z.literal(false), error: z.string() });
 
@@ -49,18 +51,31 @@ export async function toActionResult<Res extends ApiResponse>(
   let res: Res;
   try {
     res = await request();
-  } catch {
+  } catch (error) {
+    // 画面には通信エラーとして出すが、呼び出し側のバグ（hc の使い方の誤り等）もここに来るので
+    // 握りつぶさず通報する（reject させていた頃は unhandledrejection 経由で通報されていた）。
+    reportHandledError(error, "action request failed");
     return { ok: false, message: NETWORK_ERROR_MESSAGE };
   }
   if (res.ok) {
     return { ok: true };
   }
-  const body: unknown = await res.json().catch(() => undefined);
+  const body: unknown = await res.json().catch((error: unknown) => {
+    // JSON でない本文（エッジの 5xx HTML 等）は API の応答ではないので観測に残す。
+    reportHandledError(error, "action response is not JSON");
+    return undefined;
+  });
   const parsed = ActionErrorResponseSchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, message: options.fallback };
   }
+  const code = parsed.data.error;
   const messages: Record<string, string> = options.messages;
-  const message = messages[parsed.data.error] ?? COMMON_MESSAGES[parsed.data.error];
+  // Object.hasOwn: "toString" 等のプロトタイプのキー名で関数を拾わないため。
+  const message = Object.hasOwn(messages, code)
+    ? messages[code]
+    : Object.hasOwn(COMMON_MESSAGES, code)
+      ? COMMON_MESSAGES[code]
+      : undefined;
   return { ok: false, message: message ?? options.fallback };
 }
