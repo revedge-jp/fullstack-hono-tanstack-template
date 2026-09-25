@@ -11,6 +11,8 @@
 - `../../.claude/rules/env-vars.md` — 環境変数を足すとき
 
 参照実装は `features/tasks`。actions / queries のテストは `test-helpers/api-mock.ts` から書き始める。
+api-service と違って `src/` は無く、`apps/client` 直下に `app/`（ルートと `server.ts`）・`features/`・`shared/`・
+`components/`（`ui` / `layout` / `patterns`）・`test-helpers/`・`tests/e2e/` がある。
 
 ## Architecture: client
 
