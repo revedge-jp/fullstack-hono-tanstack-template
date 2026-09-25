@@ -33,10 +33,14 @@
 ### Step 0: 対象を固定する（最初に一度だけ）
 
 ```bash
-REVIEW_DIR="$(mktemp -d)"
+mktemp -d   # 出力された絶対パスを <作業ディレクトリ> として記録する
 gh pr view <PR番号> --json baseRefName,headRefName,headRefOid --jq '"\(.baseRefName) \(.headRefName) \(.headRefOid)"'
-gh pr diff <PR番号> > "$REVIEW_DIR/pr<PR番号>.diff"
+gh pr diff <PR番号> > <作業ディレクトリ>/pr<PR番号>.diff
 ```
+
+**作業ディレクトリはシェル変数に入れず、絶対パスをそのまま書く。** Bash ツールは呼び出しを跨いで
+シェル変数を保持しないため、`REVIEW_DIR=$(mktemp -d)` を後の呼び出しで参照すると空に展開され、
+書き込みがルート直下を指す（削除に使えばさらに危険）。
 
 **PR 番号を必ず渡す。** `/code-review` 等は `$CLAUDE_PROJECT_DIR` の現在ブランチを見るため、worktree で
 実装した内容は引数無しだと**エラーにならずに別ブランチがレビューされる**（`.claude/rules/general.md`
@@ -138,7 +142,7 @@ cd apps/api-service && bun run mutation:diff   # api-service を触った場合
 
 変更した feature のテストも実行する。失敗したら修正を見直し、それでも失敗するなら
 AskUserQuestion で確認する。成功したらサイクル +1、修正コミットを push し、**修正差分限定の
-再レビュー**を1体で回す（差分は `git diff <修正前の head SHA>..HEAD > "$REVIEW_DIR/pr<PR番号>-r<N>.diff"`）:
+再レビュー**を1体で回す（差分は `git diff <修正前の head SHA>..HEAD > <作業ディレクトリ>/pr<PR番号>-r<N>.diff`）:
 
 ```
 リポジトリ: <worktree の絶対パス>。コマンドはすべてそこから実行すること。
@@ -172,7 +176,7 @@ AskUserQuestion で確認する。成功したらサイクル +1、修正コミ�
 各サイクルで①②それぞれが何を指摘し、何を直したかを簡潔に残す。PR 本文末尾の2行
 （`レビュー往復: N周（主な指摘: 一言）` / `レビュー収束: 最終周 CONFIRMED 0`）は `ship.md` 手順5に
 従って書く。**`レビュー収束:` 行が無いと必須チェック `Review converged` が通らず auto-merge が
-発火しない**。「最終周」は修正差分限定の再レビューを含む最後の周を指す。`$REVIEW_DIR` は最後に消す。
+発火しない**。「最終周」は修正差分限定の再レビューを含む最後の周を指す。作業ディレクトリは最後に、記録した絶対パスを指定して消す。
 
 ### Step 6: 観点追加の検討（ループ終了後に一度だけ）
 
