@@ -384,7 +384,7 @@ if (result.isErr()) { /* result.error */ }
 - `validators.test.ts` — if `validators.ts` has non-trivial logic
 - `domain/models.test.ts` — if domain has behavior (value objects)
 - `__tests__/integration/{feature}.int.test.ts` — real-DB behavior (constraints, ownership scoping); wrap each test in `createTransactionalDb()` (`src/test-helpers/transactional-db.ts`) instead of hand-written cleanup
-- `__tests__/integration/repository-conformance.int.test.ts` — **リポジトリを足したら必ず**: in-memory 実装を `in-memory-repositories.ts` に置き、Drizzle 実装と並べて `implementations` に加える
+- `__tests__/integration/repository-conformance.int.test.ts` — **リポジトリを足したら必ず**: in-memory 実装を `in-memory-repositories.ts` に置き、`Harness` 型にそのリポジトリ（と時刻を明示するシード関数）を足して、`implementations` の in-memory / drizzle の両方の要素を埋める。並び順など時刻に依存する性質は、時刻を明示してシードして検証する
 - `integrations/composition/{adapter}.test.ts` — **feature 間 adapter を追加したら必ず**（co-located）。
   入力の組み立てとポートのエラー型への正規化を検証する。adapter は feature 間連携の参照実装で、
   コピーされて量産される起点になるため。実例: `activity-recorder.test.ts`
