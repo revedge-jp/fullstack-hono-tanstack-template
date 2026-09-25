@@ -34,7 +34,8 @@ run_guard() {
   return "$rc"
 }
 
-# arch-guards.sh が実行する順番（最初の違反で止まる）
+# arch-guards.sh が実行する順番（最初の違反で止まる）。新しい検査は guard_feature_structure の前に
+# 並べる — 構造チェックを最後に置く前提で、自己テストが本体の全検査の実行を確かめている。
 ARCH_GUARDS=(
   guard_export_star
   guard_window_location_href

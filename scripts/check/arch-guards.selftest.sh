@@ -422,8 +422,17 @@ else
   diff <(printf '%s\n' "$DEFINED_GUARDS") <(printf '%s\n' "$LISTED_GUARDS") | sed 's/^/    /'
   FAIL=1
 fi
-# (2) 本体を1回だけ実行する。この時点で置いている fixture は最後の検査（feature 構造）にだけ
-#     引っかかるので、本体は全検査を順に実行したうえで最後に失敗するはず
+# (2) 構造チェックが ARCH_GUARDS の最後にあること。下の (3) はこれを前提にしている
+#     （新しい検査を末尾に足すと、本体が構造チェックで止まって新しい検査まで届かない）
+LAST_GUARD="${ARCH_GUARDS[${#ARCH_GUARDS[@]}-1]}"
+if [ "$LAST_GUARD" = "guard_feature_structure" ]; then
+  echo "✅ ARCH_GUARDS の最後が guard_feature_structure"
+else
+  echo "❌ ARCH_GUARDS の最後が $LAST_GUARD です。guard_feature_structure を最後に置き、新しい検査はその前に並べてください"
+  FAIL=1
+fi
+# (3) 本体を実行し、全検査を順に呼ぶこと。この時点で置いている fixture は最後の検査（構造チェック）に
+#     だけ引っかかるので、本体は全検査を実行したうえで最後に失敗するはず
 e2e_out=$(bash scripts/check/arch-guards.sh 2>&1)
 e2e_rc=$?
 e2e_headers=$(printf '%s\n' "$e2e_out" | grep -c '^\[guard\]')
@@ -436,6 +445,21 @@ else
   FAIL=1
 fi
 rm -rf "$SELFTEST_ACTION_DIR"
+# (4) 本体が途中の違反で止まること。(3) は最後の検査の違反なので、本体の set -e が外れて「全検査を
+#     最後まで回し、最後の検査の終了コードで終わる」状態でも通ってしまう。最初の検査にだけ引っかかる
+#     fixture を置き、1件目で止まる（見出しが1つだけ）ことを確かめる
+FIRST_GUARD="${ARCH_GUARDS[0]}"
+mkfix "$D/application/__selftest_export_star.ts" 'export * from "./nope";'
+first_out=$(bash scripts/check/arch-guards.sh 2>&1)
+first_rc=$?
+first_headers=$(printf '%s\n' "$first_out" | grep -c '^\[guard\]')
+if [ "$FIRST_GUARD" = "guard_export_star" ] && [ "$first_rc" -ne 0 ] && [ "$first_headers" -eq 1 ]; then
+  echo "✅ arch-guards.sh が最初の検査の違反で止まる"
+else
+  echo "❌ arch-guards.sh: 最初の検査（$FIRST_GUARD）の違反で exit=$first_rc、実行した検査 ${first_headers}（1件目で止まるはず。set -e が外れていないか）"
+  FAIL=1
+fi
+rm -f "$D/application/__selftest_export_star.ts"
 
 echo "=== dependency-cruiser 自己テスト ==="
 if [ "${SKIP_DC:-0}" = "1" ]; then
