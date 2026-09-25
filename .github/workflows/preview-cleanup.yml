@@ -3,6 +3,7 @@ name: Preview Cleanup
 # 放置された preview 環境の自動掃除。DB ブランチ（PS-DEV）はオートスリープせず
 # 存在時間分の課金が続くため、最終更新から7日を超えた preview は破棄する。
 # ラベルも外すので、続きが必要なら再度 preview ラベルを付ければ作り直される（DB は空に戻る）。
+# あわせて、PR 側の destroy に失敗して DB ブランチだけ残った preview も拾って破棄する。
 on:
   schedule:
     - cron: "0 21 * * *" # 毎日 06:00 JST
@@ -14,9 +15,8 @@ on:
         required: false
 
 jobs:
-  # cleanup は preview.yml と同じ `environment: preview` で動かす。staging で動かすと、毎晩 main HEAD の
-  # 成功 Deployment が staging に記録され、deploy.yml のロールバック先（staging の最新の成功 Deployment）を
-  # 汚す。preview の破棄に staging の資格情報を使う理由も無い。
+  # cleanup は preview.yml と同じ `environment: preview` で動かす（preview の破棄に staging の資格情報を
+  # 使う理由が無い）。
   # `environment: preview` を参照する cleanup ジョブは、Environment が存在しないと
   # ステップ実行前にサイレントに失敗する（preview.yml の preflight と同じ理由）。
   # テンプレート原本や未セットアップの派生リポジトリで夜間 cron を赤くしないためのガード。
@@ -50,6 +50,7 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.exists == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     environment: preview
     permissions:
       contents: read
@@ -74,39 +75,122 @@ jobs:
       - name: Check readiness
         id: readiness
         run: |
-          if [ -z "$ALCHEMY_STATE_TOKEN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+          if [ -z "$ALCHEMY_STATE_TOKEN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$APP_NAME" ] \
+            || [ -z "$PLANETSCALE_ORGANIZATION" ] || [ -z "$PLANETSCALE_SERVICE_TOKEN_ID" ] || [ -z "$PLANETSCALE_SERVICE_TOKEN" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Preview secrets not configured — nothing to clean up. Skipping."
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Find stale previews
+      # 破棄の対象は 2 種類:
+      #   stale  = preview ラベル付きの open PR で、最終更新が STALE_DAYS より古いもの
+      #   orphan = staging DB に pr-N ブランチが残っているのに、PR N が「preview ラベル付きの open」ではないもの
+      #            （preview.yml の destroy が失敗した・取り消された等。ラベルを外した後なので PR 一覧からは見えない）
+      - name: Find stale and orphaned previews
         id: stale
         if: steps.readiness.outputs.ready == 'true'
         run: |
+          # 既定の bash -e には pipefail が無く、curl の失敗がパイプの後ろの jq に隠れて「取り残し 0 件」になる
+          set -o pipefail
           cutoff=$(date -u -d "-${STALE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
-          stale=$(gh pr list --label preview --state open \
-            --json number,updatedAt \
-            --jq ".[] | select(.updatedAt < \"$cutoff\") | .number" | tr '\n' ' ')
-          echo "numbers=$stale" >> "$GITHUB_OUTPUT"
-          if [ -n "$stale" ]; then
-            echo "::notice::Stale previews (>${STALE_DAYS}d): $stale"
+          open_previews=$(gh pr list --label preview --state open --limit 1000 --json number,updatedAt)
+          stale=$(printf '%s' "$open_previews" | jq -r --arg cutoff "$cutoff" '.[] | select(.updatedAt < $cutoff) | .number' | tr '\n' ' ')
+          active=$(printf '%s' "$open_previews" | jq -r '.[].number' | tr '\n' ' ')
+          # 一覧を取れない・読めないときは失敗させる（取り残しを確かめられないのに緑で終わらせない）
+          branches=""
+          page=1
+          while true; do
+            if ! body=$(curl -sSf --max-time 30 \
+              -H "Authorization: ${PLANETSCALE_SERVICE_TOKEN_ID}:${PLANETSCALE_SERVICE_TOKEN}" \
+              "https://api.planetscale.com/v1/organizations/${PLANETSCALE_ORGANIZATION}/databases/${APP_NAME}-staging/branches?page=${page}&per_page=100"); then
+              echo "::error::PlanetScale の ${APP_NAME}-staging のブランチ一覧を取得できません（取り残しの preview を確かめられない）"
+              exit 1
+            fi
+            if ! printf '%s' "$body" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
+              echo "::error::PlanetScale のブランチ一覧を読めません: $(printf '%s' "$body" | head -c 300)"
+              exit 1
+            fi
+            names=$(printf '%s' "$body" | jq -r '.data[].name | strings | select(test("^pr-[0-9]+$")) | ltrimstr("pr-")')
+            branches="$branches $names"
+            if [ "$(printf '%s' "$body" | jq -r '.next_page // empty')" = "" ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
+          orphans=""
+          for n in $branches; do
+            case " $active " in
+              *" $n "*) ;;
+              *) orphans="$orphans $n" ;;
+            esac
+          done
+          echo "stale=$stale" >> "$GITHUB_OUTPUT"
+          echo "orphans=$orphans" >> "$GITHUB_OUTPUT"
+          if [ -n "$stale$orphans" ]; then
+            echo "numbers=$stale$orphans" >> "$GITHUB_OUTPUT"
+            echo "::notice::Stale previews (>${STALE_DAYS}d): ${stale:-なし} / Orphaned DB branches: ${orphans:-なし}"
           else
-            echo "No stale previews."
+            echo "No stale or orphaned previews."
           fi
 
       - uses: ./.github/actions/setup-workspace
         if: steps.readiness.outputs.ready == 'true' && steps.stale.outputs.numbers != ''
 
-      - name: Destroy stale previews
+      - name: Destroy stale and orphaned previews
         if: steps.readiness.outputs.ready == 'true' && steps.stale.outputs.numbers != ''
         env:
-          NUMBERS: ${{ steps.stale.outputs.numbers }}
+          STALE: ${{ steps.stale.outputs.stale }}
+          ORPHANS: ${{ steps.stale.outputs.orphans }}
         run: |
-          for n in $NUMBERS; do
-            echo "==> Destroying preview pr-$n ..."
+          # 一覧を取ってから依存のインストールを挟むので、その間にラベルが付け直されたり PR 側の destroy が
+          # 走っていたりする。削除の直前に PR の状態を読み直し、条件を満たさなくなったものは飛ばす。
+          # orphan は PR の最終更新から 2 時間は触らない（preview.yml の destroy が実行中・待機中の可能性がある）
+          recent_cutoff=$(date -u -d "-2 hours" +%Y-%m-%dT%H:%M:%SZ)
+          stale_cutoff=$(date -u -d "-${STALE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
+          # 終了コード: 0 = 破棄する / 1 = もう対象ではない / 2 = PR を読めない
+          still_target() {
+            local n=$1 kind=$2 info labeled_open updated
+            # 読めなければ消さない側に倒す（API の一時的な失敗で使用中の preview を消さない）。ただし黙って
+            # 飛ばすと取り残しが誰にも見えないので、呼び出し側でジョブを赤にする
+            info=$(gh pr view "$n" --json state,labels,updatedAt 2>/dev/null) || return 2
+            labeled_open=$(printf '%s' "$info" | jq -r '(.state == "OPEN") and any(.labels[]?; .name == "preview")')
+            updated=$(printf '%s' "$info" | jq -r '.updatedAt // ""')
+            if [ "$kind" = stale ]; then
+              [ "$labeled_open" = true ] && [ -n "$updated" ] && [[ "$updated" < "$stale_cutoff" ]]
+            else
+              [ "$labeled_open" != true ] && { [ -z "$updated" ] || [[ "$updated" < "$recent_cutoff" ]]; }
+            fi
+          }
+          failed=""
+          for n in $STALE $ORPHANS; do
+            kind=orphan
+            case " $STALE " in *" $n "*) kind=stale ;; esac
+            target=0
+            still_target "$n" "$kind" || target=$?
+            if [ "$target" = 2 ]; then
+              echo "::warning::PR #$n の状態を読めないため pr-$n を破棄しませんでした（$kind）"
+              failed="$failed pr-$n(PR を読めない)"
+              continue
+            fi
+            if [ "$target" != 0 ]; then
+              echo "==> pr-$n は条件を満たさなくなったので飛ばします（$kind）"
+              continue
+            fi
+            echo "==> Destroying preview pr-$n ($kind) ..."
             bunx alchemy destroy --stage "pr-$n"
-            gh pr edit "$n" --remove-label preview
-            gh pr comment "$n" --body "🧹 ${STALE_DAYS}日以上更新がないため preview 環境（\`pr-$n\`）を自動削除しました。再度必要なら \`preview\` ラベルを付け直してください（DB は空の状態で作り直されます）。" || true
+            # destroy は失敗しても exit 0 なので、消えたのを確かめてからラベルを外す（残ったまま外すと
+            # stale の一覧から見えなくなる。orphan として翌日また拾うが、赤くして人に知らせる）
+            if ! bash scripts/deploy/verify-preview-destroyed.sh "pr-$n"; then
+              failed="$failed pr-$n"
+              continue
+            fi
+            if [ "$kind" = stale ]; then
+              gh pr edit "$n" --remove-label preview
+              gh pr comment "$n" --body "🧹 ${STALE_DAYS}日以上更新がないため preview 環境（\`pr-$n\`）を自動削除しました。再度必要なら \`preview\` ラベルを付け直してください（DB は空の状態で作り直されます）。" || true
+            fi
           done
+          if [ -n "$failed" ]; then
+            echo "::error::次の preview を削除できませんでした:${failed}"
+            exit 1
+          fi
