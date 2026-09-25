@@ -77,31 +77,31 @@
     "typescript": "6.0.3"
   },
   "overrides": {
-    "baseline-browser-mapping": ">=2.11.0",
+    "baseline-browser-mapping": ">=2.11.0 <3.0.0",
     "brace-expansion": ">=5.0.9 <6.0.0",
-    "browserslist": ">4.28.6",
+    "browserslist": ">4.28.6 <5.0.0",
     "defu": ">=6.1.5",
-    "esbuild": ">=0.25.0",
+    "esbuild": ">=0.25.0 <0.29.0",
     "fast-uri": ">=3.1.6 <4.0.0",
-    "fast-xml-parser": ">=5.10.1",
+    "fast-xml-parser": ">=5.10.1 <6.0.0",
     "hono": "^4.13.5",
     "js-yaml": ">=4.3.2 <5.0.0",
     "lodash-es": ">=4.17.24",
     "minimatch": ">=10.2.3",
     "nanoid": ">=3.3.18 <4.0.0",
     "picomatch": ">=2.3.2",
-    "postcss": ">8.5.22",
-    "qs": ">6.15.3",
+    "postcss": ">8.5.22 <9.0.0",
+    "qs": ">6.15.3 <7.0.0",
     "sharp": ">=0.35.4 <0.36.0",
     "undici": ">=7.29.0 <8.0.0",
-    "ws": ">=8.21.0"
+    "ws": ">=8.21.0 <9.0.0"
   },
   "engines": {
     "node": ">=22"
   },
   "packageManager": "bun@1.4.0",
   "overridesNotes": {
-    "//": "各 override の理由。上流（bun why <pkg> で確認）が修正版に更新されたら該当行ごと削除する。Bun の override はパッケージ全体を1つの版に寄せるので、複数メジャーが同居するもの（@babel/core は Stryker 10 が 8 系、TanStack の router-plugin が 7 系）には使わない",
+    "//": "各 override の理由。上流（bun why <pkg> で確認）が修正版に更新されたら該当行ごと削除する。Bun の override はパッケージ全体を1つの版に寄せるので、複数メジャーが同居するもの（@babel/core は Stryker 10 が 8 系、TanStack の router-plugin が 7 系）には使わない。新しく足す行には上限（今のメジャー。0.x は minor）を付ける — 上限が無いと次に lock を再解決したとき新メジャーが全利用者に強制される",
     "baseline-browser-mapping": "推移依存の脆弱性回避（不正入力でのプロセス終了）。>=2.11.0 で修正済み",
     "brace-expansion": "推移依存の脆弱性回避（展開長・中間配列の OOM、指数時間展開）。>=5.0.9 で修正済み。minimatch が ^5 を要求するので 6.x へは上げない",
     "browserslist": "推移依存の脆弱性回避（キャッシュ無制限増加・stats 読み込み時の prototype 書き込み）。>4.28.6 で修正済み",
