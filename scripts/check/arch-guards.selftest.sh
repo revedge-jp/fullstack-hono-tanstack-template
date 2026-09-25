@@ -207,6 +207,11 @@ expect_guard "スタイル規約: すりガラスの禁止" \
   'export const SelftestUi = () => <div className="backdrop-blur-md">x</div>;' \
   "違反 [glassmorphism]"
 
+expect_guard "スタイル規約: h1 の直書きの禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <h1 className="text-xl font-semibold">x</h1>;' \
+  "違反 [raw-page-heading]"
+
 expect_guard "スタイル規約: 絵文字の禁止" \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p>🚀 Launch</p>;' \

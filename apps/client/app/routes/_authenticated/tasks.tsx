@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { CenteredPage } from "@/components/layout/centered-page";
+import { PageHeader } from "@/components/patterns/page-header";
 import { CreateTaskForm, getTasksServerFn, TaskList, tasksQueryOptions } from "@/features/tasks";
 
 // ページ位置を URL の search param（?cursor=...）で表現する。
@@ -33,7 +34,7 @@ function TasksPage() {
   return (
     <CenteredPage>
       <main className="flex w-full max-w-md flex-col gap-4 p-4">
-        <h1 className="text-2xl font-bold">タスク</h1>
+        <PageHeader title="タスク" />
         <CreateTaskForm />
         <TaskList items={tasks.items} />
         <div className="flex items-center justify-between">

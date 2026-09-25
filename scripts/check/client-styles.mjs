@@ -101,6 +101,15 @@ const RULES = [
       "すりガラス（backdrop-blur 等）は AI slop の代表例のため禁止です。必要なオーバーレイは components/ui の部品を使ってください",
   },
   {
+    id: "raw-page-heading",
+    // ページ見出しのサイズ・太さを PageHeader に閉じ込める。直書きの h1 はページごとに
+    // 書き方がばらつく（派生プロダクトの実測で h1 の class が 5 通りに分かれていた）。
+    pattern: /<h1\b/g,
+    allowedIn: ["apps/client/components/patterns/page-header.tsx"],
+    message:
+      "h1 を直接書かないでください。ページ見出しは @/components/patterns/page-header の PageHeader を使ってください",
+  },
+  {
     id: "emoji",
     // Extended_Pictographic は © / ™ / ↔ まで含むため使わない。既定で絵文字表示になる文字と、
     // 異体字セレクタ（U+FE0F）で絵文字化した文字だけを拾う。
@@ -144,6 +153,9 @@ for (const file of files) {
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, index) => {
     for (const rule of RULES) {
+      if (rule.allowedIn?.includes(file)) {
+        continue;
+      }
       for (const match of line.matchAll(rule.pattern)) {
         violations.push({ rule, location: `${relative(".", file)}:${index + 1}`, found: match[0] });
       }

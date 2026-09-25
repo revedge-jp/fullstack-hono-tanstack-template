@@ -110,8 +110,20 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 - 【ガード】任意値（`w-[347px]` / `bg-[#7c3aed]` / `bg-(--brand)`）と任意プロパティ（`[color:#7c3aed]`）は使えない。Tailwind のスケール
   （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `components/` に部品として閉じ込める
   （`data-[state=open]:` のような任意バリアントは対象外）
-- 文字: 本文と UI は `text-sm`、補足は `text-xs`、ページ見出し（h1）は `text-2xl font-bold`。
-  強調は `font-medium` まで。サイズと太さの組み合わせを画面ごとに発明しない
+- 文字サイズと太さの組み合わせを画面ごとに発明しない。使う組み合わせは次の 4 つだけ:
+
+  | 用途 | クラス |
+  |---|---|
+  | ページ見出し（h1） | 【ガード】`PageHeader` を使う（h1 の直書きは禁止。中身は `text-2xl font-bold`） |
+  | セクション見出し（h2 / h3） | `text-base font-semibold` |
+  | 本文・UI | `text-sm`（強調は `font-medium`） |
+  | 補足・注記 | `text-xs text-muted-foreground` |
+
+  `font-bold` は `PageHeader` の中だけ、`font-semibold` はセクション見出しだけに使う。
+- 字間は Tailwind のスケール（`tracking-tight` / `tracking-wide` / `tracking-wider` / `tracking-widest`
+  = 0.1em）から選ぶ。`tracking-[0.1em]` は `tracking-widest` と同じ値なので任意値にしない。日本語の見出し
+  などでスケールに無い字間が要るなら、`apps/client/app/globals.css` の `@theme` に `--tracking-*` の
+  トークンとして足し（`tracking-<名前>` で使える）、同じ値を画面ごとに書かない
 - 【ガード】並べるときの間隔は親の `flex` / `grid` + `gap-*`、部品の内側は padding で作る。margin
   （`mt-2` / `-mx-4`）と `space-y-*` / `space-x-*` は使えない（中央寄せの `mx-auto` 等 `auto` は可）
 - 正方形は `size-*`（`w-* h-*` を並べない）、条件付きクラスは `cn()`（`@/shared/lib/utils`）で合成する
@@ -124,7 +136,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
   手で書き換えない。足りない部品は shadcn CLI で追加する（`components.json` の `style: base-vega` /
   Base UI 前提。Radix 前提の例をそのまま貼らない）。同じ場所にある `ThemeToggle` は手書きの部品で
   書き換えてよいが、スタイルガードの対象外なので規約は目視で守る
-- `components/patterns/`: 画面パターン（`EmptyState` / エラー表示 / NotFound）
+- `components/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
 - `components/layout/`: ページ枠（`CenteredPage`）と常駐バナー
 - 部品に渡す `className` は**配置（余白・幅・並び）だけ**に使い、色や文字を上書きしない。見た目の違いは
   `variant` / `size` で表す（例: 削除は `<Button variant="destructive">`、控えめな操作は `variant="ghost"`）
