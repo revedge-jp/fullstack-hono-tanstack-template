@@ -14,6 +14,10 @@
 # プランの枠で回す前提のため（枠は CLI・アプリ・Web で共有。枠切れは実行失敗としてスキップになる）。
 # ~/.codex/config.toml は読まない（--ignore-user-config）。個人設定のモデル指定が古いと ChatGPT の
 # サインインでは使えず失敗し（実測: gpt-5.4 は 400）、MCP サーバー等の個人設定もレビューに混ざるため。
+# 認証系の環境変数（CODEX_API_KEY / OPENAI_API_KEY / CODEX_ACCESS_TOKEN）は確認・実行の両方から外す。
+# codex exec は保存済みの ChatGPT ログインより CODEX_API_KEY を優先する（実測: ダミーのキーで
+# api.openai.com へ接続し 401）一方、login status は保存済みの認証しか見ないため、そのままだと
+# 確認を通ったまま API キーで課金される。
 # CI では使わない: ChatGPT の認証情報を CI に置くことになる（.claude/rules/agent-permissions.md）。
 
 set -uo pipefail
@@ -33,18 +37,25 @@ skip() {
   exit 2
 }
 
+# 確認と実行で同じ認証を見るよう、両方ともこれを通す。認証情報の保存先は --ignore-user-config の exec と
+# 同じ既定値（file）に揃える（keyring の人は確認の時点で未ログイン扱いになり、スキップで気づける）。
+codex_chatgpt() {
+  env -u CODEX_API_KEY -u OPENAI_API_KEY -u CODEX_ACCESS_TOKEN codex "$@"
+}
+
 command -v codex >/dev/null 2>&1 || skip "codex CLI が見つからない（npm install -g @openai/codex）"
-LOGIN_STATUS=$(codex login status 2>&1 || true)
+LOGIN_STATUS=$(codex_chatgpt login status -c cli_auth_credentials_store=file 2>&1 || true)
 case "$LOGIN_STATUS" in
   *"Logged in using ChatGPT"*) ;;
   *) skip "codex が ChatGPT でログインしていない（codex login。API キーでは動かさない）: ${LOGIN_STATUS}" ;;
 esac
 [ -s "$DIFF_FILE" ] || skip "差分ファイルが空か存在しない: $DIFF_FILE"
+[ -z "$CONTEXT_DIFF" ] || [ -s "$CONTEXT_DIFF" ] || skip "文脈用の全体差分が空か存在しない: $CONTEXT_DIFF"
 
 if [ -n "$CONTEXT_DIFF" ]; then
   SCOPE="下の差分は、前回のレビュー指摘への修正コミット群の差分です。全体の再レビューではなく、
-「この修正が新たな回帰を生んでいないか」だけを見てください。修正前の PR 全体の差分は
-${CONTEXT_DIFF} にあり、文脈として読んでよい。"
+「この修正が新たな回帰を生んでいないか」だけを見てください。末尾に修正前の PR 全体の差分を
+文脈として付けてある（レビュー対象ではない）。"
 else
   SCOPE="下の差分は PR の差分です。"
 fi
@@ -66,11 +77,18 @@ PROMPT="あなたはこのリポジトリのコードレビュアーです。${S
 === 差分ここから ===
 $(cat "$DIFF_FILE")
 === 差分ここまで ==="
+if [ -n "$CONTEXT_DIFF" ]; then
+  PROMPT="${PROMPT}
+
+=== 文脈用の全体差分ここから（レビュー対象ではない） ===
+$(cat "$CONTEXT_DIFF")
+=== 文脈用の全体差分ここまで ==="
+fi
 
 LOG="${OUT}.log"
 MODEL_ARGS=()
 if [ -n "${CODEX_REVIEW_MODEL:-}" ]; then MODEL_ARGS=(-m "$CODEX_REVIEW_MODEL"); fi
-if ! printf '%s' "$PROMPT" | codex exec --ignore-user-config ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+if ! printf '%s' "$PROMPT" | codex_chatgpt exec --ignore-user-config ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
   --sandbox read-only --ephemeral -C "$ROOT" -o "$OUT" - >"$LOG" 2>&1; then
   skip "codex exec が失敗した（枠切れ・ネットワーク等。詳細は ${LOG}）: $(tail -n 3 "$LOG" | tr '\n' ' ')"
 fi
