@@ -162,6 +162,11 @@ expect_guard "スタイル規約: dark: 手書きの禁止" \
   'export const SelftestUi = () => <div className="bg-card dark:bg-muted">x</div>;' \
   "違反 [manual-dark-variant]"
 
+expect_guard "スタイル規約: 数字始まりのバリアントが続く dark: の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="dark:2xl:bg-card">x</div>;' \
+  "違反 [manual-dark-variant]"
+
 expect_guard "スタイル規約: グラデーション背景の禁止" \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="bg-linear-to-r from-primary to-accent">x</div>;' \

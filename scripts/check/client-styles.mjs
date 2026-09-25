@@ -33,7 +33,7 @@ const RULES = [
   {
     id: "raw-palette",
     pattern: new RegExp(
-      `${CLASS_START}-?(?:${COLOR_UTILITIES})-(?:${PALETTE_NAMES})(?:-\\d{2,3})?(?:\\/(?:\\d+|\\[[^\\]\\s]+\\]))?${CLASS_END}`,
+      `${CLASS_START}-?(?:${COLOR_UTILITIES})-(?:${PALETTE_NAMES})(?:-\\d{2,3})?(?:\\/(?:\\d+|\\[[^\\]\\s]+\\]|\\([^)\\s]+\\)))?${CLASS_END}`,
       "g",
     ),
     message:
@@ -41,10 +41,10 @@ const RULES = [
   },
   {
     id: "arbitrary-value",
-    // w-[347px] と、v4 の CSS 変数省略記法 bg-(--brand) の両方。
+    // w-[347px] と、v4 の CSS 変数省略記法 bg-(--brand) / text-(color:--brand) の両方。
     // data-[state=open]: のような任意バリアント（直後が `:`）は対象外。
     pattern: new RegExp(
-      `${CLASS_START}-?[a-z][a-z0-9-]*-(?:\\[[^\\]\\s]+\\]|\\(--[^)\\s]+\\))(?![:\\w-])`,
+      `${CLASS_START}-?[a-z][a-z0-9-]*-(?:\\[[^\\]\\s]+\\]|\\((?:[a-z-]+:)?--[^)\\s]+\\))(?![:\\w-])`,
       "g",
     ),
     message:
@@ -60,8 +60,9 @@ const RULES = [
   },
   {
     id: "manual-dark-variant",
-    // `{ dark: "Dark" }` のようなオブジェクトキーを拾わないよう、直後にクラスが続く形だけを見る。
-    pattern: new RegExp(`${CLASS_START}dark:(?=[a-z!\\[*-])`, "g"),
+    // `{ dark: "Dark" }` のようなオブジェクトキーを拾わないよう、直後が区切りのものは除く
+    // （2xl: や @md: のように数字・記号で始まるバリアントが続く形は拾う）。
+    pattern: new RegExp(`${CLASS_START}dark:(?![\\s"'\\x60}]|$)`, "g"),
     message:
       "dark: を手書きしないでください。semantic トークンは .dark で値が切り替わるため、トークンを使えばダークモードは自動で対応します",
   },
@@ -111,10 +112,11 @@ function collectFiles(dir) {
 }
 
 // ガードの説明コメント自体や、移行時の「旧クラスはこうだった」というコメントで引っかからないよう、
-// コメント行と行内コメントは見ない。行末コメントは直前が空白のものだけを落とす（https:// を守るため）。
+// コメント行と行内コメントは見ない。行末コメントは直前が空白で、後ろに引用符が残らない `//` だけを
+// 落とす（https:// や title="a // b" の後ろのクラスまで捨てないため）。
 const isCommentLine = (line) => /^\s*(?:\/\/|\/\*|\*)/.test(line);
 const stripInlineComments = (line) =>
-  line.replace(/\/\*.*?\*\//g, " ").replace(/(?:^|\s)\/\/.*$/, "");
+  line.replace(/\/\*.*?\*\//g, " ").replace(/(?:^|\s)\/\/(?=[^"'\x60]*$).*$/, "");
 
 // 走査対象の移動・改名でガードが黙って無効にならないよう、対象が無ければ失敗させる。
 const missingRoots = ROOTS.filter((root) => !isDir(root));
