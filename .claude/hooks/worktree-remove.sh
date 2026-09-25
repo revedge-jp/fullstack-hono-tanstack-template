@@ -36,6 +36,31 @@ if is_legacy_slot_worktree "$WT_PATH"; then
     git -C $MAIN_ROOT worktree remove --force $WT_PATH"
 fi
 
+# 手で流したとき（Claude Code の ExitWorktree を経由しない呼び出し。ペイロードに hook_event_name が無い）の
+# 安全装置。下の git worktree remove --force は未コミット・未追跡の変更も、どのブランチにも乗っていない
+# コミット（detached HEAD・rebase の途中）も確認なしに消す。ExitWorktree は自分で変更の有無を確かめてから
+# フックを呼ぶが、手で流すとその確認が無いので、ここで止める。確かめたうえで消すなら WORKTREE_REMOVE_FORCE=1
+HOOK_EVENT="$(printf '%s' "$payload" | jq -r '.hook_event_name // empty')"
+if [ -z "$HOOK_EVENT" ] && [ -d "$WT_PATH" ] && [ "${WORKTREE_REMOVE_FORCE:-}" != "1" ]; then
+  dirty="$(git -C "$WT_PATH" status --porcelain 2>/dev/null || true)"
+  unbranched=""
+  if ! git -C "$WT_PATH" symbolic-ref -q HEAD >/dev/null 2>&1 &&
+    [ -z "$(git -C "$WT_PATH" for-each-ref --contains HEAD refs/heads refs/remotes 2>/dev/null)" ]; then
+    unbranched="$(git -C "$WT_PATH" rev-parse --short HEAD 2>/dev/null || echo HEAD)"
+  fi
+  if [ -n "$dirty" ] || [ -n "$unbranched" ]; then
+    msg="worktree $WT_PATH に消えると戻せない変更があるため削除しません:"
+    [ -n "$dirty" ] && msg="$msg
+  未コミット・未追跡の変更:
+$(printf '%s\n' "$dirty" | sed 's/^/    /')"
+    [ -n "$unbranched" ] && msg="$msg
+  どのブランチにも乗っていないコミット（detached HEAD / rebase の途中）: ${unbranched}
+    残すなら: git -C $WT_PATH branch <branch> HEAD"
+    die "$msg
+  コミット・退避してから再実行するか、確かめたうえで消すなら WORKTREE_REMOVE_FORCE=1 を付けて再実行してください"
+  fi
+fi
+
 # 1. まず worktree を削除する。順序が重要: ここで失敗すると Claude Code は worktree を残す。
 #    先に DB を落としてポートを解放していると、生き残った worktree が DB なし・ポートは次の
 #    worktree に再割り当て済み、という壊れた状態になる。

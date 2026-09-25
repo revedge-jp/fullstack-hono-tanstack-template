@@ -50,8 +50,7 @@
 |--------|------|--------|
 | `CLIENT_PORT` | client（Vite）のポート | `3000` |
 
-SSR からの API 呼び出しは同一 Worker 内のインプロセス呼び出し（ADR-001）なので、client に API の URL は要らない。`.env.example` のコメントにある `API_BASE_URL` は
-`scripts/worktree.sh` と `.claude/hooks/worktree-create.sh` が worktree 用 `.env` に書き込むだけで、どのコードも読まない残置変数。
+SSR からの API 呼び出しは同一 Worker 内のインプロセス呼び出し（ADR-001）なので、client に API の URL は要らない。
 
 ### Docker / インフラ
 
@@ -74,8 +73,7 @@ SSR からの API 呼び出しは同一 Worker 内のインプロセス呼び出
 > （データは消える）。
 >
 > テスト用 Postgres（`postgres-test`）は使い捨てで named volume を持たないため、
-> `POSTGRES_TEST_VOLUME_NAME` は使用しない。`SERVER_PUBLIC_URL` は `scripts/worktree.sh` が
-> worktree 用 `.env` に書き込むだけで、アプリ本体（`config.ts`）は参照しない残置変数。
+> `POSTGRES_TEST_VOLUME_NAME` は使用しない。
 
 ---
 

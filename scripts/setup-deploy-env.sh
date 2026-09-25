@@ -73,6 +73,13 @@ echo "secret はエコーバックされません（画面に表示されない�
 set_items=""
 skipped_items=""
 
+if [ "$STAGE" = "preview" ]; then
+  echo ""
+  echo "⚠️  preview は PR のコード（bun install / build / migrate）をこの Environment の資格情報で実行します。"
+  echo "   CLOUDFLARE_API_TOKEN / PLANETSCALE_SERVICE_TOKEN は production と共有せず、preview 専用に発行してください"
+  echo "   （.claude/rules/agent-permissions.md の Rule of Two。PR を書くエージェントに本番を消せる資格情報を渡さない）"
+fi
+
 # アイテムリストは fd 3 から読む（stdin はユーザー入力用に空けておく）
 while IFS='|' read -r name kind desc <&3; do
   [ -z "$name" ] && continue

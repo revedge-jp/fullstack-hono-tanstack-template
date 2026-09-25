@@ -129,7 +129,6 @@ if [ "$ENV_MISSING" -eq 0 ]; then
   log ".env にこの worktree 固有の値を反映"
   set_env_var CLIENT_PORT "$WT_CLIENT_PORT"
   set_env_var API_PORT "$WT_API_PORT"
-  set_env_var API_BASE_URL "http://localhost:$WT_API_PORT"
   set_env_var BETTER_AUTH_URL "http://localhost:$WT_API_PORT"
   set_env_var BETTER_AUTH_TRUSTED_ORIGINS "http://localhost:$WT_CLIENT_PORT"
   set_env_var CORS_ORIGIN "http://localhost:$WT_CLIENT_PORT"
