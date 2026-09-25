@@ -100,10 +100,15 @@ function percentile(values, ratio) {
 
 export function summarize(records) {
   const withRounds = records.filter((record) => record.rounds !== null);
-  const roundBuckets = { one: 0, two: 0, three: 0, fourOrMore: 0 };
-  for (const { rounds } of withRounds) {
+  const roundBuckets = { one: 0, oneClean: 0, two: 0, three: 0, fourOrMore: 0 };
+  for (const { rounds, reviewFixCommits } of withRounds) {
     if (rounds <= 1) {
       roundBuckets.one += 1;
+      // 「1周」の中身は過去の記録で意味が揺れていた（指摘ゼロで収束 / 指摘を1回直した）ので、
+      // 指摘対応コミットが無いものを別に数えて区別できるようにする
+      if (reviewFixCommits === 0) {
+        roundBuckets.oneClean += 1;
+      }
     } else if (rounds === 2) {
       roundBuckets.two += 1;
     } else if (rounds === 3) {
@@ -192,7 +197,7 @@ export function renderMarkdown(summary, records, days) {
       .join(" / ")}`,
   );
   lines.push(
-    `- レビュー周回: 中央値 ${rounds.median ?? "-"} 周（1周 ${rounds.buckets.one} / 2周 ${rounds.buckets.two} / 3周 ${rounds.buckets.three} / 4周以上 ${rounds.buckets.fourOrMore} / 記録なし ${rounds.unrecorded}）`,
+    `- レビュー周回: 中央値 ${rounds.median ?? "-"} 周（1周 ${rounds.buckets.one}〔うち指摘対応なし ${rounds.buckets.oneClean}〕 / 2周 ${rounds.buckets.two} / 3周 ${rounds.buckets.three} / 4周以上 ${rounds.buckets.fourOrMore} / 記録なし ${rounds.unrecorded}）`,
   );
   lines.push(`- 指摘対応のコミット: 合計 ${summary.reviewFixCommits}`);
   lines.push(

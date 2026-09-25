@@ -118,7 +118,13 @@ describe("集計", () => {
       toPrRecord(node({ number: 3, title: "fix: 回帰", body: "原因PR: #1" })),
     ];
     const summary = summarize(records);
-    expect(summary.rounds.buckets).toEqual({ one: 1, two: 0, three: 0, fourOrMore: 1 });
+    expect(summary.rounds.buckets).toEqual({
+      one: 1,
+      oneClean: 1,
+      two: 0,
+      three: 0,
+      fourOrMore: 1,
+    });
     expect(summary.rounds.unrecorded).toBe(1);
     expect(summary.detections).toEqual({
       first: 2,

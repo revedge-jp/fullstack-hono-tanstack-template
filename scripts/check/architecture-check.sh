@@ -114,7 +114,8 @@ else
 fi
 
 # 9) scripts/ 配下のテスト(開発用スクリプトの解析ロジック等)。どのワークスペースにも属さず turbo の
-#    test:unit に乗らないので、ここで回す(CI の Architecture & FSD Checks と arch:check / pre-push が通る)
+#    test:unit に乗らないので、ここで回す(arch:check と、CI の ci ジョブが動く PR = apps / packages / 依存の
+#    変更を含む PR・merge queue の Architecture & FSD Checks で走る。scripts だけの PR は pre-push の check-all が拾う)
 if [ "${SKIP_SCRIPT_TESTS:-0}" != "1" ]; then
   run_step_bg "ScriptTests" bun test ./scripts
 else
