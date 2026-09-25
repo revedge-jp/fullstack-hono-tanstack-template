@@ -41,7 +41,8 @@
 - **CI の `ci` ジョブ（lint/type と arch:check 一式。テスト・カバレッジ・ミューテーションは apps/packages の変更時だけ）は、
   コード・`scripts/`・ゲートの設定ファイル・依存のどれかに触れる PR で必ず走る**。
   `ci.yml` の `changes` ジョブが paths-filter で判定し、どのフィルタにも当たらないコード変更も受け皿（`catchall`）で拾う。
-  走らないのは `docs/`・`*.md`・`.claude/` など受け皿の除外に書いたものだけで、そのうち指示ファイル（`*.md`・`.claude/`）は
+  ワークフロー・フック・`.claude/settings.json`（ガードの検査対象と検証器）も含む。
+  走らないのは `docs/`・`*.md`・`.claude/` の残りなど受け皿の除外に書いたものだけで、そのうち指示ファイル（`*.md`・`.claude/`）は
   軽量な `instructions` ジョブが参照整合だけを見る。新しい設定ファイルを足しても追記は不要（受け皿に当たる）。
 - ローカルでアーキ一式（jscpd・自己テスト込み）を回したいときは **`bun run arch:check`**。`FAST=1` を付けると knip/deps/dc/jscpd/自己テストをスキップして高速化できる。
 

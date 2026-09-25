@@ -53,13 +53,16 @@ jobs:
           # client / api-service は packages 全体を見る。個別に列挙していた頃は packages/logging
           # だけの PR でそのテストも E2E も走らなかった(どちらの app も @repo/logging を import する)
           filters: |
+            # .github/actions/** は E2E / integration が使う setup-workspace(Playwright の導入分岐含む)なので両方に入れる
             client:
               - 'apps/client/**'
               - 'apps/api-service/**'
               - 'packages/**'
+              - '.github/actions/**'
             api-service:
               - 'apps/api-service/**'
               - 'packages/**'
+              - '.github/actions/**'
             packagesAll:
               - 'packages/**'
             deps:
@@ -67,9 +70,14 @@ jobs:
               - 'bun.lock'
             workflows:
               - '.github/workflows/**'
+            # 受け皿が除外する .github/workflows と .claude のうち、ガードの検査対象(actions の SHA ピン・
+            # id-token)と検証器そのもの(フックと settings.json。自己テストは ci ジョブ内でしか走らない)はここで拾う
             tooling:
               - 'scripts/**'
               - '.github/actions/**'
+              - '.github/workflows/**'
+              - '.claude/hooks/**'
+              - '.claude/settings.json'
               - 'dependency-cruiser.config.cjs'
               - 'tsconfig.depcruise.json'
               - 'knip.json'
@@ -248,8 +256,10 @@ jobs:
             FILTERS="$FILTERS --filter=api-service"
           fi
 
-          if [[ -z "$FILTERS" ]]; then
-            echo "No specific app changes; running lint/typecheck across repo"
+          # packages / tooling の変更は repo 全体で回す。turbo の lint は ^lint を持たないので、アプリに
+          # 絞るとパッケージ自身(@repo/logging 等)の lint が走らない
+          if [[ -z "$FILTERS" || "${{ needs.changes.outputs.packagesAll }}" == "true" || "${{ needs.changes.outputs.tooling }}" == "true" ]]; then
+            echo "Running lint/typecheck across repo"
             bunx turbo run lint typecheck --concurrency=4 --cache-dir=.turbo
           else
             echo "Running lint/typecheck for changed packages: $FILTERS"
