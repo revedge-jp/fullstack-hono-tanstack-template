@@ -24,8 +24,25 @@ done
 # shellcheck source=../lib/compose-ownership.sh
 source "$ROOT/scripts/lib/compose-ownership.sh"
 
+# up / rm でサービス名が指定されていれば、そのサービス（と、それがマウントする volume）だけを判定する。
+# 全サービスを見ると、触らない pgadmin の衝突で db:up:test まで止まる（scripts/worktree.sh の手動
+# worktree は pgadmin の名前を main から引き継ぐので、ここで必ず止まっていた）。down は宣言した全 volume を
+# 消すので、常に全サービスを判定する。フラグの値（--timeout 10 の 10 等）はサービス名として紛れ込むが、
+# 存在しないサービス名は判定対象を増やさないだけで害は無い。
+services=()
+case "${1:-}" in
+  up | rm)
+    for arg in "${@:2}"; do
+      case "$arg" in
+        -*) ;;
+        *) services+=("$arg") ;;
+      esac
+    done
+    ;;
+esac
+
 rc=0
-foreign="$(compose_foreign_resources "$ROOT")" || rc=$?
+foreign="$(compose_foreign_resources "$ROOT" ${services[@]+"${services[@]}"})" || rc=$?
 if [ "$rc" -eq 2 ]; then
   echo "❌ docker compose の設定を解決できません（docker-compose.yml と .env を確認してください）" >&2
   exit 1

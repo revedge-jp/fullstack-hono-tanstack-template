@@ -16,6 +16,10 @@
 #   戻り値: 0=判定できた（出力が空なら衝突なし）、2=compose 設定を解決できない
 #
 # 前提コマンド: docker / jq
+#
+# 既知の限界: 持ち主は compose のプロジェクト名（docker-compose.yml に name: が無いのでチェックアウト先の
+# ディレクトリ名）で見分ける。ディレクトリ名が同じ別プロジェクトが同じ既定名を使っていると区別できない。
+# scripts/init-template.sh が名前をアプリ名入りにするので、既定名のまま同名ディレクトリに置かない限り起きない。
 
 compose_foreign_resources() {
   local dir="$1"
@@ -59,4 +63,6 @@ print_foreign_resources() {
   done
   printf '  .env で POSTGRES_CONTAINER_NAME / POSTGRES_TEST_CONTAINER_NAME / POSTGRES_VOLUME_NAME /\n' >&2
   printf '  PGADMIN_CONTAINER_NAME / PGADMIN_VOLUME_NAME をこのプロジェクト固有の値にしてください（.env.example 参照）\n' >&2
+  printf '  ただし持ち主がこのチェックアウトの以前のディレクトリ名なら（改名・移動した）、名前は変えずに\n' >&2
+  printf '  ディレクトリ名を元に戻すこと。名前を変えると空の volume で起動し、元のデータに届かなくなる\n' >&2
 }
