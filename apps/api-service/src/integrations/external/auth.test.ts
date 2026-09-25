@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { APIError } from "better-auth/api";
+
 import { type AuthLogger, toBetterAuthLoggerOption } from "./auth";
 
 type LoggedCall = { level: string; obj: unknown; msg: string | undefined };
@@ -96,5 +98,93 @@ describe("toBetterAuthLoggerOption", () => {
     expect(direct).not.toHaveProperty("params");
     expect(direct).not.toHaveProperty("query");
     expect(withCause.cause).toBe('Error: Failed query: select * from "user" where "email" = $1');
+  });
+
+  test("msg に渡されたメッセージからもバインド値を切り落とす", () => {
+    const { logger, calls } = createCapturingLogger();
+
+    toBetterAuthLoggerOption(logger).log(
+      "error",
+      'Failed query: select * from "user" where "email" = $1\nparams: secret@example.com',
+    );
+
+    expect(calls[0]?.msg).toBe('Failed query: select * from "user" where "email" = $1');
+  });
+
+  test("バインド値が改行と `at ` を含んでも stack に残さない", () => {
+    const { logger, calls } = createCapturingLogger();
+    const error = new Error(
+      'Failed query: insert into "user" values ($1)\nparams: foo\n    at leaked-secret',
+    );
+
+    toBetterAuthLoggerOption(logger).log("error", "INTERNAL_SERVER_ERROR", error);
+
+    const [serialized] = toLoggedJson(calls[0]?.obj).betterAuthArgs;
+    expect(JSON.stringify(serialized)).not.toContain("leaked-secret");
+    expect(serialized.stack).toContain("at ");
+  });
+
+  test("stack 中にメッセージが見つからなければ stack を出さない", () => {
+    const { logger, calls } = createCapturingLogger();
+    const error = new Error("original");
+    error.stack = "Error: rewritten\n    at leaked-secret";
+
+    toBetterAuthLoggerOption(logger).log("warn", "hint", error);
+
+    const [serialized] = toLoggedJson(calls[0]?.obj).betterAuthArgs;
+    expect(serialized).not.toHaveProperty("stack");
+  });
+
+  test("APIError は status / statusCode / body.code と errorStack のフレームを残す", () => {
+    const { logger, calls } = createCapturingLogger();
+    const error = new APIError("INTERNAL_SERVER_ERROR", {
+      message: "Failed to create session",
+      code: "FAILED_TO_CREATE_SESSION",
+    });
+
+    toBetterAuthLoggerOption(logger).log("error", "INTERNAL_SERVER_ERROR", error);
+
+    const [serialized] = toLoggedJson(calls[0]?.obj).betterAuthArgs;
+    expect(serialized).toMatchObject({
+      name: "APIError",
+      message: "Failed to create session",
+      status: "INTERNAL_SERVER_ERROR",
+      statusCode: 500,
+      bodyCode: "FAILED_TO_CREATE_SESSION",
+    });
+    expect(serialized.stack).toContain("at ");
+  });
+
+  test("SQLSTATE 22xxx のエラーはメッセージを出さずコードだけ残す", () => {
+    const { logger, calls } = createCapturingLogger();
+    const postgresError = Object.assign(
+      new Error('invalid input syntax for type timestamp with time zone: "secret-ts-value"'),
+      { name: "PostgresError", code: "22P02" },
+    );
+    const uniqueViolation = Object.assign(
+      new Error('duplicate key value violates unique constraint "user_email_key"'),
+      { name: "PostgresError", code: "23505", detail: "Key (email)=(secret@example.com)" },
+    );
+
+    toBetterAuthLoggerOption(logger).log(
+      "error",
+      "INTERNAL_SERVER_ERROR",
+      postgresError,
+      new Error("Failed query: update", { cause: postgresError }),
+      new Error("Failed query: insert", { cause: uniqueViolation }),
+    );
+
+    const output = JSON.stringify(calls[0]?.obj);
+    expect(output).not.toContain("secret-ts-value");
+    expect(output).not.toContain("secret@example.com");
+    const [direct, withDataException, withUniqueViolation] = toLoggedJson(
+      calls[0]?.obj,
+    ).betterAuthArgs;
+    expect(direct).not.toHaveProperty("message");
+    expect(direct.code).toBe("22P02");
+    expect(withDataException.cause).toBe("PostgresError [22P02]");
+    expect(withUniqueViolation.cause).toBe(
+      'PostgresError [23505]: duplicate key value violates unique constraint "user_email_key"',
+    );
   });
 });
