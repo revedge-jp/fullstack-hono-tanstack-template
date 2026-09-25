@@ -8,7 +8,7 @@ worktree の作り方は2つある。**エージェント（Claude Code）が使
 | 方式 | 置き場所 | セットアップ | DB |
 |---|---|---|---|
 | Claude Code の worktree（`EnterWorktree`） | `.claude/worktrees/<name>` | WorktreeCreate フックが自動 | main の共有コンテナ内の `wt_<name>` |
-| 手動 worktree（`bun run worktree`） | `../<project>-<branch>` | `scripts/worktree.sh` | `dev-<N>` ブランチなら worktree ごとに起動。それ以外は main の開発 DB（`localhost:5432`）をそのまま使う |
+| 手動 worktree（`bun run worktree`） | `../<project>-<branch>` | `scripts/worktree.sh` | ポート・コンテナ名を固定値で書き込む（下の「ポート設定」。main の DB とは限らない） |
 
 ## Claude Code の worktree（`.claude/worktrees/<name>`）
 
@@ -151,12 +151,12 @@ bun install
 ### 3. DB の起動とマイグレーションの適用（`dev-<N>` ブランチのみ）
 
 ```bash
-bun run db:up:all   # 開発 DB とテスト DB だけ。db:up は pgAdmin も起動し、main の pgAdmin と衝突して止まる
+bun run db:up:all   # 開発 DB とテスト DB だけ（db:up は pgAdmin も起動する。下の「自動設定される環境変数」）
 bun run db:migrate
 ```
 
-`dev-<N>` 以外の名前の worktree は DB を起動しない。接続先が main の開発 DB（`localhost:5432`）になるので、
-そこで `db:migrate` するとブランチのマイグレーションが main の DB に当たる（下の「ポート設定」）。
+`dev-<N>` 以外の名前の worktree はスロット 0 の固定値（開発 DB 5432 / テスト DB 5433）になり、そこで
+動いている DB（main の DB とは限らない）にマイグレーションやテストが当たる（下の「ポート設定」）。
 
 マイグレーションはスキーマを変更したブランチで 1 回だけ `bun run db:generate` してコミットする。他の worktree は
 取り込んだマイグレーションを `bun run db:migrate` で当てるだけにする（各 worktree で生成し直すと、同じ変更の
@@ -165,10 +165,12 @@ bun run db:migrate
 ## ポート設定
 
 `dev-<N>` という名前のブランチの worktree には、スロット N のポートが自動設定されます。これにより、複数の
-worktree で同時に `bun run dev` と `bun run db:up:all` を実行できます。**それ以外の名前（`feat/xxx` 等）はスロット 0 =
-main と同じポート**（コンテナ名は既定の `app_postgres`）になり、開発 DB の接続先は main の DB そのものになる。
-main と同時に動かすなら `.env` を手で書き換える（スロットの判定は `scripts/worktree.sh` の `extract_slot_number`）。
-並行開発で DB を分けたいなら、Claude Code の worktree か `dev-<N>` ブランチを使う。
+worktree で同時に `bun run dev` と `bun run db:up:all` を実行できます。**それ以外の名前（`feat/xxx` 等）はスロット 0**
+（スロットの判定は `scripts/worktree.sh` の `extract_slot_number`）。
+
+**ポートとコンテナ名は main の `.env` から引き継がず、下の表の固定値で書き込まれる**。main が `init-template.sh` 後の
+固有名やポートを使っていると、スロット 0 の接続先（5432 / 5433）は main の DB ではなく、同じポートで動いている
+別プロジェクトの DB になりうる。DB を分けた並行開発は Claude Code の worktree（上）を使う。
 
 ### ポート割り当て
 
@@ -184,8 +186,9 @@ main と同時に動かすなら `.env` を手で書き換える（スロット�
 `bun run worktree add dev-1` を実行すると、`scripts/worktree.sh` の `setup_worktree` が `.env` 末尾に
 スロット 1 の値を書き足す（ポート・`DATABASE_URL` / `TEST_DATABASE_URL`・Postgres のコンテナ名と volume 名。
 値は `.env` を開いて確認する）。Postgres のコンテナ名・volume 名は `app_postgres_slot1` のような固定の接頭辞で
-書き直され、main の `.env` に設定した固有名は引き継がない。pgAdmin の名前（`PGADMIN_*`）とポート 5050 は main の
-値のまま残るので、`db:up`（pgAdmin を含む全サービス）ではなく `db:up:all` を使う。
+書き直され、main の `.env` に設定した固有名は引き継がない。一方 pgAdmin の名前（`PGADMIN_*`）とポート 5050 は
+main の値のまま残るので、`db:up`（pgAdmin を含む全サービス）を使うと main と同じ名前の pgAdmin を取り合い、
+後から実行した側の `db:up` / `db:down` が「別プロジェクトの持ち物」として止まる。`db:up:all` を使う。
 
 ### 手動でポートを変更する場合
 
@@ -222,7 +225,7 @@ bun run worktree add dev-2
 `dev-<N>` の worktree には独立した DB コンテナ（スロット N のポート・コンテナ名）が自動設定されます。
 
 ```bash
-# 各 worktree で独自の DB を起動（pgAdmin は起動しない。db:up は main の pgAdmin と衝突する）
+# 各 worktree で独自の DB を起動（pgAdmin は起動しない。上の「自動設定される環境変数」）
 bun run db:up:all
 
 # マイグレーション実行
