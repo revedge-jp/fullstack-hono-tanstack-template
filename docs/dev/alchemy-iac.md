@@ -136,28 +136,15 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
 - **preview を使うプロジェクトが 1 つでもある Cloudflare アカウントには、どのプロジェクトの production も置かない**。
   production 用のアカウントの `ALCHEMY_STATE_TOKEN` と `CLOUDFLARE_API_TOKEN` はそのアカウント専用の値にする
   （同じ値を使うと、アカウントを分けても公開 URL・API 経由で届く）
-- PlanetScale のサービストークンは CF アカウントに紐づかず、発行時の権限のままだと組織の全 DB を削除できる。preview・staging・
-  production の Environment ごとに別に発行し、production 用は production の Environment にだけ置く（preview から
-  staging の state を書き換えれば、staging のデプロイが持つトークンで他の DB に手が届くため）
-- **GitHub の Environment のデプロイ元を main に限る**。保護の無い Environment の secrets は、それを参照する
-  どのジョブにも渡る。同じリポジトリの PR がワークフローを 1 本足して `environment: production` を参照すれば、
-  マージ前に production の secrets を読める。`deploy.yml` は `workflow_run` で main 上のジョブとして動くので
-  （タグ起動の production も同じ）、staging / production は main だけに制限してもデプロイは止まらない:
-
-  ```bash
-  REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-  for env in staging production; do
-    gh api -X PUT "repos/$REPO/environments/$env" --input - <<'JSON'
-  {"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
-  JSON
-    gh api -X POST "repos/$REPO/environments/$env/deployment-branch-policies" -f name=main -f type=branch
-  done
-  ```
-
-  preview は PR のブランチから動くので制限できない。preview には production に届く値を置かないことで守る。
-  使えるプラン（公開リポジトリ・Enterprise 等）なら、production に承認者（required reviewers）も付ける
+- PlanetScale のサービストークンは CF アカウントに紐づかず、発行時の権限のままだと組織の全 DB を削除できる。
+  preview Environment には production の DB に届くトークンを置かない（preview 用を別に発行する。preview に要る
+  最小の権限は未検証なので、下の「既知の制約」の付与から絞れる範囲で絞る）
 - preview ラベルを付けた PR は、push のたびに再デプロイされる。人がコードを読んで信頼できると判断した PR に
   だけ付け、読んでいない push が続くならラベルを外す
+- この節が扱うのは preview（PR のコード）から同じアカウントの state・Worker に届く経路だけ。GitHub の
+  Environment（PR がワークフローを足して `environment: production` を参照する）と、未マージのコミットへの
+  `v*` タグ push（`deploy.yml` が祖先を確かめずにそのコミットを production の資格情報で動かす）から production の
+  資格情報に届く経路は、この節の対策では塞がらない
 
 ## オプションリソース（環境変数で opt-in）
 

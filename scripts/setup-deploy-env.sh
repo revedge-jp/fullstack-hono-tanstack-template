@@ -57,7 +57,7 @@ EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ご
 SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL（例: https://<app>-staging.<subdomain>.workers.dev）。空だと smoke は skip される
 CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。同じ CF アカウントの staging / production では同じ値を使い回してよい（production を別アカウントに置くならそのアカウント用に、preview は専用に発行）。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
-PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（org: create_databases + DB read/write/delete 権限、無期限）。【Environment ごとに別に発行】し、production 用は production にだけ置く（preview は権限を preview が使う DB に絞る）。発行時のトークン名は「<APP_NAME>-<stage>」推奨（例: my-app-production）
+PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（org: create_databases + DB read/write/delete 権限、無期限）。【Environment ごとに別に発行】し、production 用は production にだけ置く（preview 用は production の DB に届かない範囲に絞る）。発行時のトークン名は「<APP_NAME>-<stage>」推奨（例: my-app-production）
 PLANETSCALE_SERVICE_TOKEN|secret|同サービストークンの secret
 ALCHEMY_STATE_TOKEN|secret|Alchemy state store の認証トークン。同じ CF アカウント内の全プロジェクト・全 stage で【同一の値】にし、別アカウントには別の値を使う（このトークンで同じアカウントの全 state を読み書きできる。docs/dev/alchemy-iac.md「state と資格情報の権限境界」）
 ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。プロジェクトごとに固有の値を推奨（openssl rand -base64 32 で生成）。既に deploy した stage の値は変えない（state 内の secrets を復号できずデプロイが止まる）
