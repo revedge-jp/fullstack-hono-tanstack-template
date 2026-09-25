@@ -66,7 +66,8 @@ cd apps/api-service && bun run lint:fix
 - 実行前に未コミット変更がないことを要求
 - 追従後に以下を自動実行
   - `bun install`（LEFTHOOK=0 で lefthook フック抑止）
-  - DB セットアップ（存在する場合）: `bun run db:generate` / `bun run db:migrate`
+  - DB セットアップ（存在する場合）: `.env` の存在確認 → `bun run db:migrate`。**どちらかが失敗すれば
+    そこで終了する**（以前は drizzle-kit の終了コードを見ず、DB 停止中でも「✅ 同期完了」と出ていた）
   - 型チェック: `bun run typecheck`
 
 使い方:
@@ -82,7 +83,9 @@ SYNC_STRATEGY=merge bun run sync-main
 トラブルシュート:
 
 - rebase/merge でコンフリクト: 解決後、`git rebase --continue` または `git rebase --abort` の上で再実行
-- DB 未起動: `bun run db:up` を先に実行してから再実行
+- DB 未起動: `bun run db:up` を先に実行してから再実行（スクリプトが `.env` の host:port へ疎通確認し、
+  つながらなければその旨を出す）
+- `.env` が無い: `cp .env.example .env`（`.claude/worktrees/` 配下なら `bash scripts/agent-worktree-setup.sh`）
 
 ### 推奨ワークフローの例
 

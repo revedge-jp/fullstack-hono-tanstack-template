@@ -60,23 +60,10 @@ git clean -fd --quiet
 echo "📦 依存関係を更新中..."
 LEFTHOOK=0 bun install --silent
 
-# Database setup via root scripts
-if [ -f "packages/database/package.json" ]; then
-  echo "🗄️ データベースをセットアップ中..."
-
-  echo "   🔄 データベースマイグレーションを実行中..."
-  MIGRATE_OUTPUT=$(bun run db:migrate 2>&1 || true)
-  if echo "${MIGRATE_OUTPUT}" | grep -q "Already in sync\|Migration.*applied"; then
-    echo "   ✅ データベースは最新です"
-  elif echo "${MIGRATE_OUTPUT}" | grep -qi "Can't reach database server"; then
-    echo "   ❌ データベースサーバーに接続できません"
-    echo "   💡 先にデータベースを起動してください: bun run db:up"
-    echo "   その後、このスクリプトを再実行してください"
-    exit 1
-  else
-    echo "   ⚠️ マイグレーションに失敗したか、新しいマイグレーションがありません（続行中...）"
-  fi
-fi
+# Database setup（.env プリフライト + マイグレーション。失敗は握り潰さない）
+# shellcheck source=./lib/db-setup.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-setup.sh"
+setup_database
 
 # Type checking
 echo "🔍 タイプチェックを実行中..."
