@@ -55,22 +55,27 @@ else
   #
   # Environment の PUT は保護設定をまるごと置き換える（送らなかった承認者・待機時間は消える）ので、既存の
   # Environment は現在の設定を読んで引き継ぐ。読めない理由が「存在しない」以外なら、消さないよう中断する
-  if env_json_err=$(gh api "repos/$REPO/environments/$STAGE" --jq '
+  # 出力は tojson で文字列にする（オブジェクトのままだと CLICOLOR_FORCE / GH_FORCE_TTY 下で色コードが混ざり、JSON が壊れる）。
+  # can_admins_bypass は既定（true）と違うときだけ送る（使えないプランでフィールドごと拒否されないように）
+  env_err_file=$(mktemp)
+  trap 'rm -f "$env_err_file"' EXIT
+  if env_body=$(gh api "repos/$REPO/environments/$STAGE" --jq '
     (.protection_rules // []) as $rules
     | ([$rules[] | select(.type == "required_reviewers")] | first) as $review
     | ([$rules[] | select(.type == "wait_timer")] | first) as $wait
     | {deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}}
-      + (if .can_admins_bypass == null then {} else {can_admins_bypass: .can_admins_bypass} end)
+      + (if .can_admins_bypass == false then {can_admins_bypass: false} else {} end)
       + (if $wait == null then {} else {wait_timer: $wait.wait_timer} end)
       + (if $review == null then {} else {
           prevent_self_review: ($review.prevent_self_review // false),
           reviewers: [$review.reviewers[] | {type: .type, id: .reviewer.id}]
-        } end)' 2>&1); then
-    env_body=$env_json_err
-  elif printf '%s' "$env_json_err" | grep -q 'HTTP 404'; then
+        } end)
+    | tojson' 2>"$env_err_file"); then
+    :
+  elif grep -q 'HTTP 404' "$env_err_file"; then
     env_body='{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}'
   else
-    echo "エラー: Environment '${STAGE}' の現在の設定を読めませんでした（既存の保護設定を消さないよう中断します）: $env_json_err" >&2
+    echo "エラー: Environment '${STAGE}' の現在の設定を読めませんでした（既存の保護設定を消さないよう中断します）: $(cat "$env_err_file")" >&2
     exit 1
   fi
   if printf '%s' "$env_body" | gh api -X PUT "repos/$REPO/environments/$STAGE" --silent --input -; then
