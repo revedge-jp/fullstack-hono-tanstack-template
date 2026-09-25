@@ -121,11 +121,10 @@ mutation testing にもカバレッジ閾値にもかからなくなる。解決
 `application/` 層に置き、adapter はその結果を pick するだけにする。
 
 **外れるのはこの2つだけではない。** `scripts/check/arch-guards.sh` も一部のガード
-（`process.env` 直参照の禁止、application 層からの infrastructure import / `fetch` 直叩き禁止等）を
+（application 層からの infrastructure import / `fetch` 直叩き禁止等）を
 `find apps/api-service/src/features ...` で走査しており、`src/shared/` を見ていない。
-`process.env` を持ったまま shared へ移すと `arch:check` は緑のまま通り、Workers では
-`process.env` がローカルの Bun と同じようには埋まらないため、**本番でだけ既定値側の分岐に
-静かに落ちる**（フラグが off 扱い、上限値が `NaN` 等）。
+shared へ移したロジックがこれらを破っても `arch:check` は緑のまま通る
+（`process.env` 直参照だけは `scripts/check/api-process-env.sh` が `src/` 全体を見ている）。
 
 重複解消のために共有化したら、移した先を `stryker.config.json` の `mutate` に**個別に列挙し**、
 `bunx stryker run --mutate '<path>'` で break 90 を満たすことを確認する。あわせて
