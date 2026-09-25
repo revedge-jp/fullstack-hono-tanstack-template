@@ -145,7 +145,7 @@ jobs:
       - uses: ./.github/actions/setup-workspace
         if: steps.readiness.outputs.ready == 'true'
 
-      # テンプレート原本では wrangler.jsonc の name が {{APP_NAME}} のままで、
+      # テンプレート原本では wrangler.jsonc の name が APP_NAME プレースホルダーのままで、
       # vite build（@cloudflare/vite-plugin の config 検証）が落ちる。APP_NAME 変数で
       # 置換してからビルドする（init-template.sh 適用済みのリポジトリでは no-op）。
       - name: Materialize APP_NAME placeholder

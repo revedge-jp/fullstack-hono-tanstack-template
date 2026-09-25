@@ -90,44 +90,16 @@ REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 # Ruleset ID を取得
 RULESET_ID=$(gh api "repos/${REPO}/rulesets" --jq '.[] | select(.name == "main-branch-protection") | .id')
 
-# Rulesetの更新（レビュー1名必須に変更）
-gh api "repos/${REPO}/rulesets/${RULESET_ID}" --method PUT --input - << 'EOF'
-{
-  "name": "main-branch-protection",
-  "target": "branch",
-  "enforcement": "active",
-  "conditions": {
-    "ref_name": {
-      "include": ["refs/heads/main"],
-      "exclude": []
-    }
-  },
-  "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
-    {
-      "type": "pull_request",
-      "parameters": {
-        "required_approving_review_count": 1,
-        "dismiss_stale_reviews_on_push": true,
-        "require_code_owner_review": false,
-        "require_last_push_approval": false,
-        "required_review_thread_resolution": true
-      }
-    },
-    {
-      "type": "required_status_checks",
-      "parameters": {
-        "strict_required_status_checks_policy": true,
-        "required_status_checks": [
-          { "context": "CI Pipeline" }
-        ]
-      }
-    }
-  ],
-  "bypass_actors": []
-}
-EOF
+# Ruleset の更新（レビュー1名必須に変更）
+# 現在の Ruleset を取得して変えたい値だけを書き換え、そのまま PUT する。PUT は rules を丸ごと
+# 置き換えるので、全体を手書きすると setup-github.sh が作った merge_queue や
+# 必須チェック（Review converged 等）が黙って消える
+gh api "repos/${REPO}/rulesets/${RULESET_ID}" \
+  | jq '{name, target, enforcement, conditions, bypass_actors,
+         rules: [.rules[] | if .type == "pull_request"
+                            then .parameters.required_approving_review_count = 1
+                            else . end]}' \
+  | gh api "repos/${REPO}/rulesets/${RULESET_ID}" --method PUT --input -
 ```
 
 ### Web UIでの変更

@@ -36,14 +36,24 @@ export TEST_DATABASE_URL="${TEST_DATABASE_URL:-${TEST_DATABASE_URL_FROM_ENV:-pos
 
 WRANGLER_JSONC="$ROOT_DIR/apps/client/wrangler.jsonc"
 DEV_VARS="$ROOT_DIR/apps/client/.dev.vars"
-APP_NAME_REPLACED=0
+# init-template.sh の置換対象にならないよう、プレースホルダーは動的に組み立てる（同スクリプトと同じ理由）
+PLACEHOLDER='{{'APP_NAME'}}'
+WRANGLER_BACKUP=""
+WRANGLER_REPLACED=""
 DEV_VARS_REPLACED=0
 
 cleanup() {
-  # {{APP_NAME}} を一時置換した場合は逆置換で戻す
-  # （git checkout はファイルの他の未コミット編集まで消してしまうため使わない）
-  if [ "$APP_NAME_REPLACED" = "1" ]; then
-    perl -pi -e 's/template-app/\{\{APP_NAME\}\}/g' "$WRANGLER_JSONC"
+  # プレースホルダーを一時置換した場合は退避したファイルで戻す（逆置換だと元からあった同じ文字列まで
+  # 戻してしまい、git checkout はファイルの他の未コミット編集まで消してしまう）
+  # 実行中に wrangler.jsonc が編集されていたら（置換直後の内容と違えば）上書きせず、退避先を知らせる
+  if [ -n "$WRANGLER_BACKUP" ]; then
+    if cmp -s "$WRANGLER_JSONC" "$WRANGLER_REPLACED"; then
+      cp "$WRANGLER_BACKUP" "$WRANGLER_JSONC"
+      rm -f "$WRANGLER_BACKUP"
+    else
+      echo "⚠️  テスト中に wrangler.jsonc が変更されたため元に戻していません。置換前の内容: $WRANGLER_BACKUP" >&2
+    fi
+    rm -f "$WRANGLER_REPLACED"
   fi
   # .dev.vars を dev 用の symlink（bun run dev が張るのと同じ）に復元する
   if [ "$DEV_VARS_REPLACED" = "1" ]; then
@@ -65,13 +75,18 @@ echo "==> Running drizzle migrations..."
 cd "$ROOT_DIR/packages/database"
 DATABASE_URL="$TEST_DATABASE_URL" bun run db:migrate
 
-# テンプレート原本（{{APP_NAME}} プレースホルダーのまま）では @cloudflare/vite-plugin が
+# テンプレート原本（APP_NAME プレースホルダーのまま）では @cloudflare/vite-plugin が
 # wrangler.jsonc の name 検証で落ち、vite dev / vite build のどちらも起動できないため、
 # 一時的に置換してテスト後に戻す（CI の置換ステップと同じ扱い）。
-if grep -q '{{APP_NAME}}' "$WRANGLER_JSONC"; then
-  echo "==> Temporarily replacing {{APP_NAME}} placeholder in wrangler.jsonc..."
-  perl -pi -e 's/\{\{APP_NAME\}\}/template-app/g' "$WRANGLER_JSONC"
-  APP_NAME_REPLACED=1
+if grep -qF "$PLACEHOLDER" "$WRANGLER_JSONC"; then
+  echo "==> Temporarily replacing the APP_NAME placeholder in wrangler.jsonc..."
+  # 退避が完了してから WRANGLER_BACKUP に入れる（途中で止まっても後始末が空のファイルで上書きしない）
+  backup="$(mktemp)"
+  cp "$WRANGLER_JSONC" "$backup"
+  WRANGLER_REPLACED="$(mktemp)"
+  WRANGLER_BACKUP="$backup"
+  PLACEHOLDER="$PLACEHOLDER" perl -pi -e 's/\Q$ENV{PLACEHOLDER}\E/template-app/g' "$WRANGLER_JSONC"
+  cp "$WRANGLER_JSONC" "$WRANGLER_REPLACED"
 fi
 
 if [ "$PROD_SHAPE" = "1" ]; then

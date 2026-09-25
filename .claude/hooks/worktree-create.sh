@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # Claude Code の WorktreeCreate フック。
-# 移植元: kikagaku/kikagaku-training-portal#1292 → revedge-jp/chiryonavi#1218 / #1222。
 #
 # 重要: これは「後処理フック」ではなく「置換フック」。設定されている場合 Claude Code は自前の
 # `git worktree add` を実行せず、このスクリプトが worktree を作って *絶対パスだけ* を stdout に
@@ -15,7 +14,7 @@
 # 注意: 変数の直後に全角文字を続けるときは必ず ${VAR} と書く。macOS 標準の bash 3.2 は UTF-8
 # ロケールで、波括弧なしの変数参照の直後にある全角文字の先頭バイトを変数名の一部と解釈し、
 # unbound variable で落ちる
-# （置換フックなので worktree が1つも作れなくなる。移植元 chiryonavi#1222 で実際に踏んだ）。
+# （置換フックなので worktree が1つも作れなくなる。派生プロダクトで実際に踏んだ）。
 
 set -euo pipefail
 

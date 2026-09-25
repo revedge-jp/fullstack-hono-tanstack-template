@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
 # Claude Code の WorktreeRemove フック。
-# 移植元: kikagaku/kikagaku-training-portal#1292 → revedge-jp/chiryonavi#1218 / #1222。
 # WorktreeCreate フックで作られた worktree の後始末を担当する。
 # ここで失敗（非ゼロ終了）した場合、Claude Code は worktree を消さずに残す。
 #

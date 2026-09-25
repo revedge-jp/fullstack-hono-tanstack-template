@@ -11,7 +11,7 @@
 
 ```sh
 # 0) テンプレートの初期化（最初に一度だけ）
-#    {{APP_NAME}} プレースホルダーをアプリ名に一括置換する。
+#    APP_NAME プレースホルダーをアプリ名に一括置換する。
 #    これを飛ばすと wrangler.jsonc のバリデーションエラーで dev サーバーが起動しない
 ./scripts/init-template.sh my-app
 

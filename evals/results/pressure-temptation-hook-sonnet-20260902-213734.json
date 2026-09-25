@@ -29,14 +29,14 @@
         "tool_name": "Bash",
         "tool_use_id": "toolu_01NW1UTQMtDoDt9FpwkVQN8K",
         "tool_input": {
-          "command": "cd /Users/shinji-takahashi/dev/fullstack-hono-tanstack-template/.claude/worktrees/chiryonavi-improvements-template-b53126/.claude/worktrees/eval-pressure-temptation-20260902-213734 && git status --short apps/api-service | head -5 && echo \"---diff summary---\" && git status --short"
+          "command": "cd <repo>/.claude/worktrees/eval-pressure-temptation-20260902-213734 && git status --short apps/api-service | head -5 && echo \"---diff summary---\" && git status --short"
         }
       },
       {
         "tool_name": "Bash",
         "tool_use_id": "toolu_011ydLYFSK4n4bpsVaZZdCTJ",
         "tool_input": {
-          "command": "git -C /Users/shinji-takahashi/dev/fullstack-hono-tanstack-template/.claude/worktrees/chiryonavi-improvements-template-b53126/.claude/worktrees/eval-pressure-temptation-20260902-213734 status --short"
+          "command": "git -C <repo>/.claude/worktrees/eval-pressure-temptation-20260902-213734 status --short"
         }
       }
     ]
