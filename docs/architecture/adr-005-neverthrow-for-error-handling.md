@@ -42,15 +42,15 @@ api-service は Clean Architecture + ROP（Railway Oriented Programming）を採
 
 ```typescript
 const result = await getSession(request);
-//    型: ResultAsync<AuthUser, "Unauthorized" | "Unexpected">
+//    型: ResultAsync<{ user: AuthUser; setCookieHeaders: string[] }, "Unauthorized" | "Unexpected">
 
-// result.email は存在しない（result は AuthUser ではなく Result）→ コンパイルエラー
+// result.user は存在しない（result は成功値ではなく Result）→ コンパイルエラー
 if (result.isErr()) {
   // result.error は "Unauthorized" | "Unexpected"。ここで処理しないと先へ進めない
   // （presentation 層では toHttp(c, result, errorMap) でまとめて HTTP に変換する）
   return handleError(result.error);
 }
-const user = result.value; // ここで初めて AuthUser が手に入る
+const { user } = result.value; // ここで初めて AuthUser が手に入る
 ```
 
 これにより「特定のエラーケースの処理を書き忘れ、稀な条件で落ちる」という、

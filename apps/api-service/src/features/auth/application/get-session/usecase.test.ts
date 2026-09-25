@@ -12,15 +12,17 @@ const mockUser: AuthUser = {
 };
 
 describe("auth.getSession usecase", () => {
-  test("正常: 有効なセッションで AuthUser を返す", async () => {
-    const verifySession = () => okAsync(mockUser);
+  test("正常: 有効なセッションで AuthUser と Set-Cookie を返す", async () => {
+    const setCookieHeaders = ["better-auth.session_token=abc; Max-Age=604800"];
+    const verifySession = () => okAsync({ user: mockUser, setCookieHeaders });
     const getSession = makeGetSession({ verifySession });
 
     const r = await getSession(new Request("http://localhost"));
     expect(r.isOk()).toBe(true);
     if (r.isOk()) {
-      expect(r.value.email).toBe("test@example.com");
-      expect(r.value.name).toBe("Test User");
+      expect(r.value.user.email).toBe("test@example.com");
+      expect(r.value.user.name).toBe("Test User");
+      expect(r.value.setCookieHeaders).toEqual(setCookieHeaders);
     }
   });
 

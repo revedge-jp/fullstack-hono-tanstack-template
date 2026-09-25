@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { createInProcessApiClient } from "@/shared/lib/api-client";
+import { createInProcessApiClient, getApiClient } from "@/shared/lib/api-client";
 
 import server, {
   isNonHtmlPageRequest,
   isProductionEnv,
   releaseAfterResponse,
+  renderWithInProcessApi,
+  withForwardedSetCookies,
   withSecurityHeaders,
 } from "./server";
 
@@ -199,6 +201,87 @@ describe("createInProcessApiClient のヘッダー注入", () => {
 
     const headers = captured[0]!.headers;
     expect(headers.get("x-request-id")).toBe("explicit");
+  });
+});
+
+// api-service はセッション検証のついでに、有効期限を延ばした session_token を Set-Cookie で返す。
+// in-process で呼んだ応答はブラウザに届かないので、集めて外側のレスポンスに付けないと、SSR だけで
+// 画面を行き来している間は cookie が延びずにサインインから 7 日で切れる。
+describe("in-process で呼んだ API の Set-Cookie", () => {
+  const setCookieHeaders = [
+    "better-auth.session_token=abc; Max-Age=604800; Path=/; HttpOnly",
+    "better-auth.session_data=xyz; Expires=Fri, 02 Oct 2026 00:00:00 GMT; Path=/",
+  ];
+
+  test("createInProcessApiClient は応答の Set-Cookie を onSetCookie に渡す", async () => {
+    const received: string[][] = [];
+    const app = {
+      request: () => {
+        const headers = new Headers({ "content-type": "application/json" });
+        for (const value of setCookieHeaders) {
+          headers.append("set-cookie", value);
+        }
+        return new Response(JSON.stringify({ ok: true }), { headers });
+      },
+    };
+    const client = createInProcessApiClient(app, "rid", (values) => received.push(values));
+
+    await client.api.health.$get();
+
+    expect(received).toEqual([setCookieHeaders]);
+  });
+
+  test("Set-Cookie が無い応答では onSetCookie を呼ばない", async () => {
+    let called = false;
+    const client = createInProcessApiClient({ request: () => new Response("{}") }, "rid", () => {
+      called = true;
+    });
+
+    await client.api.health.$get();
+
+    expect(called).toBe(false);
+  });
+
+  test("withForwardedSetCookies は 1 つずつ別の Set-Cookie として足し、元の Set-Cookie も残す", () => {
+    const original = new Response("ok", { status: 201, headers: { "set-cookie": "own=1" } });
+
+    const res = withForwardedSetCookies(original, setCookieHeaders);
+
+    expect(res.status).toBe(201);
+    expect(res.headers.getSetCookie()).toEqual(["own=1", ...setCookieHeaders]);
+  });
+
+  test("renderWithInProcessApi: render 中に in-process で呼んだ API の Set-Cookie がページのレスポンスに付く", async () => {
+    const honoApp = {
+      request: () => {
+        const headers = new Headers({ "content-type": "application/json" });
+        for (const value of setCookieHeaders) {
+          headers.append("set-cookie", value);
+        }
+        return new Response(JSON.stringify({ ok: true }), { headers });
+      },
+    };
+    // TanStack Start の handler の代わりに、loader と同じく getApiClient() で API を呼ぶ render
+    const render = async () => {
+      await getApiClient().api.health.$get();
+      return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+    };
+
+    const res = await renderWithInProcessApi(
+      render,
+      honoApp,
+      new Request("https://app.example.com/tasks"),
+      "rid",
+    );
+
+    expect(res.headers.getSetCookie()).toEqual(setCookieHeaders);
+    expect(await res.text()).toBe("<html></html>");
+  });
+
+  test("足すものが無ければ元のレスポンスをそのまま返す", () => {
+    const original = new Response("ok");
+
+    expect(withForwardedSetCookies(original, [])).toBe(original);
   });
 });
 

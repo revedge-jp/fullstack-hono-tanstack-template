@@ -1,5 +1,6 @@
 import type { makeGetSession } from "@app/features/auth/application/get-session/usecase";
 import type { AuthUser } from "@app/features/auth/domain/models";
+import { appendSetCookieHeaders } from "@app/shared/http/set-cookie";
 import { toHttp } from "@app/shared/http/to-http";
 import { createMiddleware } from "hono/factory";
 
@@ -20,7 +21,10 @@ export function requireAuth(getSession: ReturnType<typeof makeGetSession>) {
     if (session.isErr()) {
       return toHttp(c, session, { Unauthorized: 401, Unexpected: 500 });
     }
-    c.set("user", session.value);
+    c.set("user", session.value.user);
     await next();
+    // セッション延長の Set-Cookie は next() の後、出来上がったレスポンスに付ける。前に c.header で
+    // 付けると、ハンドラが new Response(...) を直接返したときに消える
+    appendSetCookieHeaders(c, session.value.setCookieHeaders);
   });
 }

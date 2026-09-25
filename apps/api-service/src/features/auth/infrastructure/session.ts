@@ -7,12 +7,17 @@ import { reconstituteAuthUser } from "../domain/models";
 type Logger = { error: (obj: unknown, msg?: string) => void };
 
 /**
- * リクエストからセッションを検証して AuthUser を返す。
+ * リクエストからセッションを検証して AuthUser と、レスポンスに付けるべき Set-Cookie を返す。
  * Better Auth の session API を薄くラップする。
+ *
+ * returnHeaders を付けないと、Better Auth は DB 上のセッションの有効期限を延ばしたうえで、その
+ * Set-Cookie（session_token の新しい Max-Age、cookieCache の session_data）を捨てる。ブラウザは
+ * /api/auth/get-session を叩かないので、ここで拾わないと cookie が更新される経路が無くなる。
  */
 export function makeVerifySession(auth: Auth, logger: Logger) {
   return function verifySession(request: Request) {
-    return ResultAsync.fromPromise(auth.api.getSession({ headers: request.headers }), (e) => {
+    const verification = auth.api.getSession({ headers: request.headers, returnHeaders: true });
+    return ResultAsync.fromPromise(verification, (e) => {
       const apiError = readAuthApiError(e);
       // セッション更新中に別リクエストがそのセッションを削除した(サインアウト等)ときは
       // APIError(UNAUTHORIZED) で reject される。障害ではなく未認証なので 401 にする。
@@ -28,17 +33,18 @@ export function makeVerifySession(auth: Auth, logger: Logger) {
         "verifySession unexpected error",
       );
       return "Unexpected" as const;
-    }).andThen((session) => {
+    }).andThen(({ headers, response: session }) => {
       if (!session?.user) {
         return err("Unauthorized" as const);
       }
-      return ok(
-        reconstituteAuthUser({
+      return ok({
+        user: reconstituteAuthUser({
           id: session.user.id,
           email: session.user.email,
           name: session.user.name,
         }),
-      );
+        setCookieHeaders: headers.getSetCookie(),
+      });
     });
   };
 }

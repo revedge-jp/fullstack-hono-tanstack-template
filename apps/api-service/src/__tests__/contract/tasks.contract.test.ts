@@ -32,7 +32,10 @@ type MockTasks = {
   getTask?: () => ResultAsync<typeof mockTask, "NotFound" | "Unexpected">;
   advanceTask?: () => ResultAsync<typeof mockTask, "AlreadyDone" | "NotFound" | "Unexpected">;
   deleteTask?: () => ResultAsync<void, "NotFound" | "Unexpected">;
-  getSession?: () => ResultAsync<AuthUser, "Unauthorized" | "Unexpected">;
+  getSession?: () => ResultAsync<
+    { user: AuthUser; setCookieHeaders: string[] },
+    "Unauthorized" | "Unexpected"
+  >;
 };
 
 // createFakeApp に tasks service（メソッド単位で差し替え）と getSession を注入する。
@@ -49,7 +52,7 @@ function createTestApp(overrides: MockTasks = {}) {
   return createFakeApp({
     user: mockUser,
     tasks,
-    getSession: overrides.getSession ?? (() => okAsync(mockUser)),
+    getSession: overrides.getSession ?? (() => okAsync({ user: mockUser, setCookieHeaders: [] })),
   });
 }
 
