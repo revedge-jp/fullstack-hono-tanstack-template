@@ -126,6 +126,15 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 - テストの assert が意味のある値を検証しているか（`toBeTruthy()` のみ、空の期待値等は不十分）
 - エラーパス・異常系のテストケースが含まれているか
 
+### 3-G: 指示ファイルのサンプルとの整合
+
+- 参照実装（`apps/api-service/src/features/tasks`・`apps/api-service/src/integrations/composition`・
+  `apps/api-service/src/test-helpers`・`apps/client/features/tasks`・`apps/client/shared/lib`）の形
+  （関数のシグネチャ、エラー型の正規化、ファイル構成、呼び出し方）を変えたのに、`apps/*/AGENTS.md` の
+  サンプルコードや構造図が古い形のまま残っていないか
+  - 実害: サンプルは新しい feature を書くときの型紙として写されるので、ずれた形がそのまま量産される
+    （文字列では照合できないため機械検査にはしていない）
+
 ---
 
 ## Step 4: セキュリティ（独立して確認）
