@@ -17,11 +17,11 @@ describe("tasks.createTask action", () => {
     expect(api.state.lastPath).toBe("api.tasks.$post");
   });
 
-  test("異常: API がエラーを返す場合 { ok: false, message } を返す", async () => {
+  test("異常: API のエラーコードは生のまま出さず日本語の文言に置き換える", async () => {
     api.state.ok = false;
     api.state.body = { ok: false, error: "Conflict" };
     const result = await createTask({ title: "Write docs" });
-    expect(result).toEqual({ ok: false, message: "Conflict" });
+    expect(result).toEqual({ ok: false, message: "同じタイトルのタスクが既にあります" });
   });
 
   test("異常: エラーレスポンスの形が想定外の場合は既定メッセージ", async () => {
@@ -29,5 +29,14 @@ describe("tasks.createTask action", () => {
     api.state.body = { unexpected: true };
     const result = await createTask({ title: "Write docs" });
     expect(result).toEqual({ ok: false, message: "タスクの作成に失敗しました" });
+  });
+
+  test("異常: 通信に失敗しても reject せず { ok: false, message } を返す", async () => {
+    api.state.callError = new TypeError("Failed to fetch");
+    const result = await createTask({ title: "Write docs" });
+    expect(result).toEqual({
+      ok: false,
+      message: "通信に失敗しました。接続を確認して再度お試しください",
+    });
   });
 });

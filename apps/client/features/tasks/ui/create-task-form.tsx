@@ -39,6 +39,7 @@ export function CreateTaskForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="例: 資料を作成する"
+          maxLength={200}
           className="flex-1"
           disabled={pending}
         />

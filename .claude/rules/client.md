@@ -16,6 +16,14 @@ paths:
 派生プロダクトの実測で actions テストの21%・queries テストの25%（計4,100行）に達した。
 実例: `features/tasks/actions/create-task.test.ts` / `features/tasks/queries/get-tasks.test.ts`。
 
+## actions は `toActionResult`（`shared/lib/action-error.ts`）を通す
+
+API のエラーコード（`"Conflict"` 等）を `message` にそのまま入れて画面に出さない。また fetch 自体の
+失敗（オフライン等）で action が reject すると、呼び出し側の pending 状態が戻らずフォームが固まる。
+`toActionResult(() => apiClient.api.xxx.$post(...), { messages, fallback })` はどちらも防ぐ —
+reject せず、コードを日本語文言に置き換え、`messages` のキーをルートの型から推論するので API 側に
+コードが増えると typecheck で対応表の不足が分かる。実例: `features/tasks/actions/create-task.ts`。
+
 ## 機械的に強制される規約（arch:guards）
 
 - **`window.location.href` への代入禁止**。TanStack Router の `router.navigate()` / `useNavigate()` を使う。
