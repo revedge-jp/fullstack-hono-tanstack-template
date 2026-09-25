@@ -16,33 +16,31 @@ export function ErrorFallbackContent(props: { error: Error; description?: string
   }, [props.error]);
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <EmptyState
-        title="問題が発生しました"
-        description={props.description ?? "時間をおいて再度お試しください。"}
-        action={
-          // 開発時のエラーメッセージも EmptyState の塊の中に入れ、見出し・本文と行頭を揃える
-          <div className="flex flex-col items-start gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className={buttonVariants({ variant: "default" })}
-              >
-                再読み込み
-              </button>
-              <Link to="/" className={buttonVariants({ variant: "outline" })}>
-                ホームへ戻る
-              </Link>
-            </div>
-            {/* 生のエラーメッセージは内部情報を含みうるため開発時のみ表示する。
-                サーバー側には requestId 付きの構造化ログが残る(app/server.ts / requestLogger) */}
-            {import.meta.env.DEV ? (
-              <p className="text-sm text-destructive opacity-70">{props.error.message}</p>
-            ) : null}
+    <EmptyState
+      title="問題が発生しました"
+      description={props.description ?? "時間をおいて再度お試しください。"}
+      action={
+        // 開発時のエラーメッセージも EmptyState の塊の中に入れ、見出し・本文と行頭を揃える
+        <div className="flex flex-col items-start gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className={buttonVariants({ variant: "default" })}
+            >
+              再読み込み
+            </button>
+            <Link to="/" className={buttonVariants({ variant: "outline" })}>
+              ホームへ戻る
+            </Link>
           </div>
-        }
-      />
-    </div>
+          {/* 生のエラーメッセージは内部情報を含みうるため開発時のみ表示する。
+              サーバー側には requestId 付きの構造化ログが残る(app/server.ts / requestLogger) */}
+          {import.meta.env.DEV ? (
+            <p className="text-sm text-destructive opacity-70">{props.error.message}</p>
+          ) : null}
+        </div>
+      }
+    />
   );
 }
