@@ -1,9 +1,12 @@
+import { stripBindParams } from "./strip-bind-params.js";
+
 /**
- * 任意のオブジェクトを安全に文字列化する（循環参照に対応）
+ * 任意のオブジェクトを安全に文字列化する（循環参照に対応）。
+ * Error のメッセージに埋め込まれた SQL のバインド値は切り落とす。
  */
 export function stringifyErrorSafe(err: unknown): string {
   if (err instanceof Error) {
-    return err.message;
+    return stripBindParams(err.message);
   }
   if (typeof err === "object" && err !== null) {
     try {

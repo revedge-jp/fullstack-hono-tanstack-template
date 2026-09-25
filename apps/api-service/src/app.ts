@@ -7,7 +7,7 @@ import type { TasksService } from "@app/features/tasks/application/service";
 import { createTasksRouter } from "@app/features/tasks/presentation";
 import type { DevAuth } from "@app/integrations/external/dev-auth";
 import { createDevAuthRouter } from "@app/routes/dev-auth";
-import { stringifyErrorSafe } from "@repo/logging";
+import { stringifyErrorSafe, stripBindParamsFromStack } from "@repo/logging";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
@@ -109,9 +109,25 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
   // 含め常に 404 になる)。単純な "*" はどちらのルータでも複数階層のパスに正しくマッチする
   // ため、フォールバック先でも安全に動く "*" を使う。他 feature で新しいルートを追加する
   // たびにこのルートが無関係に壊れる非決定的な障害を防ぐための恒久対応。
-  app.on(["GET", "POST", "PUT", "PATCH", "DELETE"], "/api/auth/*", (c) =>
-    runtime.auth.handler(c.req.raw),
-  );
+  app.on(["GET", "POST", "PUT", "PATCH", "DELETE"], "/api/auth/*", async (c) => {
+    const res = await runtime.auth.handler(c.req.raw);
+    // APIError 以外の例外は onAPIError の設定で onError へ届くが、APIError(INTERNAL_SERVER_ERROR)
+    // は better-call がそのまま 500 レスポンスにするので、ここで拾わないとどこにも error ログが
+    // 残らない(integrations/external/auth.ts の onAPIError 参照)。
+    if (res.status >= 500) {
+      const log = c.get("logger") ?? runtime.logger;
+      log.error(
+        {
+          method: c.req.method,
+          path: new URL(c.req.url).pathname,
+          status: res.status,
+          err: `Better Auth responded ${res.status}`,
+        },
+        "better-auth server error",
+      );
+    }
+    return res;
+  });
 
   const routes = app
     .route("/api/health", createHealthRouter({ db: runtime.db, info: toHealthInfo(config) }))
@@ -152,7 +168,7 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
 
       if (config.nodeEnv !== "production") {
         const stack = err instanceof Error ? err.stack : undefined;
-        const detail = stack ?? message;
+        const detail = stack === undefined ? message : stripBindParamsFromStack(stack);
         return c.json(
           {
             ok: false,

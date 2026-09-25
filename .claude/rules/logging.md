@@ -20,6 +20,11 @@ Observability データセットに入る。そのためこの規約は両方に
   - Better Auth: `logger` オプションに pino を委譲（`integrations/external/auth.ts` の
     `toBetterAuthLoggerOption`）。未設定だと DB 障害時に SQL 文とバインド値が
     `$metadata.error` に丸ごと載る
+  - Better Auth のルーター（better-call）: APIError 以外の例外は `logger` と無関係に
+    `console.error("# SERVER_ERROR: ", …)` で出す。`onAPIError: { throw: true }` で Hono の
+    `onError` へ再送出している（同ファイルの `createAuth`）。外すと上と同じ漏れ方をする
+  - Hono の `onError` の `err` は `stringifyErrorSafe` を通すので、DrizzleQueryError のメッセージに
+    埋め込まれたバインド値（`\nparams: …`）は切り落とされる。redact はキー単位で文字列の中身に届かない
   - postgres.js: `onnotice` に pino を委譲（`packages/database/src/index.ts`）。
     未設定だと DB の NOTICE が素の `console.log` に出る
 - **`error` / `err` キーは「5xx・未捕捉例外」専用**。Cloudflare はこの2つのキーの値を

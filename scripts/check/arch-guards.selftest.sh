@@ -92,6 +92,24 @@ expect_guard "throw 禁止" \
   'export function selftestThrow() { throw new Error("x"); }' \
   "throw の使用が禁止"
 
+# プロパティキーとしての throw(Better Auth の onAPIError)は許容し、同じファイルの throw 文は検出する
+expect_guard "throw 禁止（プロパティキーと並んでも throw 文は検出）" \
+  guard_no_throw \
+  "$D/application/__selftest_throw_key.ts" \
+  'export const selftestOptions = { throw: true };
+export function selftestThrow() { throw new Error("x"); }' \
+  "__selftest_throw_key.ts:2:"
+THROW_KEY_NEG="$D/application/__selftest_throw_key_only.ts"
+mkfix "$THROW_KEY_NEG" 'export const selftestOptions = { throw: true };'
+throw_key_out=$(run_guard guard_no_throw 2>&1)
+if printf '%s' "$throw_key_out" | grep -qF "__selftest_throw_key_only.ts"; then
+  echo "❌ throw 禁止: プロパティキーの throw を違反として誤検出しました"
+  FAIL=1
+else
+  echo "✅ throw 禁止（プロパティキーは許容）"
+fi
+rm -f "$THROW_KEY_NEG"
+
 expect_guard "class 禁止" \
   guard_no_class_interface \
   "$D/application/__selftest_class.ts" \

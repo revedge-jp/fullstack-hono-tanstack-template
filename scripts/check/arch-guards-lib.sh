@@ -107,10 +107,12 @@ guard_no_throw() {
   echo "[guard] api-service の throw 禁止（middlewares・起動時 config 検証・テストは除外）"
   # 除外対象を先に -prune し、ファイルのみを -type f で絞り込む
   # config.ts は起動時（リクエスト処理の外）の fail-fast 検証であり、ROP フローの対象外のため除外する
+  # 同じ語がオブジェクトのプロパティキーとして現れる行（Better Auth の `onAPIError: { throw: true }`）は
+  # 文ではないので除外する。キーの直後は必ず `:` になり、throw 文の直後には来ない
   THROW_VIOL=$(find apps/api-service/src \
     \( -path '*/__tests__/*' -o -name '*.test.ts' -o -name '*.spec.ts' -o -path '*/middlewares/*' -o -name 'config.ts' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
-    xargs -0 grep -nE '\bthrow\b' -- || true)
+    xargs -0 grep -nE '\bthrow\b' -- | grep -vE '\bthrow[[:space:]]*:' || true)
   if [ -z "$THROW_VIOL" ]; then
     echo "OK"
   else

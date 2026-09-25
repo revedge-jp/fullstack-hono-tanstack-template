@@ -7,6 +7,13 @@ describe("stringifyErrorSafe", () => {
     expect(stringifyErrorSafe(new Error("boom"))).toBe("boom");
   });
 
+  test("Error のメッセージに埋め込まれた SQL のバインド値は切り落とす", () => {
+    const err = new Error(
+      'Failed query: select * from "user" where "email" = $1\nparams: secret@example.com',
+    );
+    expect(stringifyErrorSafe(err)).toBe('Failed query: select * from "user" where "email" = $1');
+  });
+
   test("JSON 化できるオブジェクトは JSON を返す", () => {
     expect(stringifyErrorSafe({ code: "E1" })).toBe('{"code":"E1"}');
   });
