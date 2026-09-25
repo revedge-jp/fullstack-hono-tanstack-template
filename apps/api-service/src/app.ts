@@ -19,7 +19,7 @@ import { timing } from "hono/timing";
 
 import { type AppConfig, loadConfig } from "./config";
 import { createContainer } from "./container";
-import { rateLimit } from "./middlewares/rate-limit";
+import { createRateLimitStore, rateLimit, type RateLimitStore } from "./middlewares/rate-limit";
 import { type RequestLogger, requestLogger } from "./middlewares/request-logger";
 import { createClientErrorsRouter } from "./routes/client-errors";
 import { createHealthRouter, type HealthDb } from "./routes/health";
@@ -42,9 +42,25 @@ type BuildConfig = Pick<
   "nodeEnv" | "corsOrigin" | "requestTimeoutMs" | "rateLimit" | "version"
 >;
 
+export type RateLimitStores = { auth: RateLimitStore; clientErrors: RateLimitStore };
+
+export function createRateLimitStores(): RateLimitStores {
+  return { auth: createRateLimitStore(), clientErrors: createRateLimitStore() };
+}
+
+// Workers は createApp → buildApp をリクエストごとに呼ぶ（client の app/server.ts）ため、
+// カウントはここ（モジュールスコープ = isolate 単位）に置く。buildApp の中で作ると毎回 0 から数え直し、
+// レート制限が一度も効かない。
+const isolateRateLimitStores = createRateLimitStores();
+
 // ミドルウェアスタック + ルーティングの唯一の組み立て箇所。createApp（本番）と
-// createFakeApp（テスト）の両方がここを共有する。
-export function buildApp(config: BuildConfig, runtime: AppRuntime) {
+// createFakeApp（テスト）の両方がここを共有する。rateLimitStores はテストが呼び出しごとに
+// 新しいものを渡してテスト間でカウントを共有しないためのもので、本番は既定の isolate 共有を使う。
+export function buildApp(
+  config: BuildConfig,
+  runtime: AppRuntime,
+  rateLimitStores: RateLimitStores = isolateRateLimitStores,
+) {
   const app = createHonoApp();
   app.use(
     "*",
@@ -93,13 +109,21 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
   // Better Auth ハンドラの手前でレート制限をかける。制限値は config 経由（DI）で渡す。
   app.use(
     "/api/auth/*",
-    rateLimit({ windowMs: config.rateLimit.windowMs, max: config.rateLimit.max }),
+    rateLimit({
+      windowMs: config.rateLimit.windowMs,
+      max: config.rateLimit.max,
+      store: rateLimitStores.auth,
+    }),
   );
   // クライアントエラー通報。認証の無い公開エンドポイントで、ブラウザがエラーごとに叩くため、
   // ログ洪水を防ぐレート制限をかける(専用しきい値は設けず既存設定を流用)。
   app.use(
     "/api/client-errors/*",
-    rateLimit({ windowMs: config.rateLimit.windowMs, max: config.rateLimit.max }),
+    rateLimit({
+      windowMs: config.rateLimit.windowMs,
+      max: config.rateLimit.max,
+      store: rateLimitStores.clientErrors,
+    }),
   );
   // 二重ワイルドカード "/api/auth/**" は使わない: Hono の RegExpRouter は「同じ深さで
   // 静的セグメントと :param が競合する」ルート(例: 他featureの `/:id` に対する
@@ -145,17 +169,31 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
     .get("/", (c) => c.json({ ok: true, message: "Hello Server!" }))
     .notFound((c) => c.json({ ok: false, error: "Not Found" }, 404))
     .onError((err, c) => {
+      const rid = c.get("requestId");
+      // requestLogger ミドルウェアより前で落ちた場合に備え、runtime.logger にフォールバック
+      const log = c.get("logger") ?? runtime.logger;
+
       // timeout / bodyLimit などが投げる HTTPException は、その意図した
-      // ステータス・レスポンスをそのまま返す（500 に握り潰さない）。
+      // ステータス・レスポンスをそのまま返す（500 に握り潰さない）。5xx（timeout の 504 等）は
+      // アクセスログの status にしか残らず、DB のハング等が Errors に出ないので error で記録する。
       if (err instanceof HTTPException) {
+        if (err.status >= 500) {
+          log.error(
+            {
+              requestId: rid,
+              method: c.req.method,
+              path: new URL(c.req.url).pathname,
+              status: err.status,
+              err: `HTTPException ${err.status}`,
+            },
+            "http exception",
+          );
+        }
         return err.getResponse();
       }
 
-      const rid = c.get("requestId");
       const message = stringifyErrorSafe(err);
 
-      // requestLogger ミドルウェアより前で落ちた場合に備え、runtime.logger にフォールバック
-      const log = c.get("logger") ?? runtime.logger;
       log.error(
         {
           requestId: rid,

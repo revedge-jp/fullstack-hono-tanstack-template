@@ -107,6 +107,10 @@ SSR 側のエラーは `apps/client/app/server.ts` が observability に出す�
 `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`（既定 60 秒あたり 20 リクエスト）。超えると 429 と
 `Retry-After` を返す。カウントは経路ごとに別々に持つ。
 
+カウントは `app.ts` のモジュールスコープ（isolate 単位）に置いている。Workers はアプリを
+リクエストごとに組み立て直すので、ミドルウェアの中にカウントを持たせると毎回 0 から数え直して
+一度も制限が効かない（`rate-limit.ts` の `RateLimitStore` 参照）。
+
 ただしカウントは **isolate のメモリにしか持たない**ため、次の限界がある:
 
 - Workers の isolate をまたいで共有されない。リクエストが複数の isolate に振り分けられると
