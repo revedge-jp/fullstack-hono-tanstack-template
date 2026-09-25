@@ -29,5 +29,19 @@
     "  \"reason\": \"到達しない理由(実測方法込み)\", \"paths\": [\"依存経路\"],",
     "  \"reviewedOn\": \"YYYY-MM-DD\", \"expiresOn\": \"YYYY-MM-DD\" }"
   ],
-  "allowed": []
+  "allowed": [
+    {
+      "advisory": "GHSA-4x5r-pxfx-6jf8",
+      "package": "@babel/core",
+      "reason": "7.29.0 は TanStack Start / Router の Vite プラグイン（ルートのコード分割・dead code elimination）がビルド時に使うだけで、Worker のバンドルに入らない。実測: apps/client を vite build し、dist/server と dist/client を @babel/core 7.29.0 の lib に存在する固有語（loadPartialConfig / transformFromAstAsync / babelrcRoots）で grep して 0 件（同じ語は lib 側で 4〜6 ファイルに出る陽性対照あり）。root の overrides で寄せないのは、Stryker 10 が 8 系を要求しており、Bun の override はパッケージ全体を1つの版に寄せるため",
+      "paths": [
+        "client → @tanstack/react-start → @tanstack/start-plugin-core → @babel/core@7.29.0",
+        "client → @tanstack/react-start → @tanstack/start-plugin-core → @tanstack/router-plugin → @babel/core@7.29.0",
+        "@tanstack/start-plugin-core → babel-dead-code-elimination → @babel/core@7.29.0",
+        "@babel/helper-module-transforms@7.28.6 (peer) → @babel/core@7.29.0"
+      ],
+      "reviewedOn": "2026-09-25",
+      "expiresOn": "2026-12-25"
+    }
+  ]
 }
