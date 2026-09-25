@@ -246,13 +246,13 @@ guard_no_legacy_integration_alias() {
 }
 
 guard_server_fn_placement() {
-  echo "[guard] createServerFn の配置（features/**/queries/** または features/**/actions/** のみ許容）"
-  SA_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/actions/*' ! -path '*/queries/*' ! -name '*.test.ts' -print0 2>/dev/null |
+  echo "[guard] createServerFn の配置（features/**/queries/** のみ許容）"
+  SA_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/queries/*' ! -name '*.test.ts' -print0 2>/dev/null |
     xargs -0 grep -nE "\bcreateServerFn\(" || true)
   if [ -z "$SA_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: createServerFn は features/**/queries/**（取得）か features/**/actions/**（更新）に置いてください"
+    echo "違反: createServerFn は features/**/queries/**（SSR の取得）にだけ置いてください。mutation はサーバー関数にせず、ブラウザから Hono RPC を直接呼ぶ平関数を actions/ に置きます（apps/client/AGENTS.md）"
     echo "$SA_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done

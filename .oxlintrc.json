@@ -85,8 +85,9 @@
       }
     },
     {
-      // ロガー実装そのものと、ロガーを組み立てる前に動く Bun の起動エントリ（ローカル専用）
-      "files": ["apps/*/src/index.ts", "packages/logging/src/**/*"],
+      // ロガー実装そのものと、ロガーを組み立てる前に動く Bun の起動エントリ（ローカル専用）、
+      // alchemy CLI が実行するデプロイ定義（console.info で ::add-mask:: を CI に渡す）
+      "files": ["apps/*/src/index.ts", "packages/logging/src/**/*", "alchemy.run.ts"],
       "rules": {
         "no-console": "off"
       }

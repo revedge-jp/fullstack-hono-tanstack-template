@@ -186,11 +186,20 @@ expect_guard "client features process.env 直接参照禁止" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "client features 配下で process.env を直接参照できません"
 
-expect_guard "createServerFn の配置（queries / actions 以外は禁止）" \
+expect_guard "createServerFn の配置（queries 以外は禁止）" \
   guard_server_fn_placement \
   "apps/client/features/__selftest/ui/x.tsx" \
   'import { createServerFn } from "@tanstack/react-start";
 export const selftestFn = createServerFn().handler(() => null);' \
+  "createServerFn は features/**/queries/**"
+
+# mutation を createServerFn にして actions/ に置く形も検出する（Workers では自オリジンへの
+# ループバックができない。apps/client/AGENTS.md）
+expect_guard "createServerFn の配置（actions/ の mutation も禁止）" \
+  guard_server_fn_placement \
+  "apps/client/features/__selftest/actions/x.ts" \
+  'import { createServerFn } from "@tanstack/react-start";
+export const selftestFn = createServerFn({ method: "POST" }).handler(() => null);' \
   "createServerFn は features/**/queries/**"
 
 # client のスタイル規約(client-styles.mjs)は規則ごとに 1 件ずつ既知違反を置く。
@@ -348,6 +357,9 @@ mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
 export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
 export const D = () => <p>© 2026 → 次へ</p>;
 export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /></svg>;'
+# style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
+mkfix "apps/client/components/__selftest/selftest-style-ok.tsx" \
+  'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'
 if STYLE_OK_OUT=$(node scripts/check/client-styles.mjs 2>&1); then
   echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号）を誤検出しない"
 else
@@ -355,7 +367,7 @@ else
   printf '%s\n' "$STYLE_OK_OUT"
   FAIL=1
 fi
-rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx"
+rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx" "apps/client/components/__selftest/selftest-style-ok.tsx"
 
 # 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、文をつないでいないダッシュ（空欄の「—」・括弧の中・
 # 区切り線・数字の範囲）では ui-copy.mjs が落ちない。ダッシュの例は日本語を含めて、ダッシュの判定まで届くようにしている。

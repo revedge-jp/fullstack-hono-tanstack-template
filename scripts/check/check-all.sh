@@ -69,7 +69,7 @@ LINT_TASKS=()
 if [ "${SKIP_LINT:-}" != "1" ]; then LINT_TASKS+=(lint); fi
 if [ "${SKIP_TYPECHECK:-}" != "1" ]; then LINT_TASKS+=(typecheck); fi
 if [ "${#LINT_TASKS[@]}" -gt 0 ]; then
-  run_step_bg "LintTypecheck" bunx turbo run "${LINT_TASKS[@]}" --filter="${TURBO_FILTER}"
+  run_step_bg "LintTypecheck" bunx turbo run "${LINT_TASKS[@]}" --filter="${TURBO_FILTER}" --continue
 fi
 
 # Tests（TURBO_FILTER で変更の影響を受けるパッケージだけ。既定は origin/main との差分なので、
@@ -147,7 +147,8 @@ for name in LintTypecheck Tests ScriptTests Filename Prose MigrationOrder FSD De
     if echo "$WARN_ONLY_STEPS" | grep -qw "$name"; then
       warn "$name: 警告"
       if [ -f "$STEP_RESULTS/$name.out" ]; then
-        { grep -E "(ERROR|Error|error|✖|failed|violation|TS[0-9]+|⚠️|deprecated|非推奨)" "$STEP_RESULTS/$name.out" || true; } | head -n 10 | sed -e 's/^/  • /'
+        # 件数の切り詰めは sed で行う(head はパイプを先に閉じ、pipefail で書き手の SIGPIPE が失敗扱いになる)
+        { grep -E "(ERROR|Error|error|✖|×|failed|violation|TS[0-9]+|⚠️|deprecated|非推奨)" "$STEP_RESULTS/$name.out" || true; } | sed -n '1,10p' | sed -e 's/^/  • /'
       fi
       if [ -f "$STEP_RESULTS/$name.err" ]; then
         { tail -n 20 "$STEP_RESULTS/$name.err" || true; } | sed -e 's/^/  • /'
@@ -157,7 +158,7 @@ for name in LintTypecheck Tests ScriptTests Filename Prose MigrationOrder FSD De
       # 「❌ Tests: ERROR」の 1 行だけが残り、原因がどこにも残らない。結果は直後に消す）
       err "$name: ERROR"
       if [ -f "$STEP_RESULTS/$name.out" ]; then
-        { grep -E "(ERROR|Error|error|✖|failed|violation|TS[0-9]+|process\.env)" "$STEP_RESULTS/$name.out" || cat "$STEP_RESULTS/$name.out"; } | head -n 20 | sed -e 's/^/  • /'
+        { grep -E "(ERROR|Error|error|✖|×|eslint\(|typescript\(|failed|violation|TS[0-9]+|process\.env)" "$STEP_RESULTS/$name.out" || cat "$STEP_RESULTS/$name.out"; } | sed -n '1,20p' | sed -e 's/^/  • /'
       fi
       if [ -f "$STEP_RESULTS/$name.err" ]; then
         { tail -n 20 "$STEP_RESULTS/$name.err" || true; } | sed -e 's/^/  • /'

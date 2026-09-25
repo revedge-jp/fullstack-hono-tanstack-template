@@ -47,21 +47,26 @@ const FILES = [
   ...markdownUnder("docs"),
 ].filter((f) => existsSync(join(ROOT, f)));
 
-// gitignore 対象(生成物)は実在しなくても参照してよい。1 回の git 呼び出しでまとめて判定する
+// gitignore 対象(生成物)は実在しなくても参照してよい。1 回の git 呼び出しでまとめて判定する。
+// リポジトリ外のパスを 1 件でも渡すと git が fatal で全体を失敗させるので、ルート配下のものだけ渡す
 const gitIgnored = (paths) => {
-  if (paths.length === 0) {
+  const inside = [...new Set(paths)].filter((p) => p !== "" && !p.startsWith(".."));
+  if (inside.length === 0) {
     return new Set();
   }
   try {
     const out = execFileSync("git", ["check-ignore", "--no-index", "--stdin"], {
       cwd: ROOT,
-      input: paths.join("\n"),
+      input: inside.join("\n"),
       encoding: "utf8",
     });
     return new Set(out.split("\n").filter(Boolean));
-  } catch {
-    // 1 件も ignore 対象でないと exit 1 になる
-    return new Set();
+  } catch (error) {
+    // exit 1 は「1 件も ignore 対象でない」。それ以外(git の失敗)を握りつぶすと除外が黙って効かなくなる
+    if (error.status === 1) {
+      return new Set();
+    }
+    throw error;
   }
 };
 
@@ -120,13 +125,18 @@ const looksLikePath = (t) =>
   !/\/[A-Z]\/|\/[xX]xx|\{feature\}|\{action\}|\/[a-z]+Xxx/.test(t); // プレースホルダ
 
 const violations = [];
-// 実在しないパス(gitignore 判定は最後にまとめて行う): [参照元, 表示用トークン, ルート相対パス]
+// 実在しないパス(gitignore 判定は最後にまとめて行う): [参照元, 表示用トークン, 候補のルート相対パス[]]。
+// 候補(参照元相対・ルート相対 等)のどれか 1 つでも gitignore 対象なら生成物への参照とみなす
 const missingPaths = [];
 for (const file of FILES) {
   const text = readFileSync(join(ROOT, file), "utf8");
   const dir = dirname(join(ROOT, file));
   const lines = text.split("\n");
+  let inFence = false;
   lines.forEach((line, i) => {
+    if (line.startsWith("```")) {
+      inFence = !inFence;
+    }
     const where = `${file}:${i + 1}`;
     for (const m of line.matchAll(/`([^`]+)`/g)) {
       const token = m[1].replace(/[:#].*$/, ""); // `path:line` / `path#anchor` の付加部分を落とす
@@ -149,17 +159,26 @@ for (const file of FILES) {
         ...APPS.map((a) => join(ROOT, "apps", a, "src", token)),
       ];
       if (!candidates.some((c) => existsSync(c))) {
-        missingPaths.push([where, `\`${token}\``, relative(ROOT, candidates[0])]);
+        missingPaths.push([where, `\`${token}\``, candidates.map((c) => relative(ROOT, c))]);
       }
     }
-    for (const m of line.matchAll(/\]\(([^)\s]+)\)/g)) {
-      const target = m[1].replace(/#.*$/, "");
+    // Markdown のリンク。コードフェンスとインラインコードの中(handlers[type](payload) 等)は見ない。
+    // `[a](<x y.md>)` と `[a](x.md "title")` の形も読み、%エンコードは戻してから確かめる
+    const prose = inFence ? "" : line.replace(/`[^`]*`/g, "");
+    for (const m of prose.matchAll(/\]\((?:<([^>]+)>|([^)\s]+))(?:\s+"[^"]*")?\)/g)) {
+      let target = (m[1] ?? m[2]).replace(/#.*$/, "");
       if (target === "" || /^[a-z]+:/i.test(target)) {
         continue;
       }
-      const full = resolve(dir, target);
+      try {
+        target = decodeURI(target);
+      } catch {
+        // 不正な %エンコードはそのまま確かめる
+      }
+      // `/` 始まりは GitHub と同じくリポジトリのルート基準
+      const full = target.startsWith("/") ? join(ROOT, target) : resolve(dir, target);
       if (!existsSync(full)) {
-        missingPaths.push([where, `リンク先 ${target}`, relative(ROOT, full)]);
+        missingPaths.push([where, `リンク先 ${target}`, [relative(ROOT, full)]]);
       }
     }
     // `bun run db:*` のような glob 表記は対象外(直後が * のものを読み飛ばす)
@@ -184,9 +203,9 @@ for (const file of FILES) {
   });
 }
 
-const ignored = gitIgnored(missingPaths.map(([, , path]) => path));
-for (const [where, label, path] of missingPaths) {
-  if (!ignored.has(path)) {
+const ignored = gitIgnored(missingPaths.flatMap(([, , paths]) => paths));
+for (const [where, label, paths] of missingPaths) {
+  if (!paths.some((path) => ignored.has(path))) {
     violations.push(`${where}: ${label} が実在しない`);
   }
 }

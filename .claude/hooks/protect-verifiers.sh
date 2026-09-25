@@ -11,14 +11,22 @@
 # settings.json の permissions.deny ではなくここで行うのは、`.env.*` を deny しつつ
 # `.env.example` だけ許可する例外が permissions では書けないため。
 #
-# 限界: Edit / Write / MultiEdit / NotebookEdit / Read / Grep ツールのパスだけを見る(Grep は `path` に
-# 名指しした場合。ディレクトリ検索は ripgrep が gitignore 済みの .env を読まない)。Bash の sed / cat 経由は対象外
+# 限界: Edit / Write / MultiEdit / NotebookEdit / Read / Grep ツールのパスだけを見る。Grep は `path` の名指しと、
+# `glob` に .env / .dev.vars を含む指定を deny する。ripgrep はホワイトリストの glob（`*` 等）が gitignore を
+# 上書きするので、`glob: "*"` のような広い指定では .env も検索対象になりうる(そこまでは塞がない)。Bash の sed / cat 経由は対象外
 # (そこまで塞ぐと作業が成立しない)。Bash 迂回・他エージェント・手編集は CI の
 # verifier-change ジョブ(PR 本文に理由を要求)が同じ一覧で受け止める。
 set -uo pipefail
 
 INPUT=$(cat)
 TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
+GLOB=$(printf '%s' "$INPUT" | jq -r '.tool_input.glob // ""' 2>/dev/null || echo "")
+case "$GLOB" in
+  *.env*|*.dev.vars*)
+    jq -cn --arg r "glob「$GLOB」は秘密情報(.env / .dev.vars)を検索対象にするため使いません。設定項目は .env.example を参照してください" \
+      '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
+    exit 0 ;;
+esac
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""' 2>/dev/null || echo "")
 [ -z "$FILE" ] && exit 0
 

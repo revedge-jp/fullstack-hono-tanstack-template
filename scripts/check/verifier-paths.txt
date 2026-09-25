@@ -35,3 +35,6 @@ steiger.config.mjs
 REVIEW.md
 .claude/commands/ship.md
 .claude/commands/review-full.md
+# レビュアー②が読む手順と、③（Codex）の実行スクリプト
+.claude/commands/codex-review.md
+scripts/dev/codex-review.sh
