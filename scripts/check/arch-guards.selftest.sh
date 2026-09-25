@@ -244,6 +244,7 @@ expect_guard "スタイル規約: すりガラスの禁止" \
   "違反 [glassmorphism]"
 
 expect_guard "スタイル規約: h1 の直書きの禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <h1 className="text-xl font-semibold">x</h1>;' \
   "違反 [raw-page-heading]"
