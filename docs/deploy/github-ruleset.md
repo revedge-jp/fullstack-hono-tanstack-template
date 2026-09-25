@@ -16,7 +16,7 @@ gh auth login          # 未認証の場合
 ```
 
 > [!NOTE]
-> **プランによる制約**: Ruleset と auto-merge は public リポジトリまたは GitHub Pro 以上のプランでのみ利用できます。private + Free プランの場合、スクリプトは該当項目をスキップして案内を出します（API はエラーを返さず黙って無視するものもあるため、スクリプトは適用後の実値を確認して報告します）。Secret scanning は private リポジトリでは GitHub Advanced Security が必要です。
+> **プランによる制約**: Ruleset と auto-merge は public リポジトリまたは GitHub Pro 以上のプランでのみ利用できます。private + Free プランの場合、スクリプトは該当項目をスキップして案内を出します（API はエラーを返さずに無視するものもあるため、スクリプトは適用後の実値を確認して報告します）。Secret scanning は private リポジトリでは GitHub Advanced Security が必要です。
 
 ## このテンプレートが適用する設定
 
@@ -37,7 +37,7 @@ gh auth login          # 未認証の場合
 `main-branch-protection` は **merge queue** を有効にしている（`merge_method: SQUASH`、
 `grouping_strategy: ALLGREEN`、最大 5 件バッチ）。「マージ前にブランチを最新化」
 （`strict_required_status_checks_policy`）は **無効**で、代わりにキューが「main + キュー内の先行 PR」の
-一時ブランチ（`gh-readonly-queue/main/...`）を作り、そこで `CI Pipeline` を 1 回走らせてからマージする。
+一時ブランチ（`gh-readonly-queue/main/...`）を作り、そこで `CI Pipeline` を 1 回実行してからマージする。
 並行 PR が何本あっても最新化 → CI 再実行の連鎖が起きない。
 
 - CI 側は `.github/workflows/ci.yml` の `merge_group:` トリガーが対応する。**これが無いとキューは
@@ -45,13 +45,13 @@ gh auth login          # 未認証の場合
 - **merge queue は public リポジトリか Enterprise Cloud の private でしか使えない**（Team プランの
   private は `merge_queue` ルールが 422 で拒否される）。`setup-github.sh` はその場合 queue ルールだけ
   外して再適用し、queue なしの auto-merge 運用にする。最新化必須は無効のままなので、古い main で緑だった
-  PR が最新 main と組み合わさって壊れるケースは、マージ後の main の CI と `notify-main-failure`
-  （Slack）で検出する（staging デプロイは main の CI 成功後にしか走らない）。public 化 / プラン変更後に
+  PR が最新 main と組み合わさって失敗するケースは、マージ後の main の CI と `notify-main-failure`
+  （Slack）で検出する（staging デプロイは main の CI 成功後にしか実行されない）。public 化 / プラン変更後に
   スクリプトを再実行すれば queue が有効になる
 - PR は Draft で作り、`/code-review` が CONFIRMED ゼロで収束してから `gh pr ready` と
   `gh pr merge --auto --squash` を打つ（`.claude/commands/ship.md`）。`Review converged`
   （`.github/workflows/review-converged.yml`、本文編集と Draft 解除でも再評価される）が本文の
-  「レビュー収束:」行を検査し、必須チェックなので記録が無い PR は auto-merge が発火しない
+  「レビュー収束:」行をチェックし、必須チェックなので記録が無い PR は auto-merge が発火しない
 - キューに入った後に push すると弾かれる（入れ直し）。Renovate の automerge はキュー対応済み
 - マージ後の deploy は `workflow_run`（CI Pipeline 完了）で動くので変更不要
 

@@ -19,9 +19,9 @@ git diff origin/main...HEAD
 
 **チェック観点**
 - アーキテクチャ: 依存方向 `presentation → application → domain ← infrastructure → integrations` を守っているか
-- TypeScript: `as` / `any` の不適切な使用がないか、Zod v4 API を使っているか
+- TypeScript: `as` / `any` を AGENTS.md の TypeScript Style で認めた用途以外に使っていないか、Zod v4 API を使っているか
 - バグ・ロジック: null アクセス、await 忘れ、ROP パターンの正しい使用
-- セキュリティ: 認証・認可漏れ、OWASP Top 10
+- セキュリティ: 認証・認可の抜け、OWASP Top 10
 - テスト: 変更に対応するテストが存在するか
 - ROP エラー型: Usecase → Presentation で全エラーケースが網羅されているか
 - Value Object: `make` / `change` / `reconstitute` の使い分けが正しいか
@@ -100,12 +100,12 @@ gh pr merge <番号> --auto --squash
 `scripts/setup-github.sh` がルールセットを作れていない環境（private + Free プラン）では auto-merge も
 無いので、CI 通過後に `gh pr merge <番号> --squash` を手で打つ）
 
-必須チェック `Review converged` が「レビュー収束:」行を検査するので、行が無いと auto-merge は
+必須チェック `Review converged` が「レビュー収束:」行をチェックするので、行が無いと auto-merge は
 発火しない。ブランチの最新化は不要（merge queue があれば queue が「main に積んだ状態」で CI を
-1 回通してからマージし、無ければマージ後の main の CI が壊れを検出する。`docs/deploy/github-ruleset.md`）。
+1 回通してからマージし、無ければマージ後の main の CI が失敗を検出する。`docs/deploy/github-ruleset.md`）。
 有効化後は `gh pr view <番号> --json mergeable -q .mergeable` が `MERGEABLE` になることを確認する
 （`UNKNOWN` は未計算なので数秒待って再取得。`CONFLICTING` なら rebase して push し直す。
-衝突で止まった PR は CI が走らず通知も出ないため、確認せずに放置すると誰も気づかない）。
+衝突で止まった PR は CI が実行されず通知も出ないため、確認せずに放置すると誰も気づかない）。
 その後に main が進んで衝突した場合は、`.github/workflows/conflicting-prs.yml` が main への push と
 日次で検出し、`needs-rebase` ラベルと作者へのメンションで知らせる（解消すればラベルは外れる）。
 `needs-rebase` の付いた PR は、rebase して push し直すまで CI もマージも止まっている。

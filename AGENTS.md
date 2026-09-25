@@ -1,7 +1,7 @@
 # AGENTS.md
 
 このリポジトリで作業するコーディングエージェント（Claude Code / Codex / その他 AGENTS.md 対応
-ツール）向けの正典。`CLAUDE.md` はこのファイルを `@AGENTS.md` で取り込むだけの薄いラッパーで、
+ツール）向けの規約本体。`CLAUDE.md` はこのファイルを `@AGENTS.md` で取り込むだけの薄いラッパーで、
 Claude Code 固有の補足だけを持つ。**ルールの追記はこのファイル・各アプリの `AGENTS.md`・
 `.claude/rules/` のいずれかに行い、`CLAUDE.md` には書かない**。
 
@@ -34,11 +34,11 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
 
 一覧は `package.json` の `scripts`（ルートと `apps/*`）を見る。ここには名前から分からないことだけ書く。
 
-- `git push` の pre-push フックが `bun run check-all`（lint / typecheck / 全テスト / アーキテクチャ検査）を回す。
+- `git push` の pre-push フックが `bun run check-all`（lint / typecheck / 全テスト / アーキテクチャのチェック）を実行する。
   テストは DB を使うので、DB が無いと push できない（worktree なら `.claude/rules/general.md` の worktree 節）
 - 途中の確認は `bun run typecheck` と `bun run arch:check`、DB 不要のテストは `bun run test:unit`。
   1 ファイルだけなら `cd apps/api-service && bun test <file>`
-- `bun run test:integration` は `.env` の `TEST_DATABASE_URL` にマイグレーションを当ててから走る
+- `bun run test:integration` は `.env` の `TEST_DATABASE_URL` にマイグレーションを当ててから実行する
 - mutation testing は `cd apps/api-service && bun run mutation:diff`（CI と同じく PR の差分だけ。コミット済みの
   差分しか見ない）
 - DB: `bun run db:up`（Docker で起動）→ スキーマを変えたら `bun run db:generate` → `bun run db:migrate`

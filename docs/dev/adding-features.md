@@ -1,12 +1,12 @@
-# 機能追加の入口
+# 機能追加の手引き
 
 新しい機能（feature）を足すときに、どこを読めばよいかの案内です。手順・構成・コード例はここに
-複製しません。複製は正典の変更に追従できずに古くなり、古い型紙がそのまま写されてゲートや
-セキュリティの穴になるためです。正典と参照実装を直接読んでください。
+複製しません。複製は規約の本体の変更に追従できずに古くなり、古い型紙がそのまま写されてゲートの抜けや
+セキュリティ上の欠陥の原因になるためです。規約の本体と参照実装を直接読んでください。
 
 ## api-service
 
-| 知りたいこと | 正典 |
+| 知りたいこと | 読む場所 |
 |---|---|
 | 実装順序 | `apps/api-service/AGENTS.md` の「Adding a New Feature (implementation order)」 |
 | ディレクトリ構成・各ファイルの役割 | `apps/api-service/AGENTS.md` の「Feature structure」 |
@@ -36,7 +36,7 @@
 
 ### 写すときに落としやすい点
 
-どれも typecheck は通るため、見落とすとゲートかレビューまで気づけません。
+どれも typecheck は通るため、ここで気づかないと、ゲートかレビューまで気づけません。
 
 - **所有者はセッションから取る**: 所有者 ID（`ownerId` 等）をリクエストボディやクエリで受けない
   （他人のデータを作成・参照できる IDOR になる）。ハンドラで `c.get("user").id` を usecase に渡し、
@@ -64,6 +64,6 @@
 
 ## client
 
-- 正典: `apps/client/AGENTS.md` の「Architecture: client」（actions / queries / ui の分け方、SSR と
+- 規約: `apps/client/AGENTS.md` の「Architecture: client」（actions / queries / ui の分け方、SSR と
   クライアント取得の使い分け）と「What tests to write (per feature addition)」。細部は `.claude/rules/client.md`
 - 参照実装: `apps/client/features/tasks`

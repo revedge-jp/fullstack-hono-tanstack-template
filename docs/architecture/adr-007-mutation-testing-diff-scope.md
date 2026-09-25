@@ -22,14 +22,14 @@ push のたびにフル実行される（`concurrency: cancel-in-progress: true`
 キャンセルされるため累積はしないが、都度フルスキャンし直す）。1 行の変更でも
 リポジトリ全体をスキャンするため、実行時間が PR のサイズではなくリポジトリのサイズに
 比例して伸び続け、feature が増えるほど開発イテレーション（push → CI 結果待ち）が
-遅くなる。テンプレートを起点にしたプロダクトは必ず同じ経路をたどるため、
+遅くなる。テンプレートを起点にしたプロダクトは必ず同じ道をたどるため、
 テンプレート側で予防的に採用する。
 
 Stryker 組み込みの `--incremental`（前回結果をキャッシュし、変更のあった部分だけ
 再実行する機能）は既に検討済みで不採用（`stryker.config.json` の
 `_comment_incremental` 参照）。理由: `testRunner: "command"`（`bun test` を直接呼ぶ
 方式）では Stryker がテストファイルとミュータントを対応付けられず、テストを変更・
-追加しても古い Survived/Killed 結果がそのまま再利用される誤動作を実測で確認した
+追加しても古い Survived/Killed 結果がそのまま再利用される誤動作を実際に動かして確認した
 （false negative — 本来 Killed になるべきミュータントが古い Survived のまま
 報告され続ける）。
 
@@ -76,21 +76,21 @@ unit テスト・`coverage:check`（domain/application の line coverage 85% 閾
 
 **得られるもの**: CI の 1 回の mutation testing 実行時間が、リポジトリ全体の
 サイズではなく PR の変更量に比例するようになる。典型的な PR（数ファイルの変更）では
-大幅に短縮される。feature 数が今後増えても、個々の PR の CI 待ち時間は悪化しない。
+対象がリポジトリ全体（前述の例で 442 ファイル）から変更した数ファイルに絞られ、その分短くなる。feature 数が今後増えても、個々の PR の CI 待ち時間は悪化しない。
 
 ## 代替案と却下理由
 
 | 代替案 | 却下理由 |
 |---|---|
-| Stryker 組み込み `--incremental` | `testRunner: command` との相性問題で stale な結果を再利用する誤動作を実測済み（既存の `_comment_incremental` で不採用済み） |
-| mutation testing を PR では実行せず、main へのマージ後 or 夜間バッチのみにする | 「ブロックしてから merge」という現行の品質ゲート思想（ADR-006）から外れる。壊れたコードが一度 main に入ってから気づく運用になり、手戻りが大きくなる |
+| Stryker 組み込み `--incremental` | `testRunner: command` との相性問題で stale な結果を再利用する誤動作を確認済み（既存の `_comment_incremental` で不採用済み） |
+| mutation testing を PR では実行せず、main へのマージ後 or 夜間バッチのみにする | 「ブロックしてから merge」という現行の品質ゲート思想（ADR-006）から外れる。不具合のあるコードが一度 main に入ってから気づく運用になり、手戻りが大きくなる |
 | mutation testing を required check から外し informational にする | CI 時間は変わらない（実行はする）ため速度面の解決にならない。ADR-006 の「機械的に止まる安全網」という設計意図とも合わない |
 | `mutate` の対象を feature 単位で分割し、変更された feature だけを CI マトリクスで実行する | 差分ファイル方式より粗い（1 ファイルの変更でも feature 全体を再スキャン）。実装も複雑（マトリクス生成ロジックが要る）でメリットが薄い |
 
 ## 再検討のトリガー
 
 - リポジトリの commit 数・履歴サイズが増え、`fetch-depth: 0` のフルクローンが
-  無視できないコストになった場合 → `fetch-depth` を適切な固定値（例: 200）に
+  無視できないコストになった場合 → `fetch-depth` を `origin/main` との merge-base に届く固定値（例: 200）に
   変更するか、`actions/checkout` の代わりに base ref だけを狙い撃ちで fetch する
   方式に切り替える
 - 差分に含まれないファイルのリグレッションが実際に本番で発生し、mutation testing の

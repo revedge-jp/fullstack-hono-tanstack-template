@@ -101,7 +101,7 @@ client には独自の設定読み込みが無い。client と api-service は�
 `createServerFn` の実行時は api-service の `loadConfig(env)` が読んだ値をそのまま使える。
 
 1. **サーバー側で使う値**（SSR・serverFn・in-process API 呼び出し）: 上の「api-service に環境変数を追加する場合」の手順どおり `apps/api-service/src/config.ts` に足す。client 側で `process.env` を読まない
-2. **ブラウザに出す値**: 実行環境ごとに変わる値は route の `loader`（サーバー側）から返す。build 時定数として焼き込んでよい非機密の値だけ `VITE_` 接頭辞で `.env.example` に追加し、`import.meta.env.VITE_XXX` で参照する（現状は `import.meta.env.DEV` のみ）。機密は絶対に含めない
+2. **ブラウザに出す値**: 実行環境ごとに変わる値は route の `loader`（サーバー側）から返す。build 時定数として埋め込んでよい非機密の値だけ `VITE_` 接頭辞で `.env.example` に追加し、`import.meta.env.VITE_XXX` で参照する（現状は `import.meta.env.DEV` のみ）。機密は絶対に含めない
 3. **turbo.json**: `VITE_` 変数は client の build のキャッシュキーに影響するため `build` タスクの `env` に追加する
 4. **CI**: E2E 等で必要なら `.github/workflows/ci.yml` の `e2e-tests` ジョブの `env` に追加する
 5. **本番環境**: staging / production は `alchemy.run.ts` の Worker `bindings`（非機密は文字列、機密は `alchemy.secret(...)`）。`apps/client/wrangler.jsonc` の `vars` はローカル `wrangler dev` 用
@@ -124,13 +124,13 @@ client には独自の設定読み込みが無い。client と api-service は�
 | `apps/api-service/src/config.ts` | api-service の環境変数バリデーション（Zod）と型定義の中心。`loadConfig()` で起動時に検証 |
 | `turbo.json` | Turborepo のタスクごとに `env` を宣言。**キャッシュキーに影響**するため、build 結果に影響する変数はここに追加する |
 | `docker-compose.yml` | Postgres 等のコンテナ起動時の環境変数。`${VAR:-default}` で上書き可能 |
-| `alchemy.run.ts` | staging / production の Worker `bindings`（非機密の vars と `alchemy.secret` の機密）。デプロイ時の正典 |
+| `alchemy.run.ts` | staging / production の Worker `bindings`（非機密の vars と `alchemy.secret` の機密）。デプロイ時はこれを正とする |
 | `apps/client/wrangler.jsonc` | ローカル `wrangler dev` 用の Worker 設定（`vars` もローカル専用。`env.*` セクションは持たない） |
 | `apps/client/.dev.vars` | ローカル開発時に Workers ランタイムへ渡す変数（`.env` への symlink、`.gitignore` 済み） |
 
 ### turbo.json に env を追加する理由
 
-Turborepo はタスクの実行結果をキャッシュする際、`env` で宣言した環境変数の値をキャッシュキーに含めます。環境変数が変わることでビルド結果が変わる場合（例: `DATABASE_URL` は本番では別の値）、該当タスクの `env` に追加する必要があります。
+Turborepo はタスクの実行結果をキャッシュする際、`env` で宣言した環境変数の値をキャッシュキーに含めます。環境変数が変わることでビルド結果が変わる場合（例: `DATABASE_URL` は本番では別の値）、該当タスクの `env` に追加します。
 
 ---
 
@@ -152,7 +152,7 @@ bindings: {
 
 パスワードや API キーなどの Worker への受け渡しは Alchemy（`alchemy.run.ts` の
 `alchemy.secret()`）が担います。値は GitHub Environment Secrets → deploy.yml →
-alchemy.run.ts の経路で渡り、`wrangler secret put` の手動実行は不要です。
+alchemy.run.ts の順に渡り、`wrangler secret put` の手動実行は不要です。
 
 ローカル開発では `.dev.vars`（`.env` への symlink）から同じ変数が Workers ランタイムに渡ります。
 

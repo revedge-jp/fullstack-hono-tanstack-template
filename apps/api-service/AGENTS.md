@@ -1,6 +1,6 @@
 # AGENTS.md — api-service
 
-`apps/api-service` 固有の規約の正典。リポジトリ全体の規約（Stack・コマンド・TypeScript Style 等）は
+`apps/api-service` 固有の規約の本体。リポジトリ全体の規約（Stack・コマンド・TypeScript Style 等）は
 ルートの `../../AGENTS.md` にあり、ここには複製しない。Claude Code は同じディレクトリの `CLAUDE.md`
 （`@AGENTS.md` を取り込むだけ）経由で、このディレクトリのファイルを読んだときにこれを読み込む。
 
@@ -11,7 +11,7 @@
 - `../../.claude/rules/env-vars.md` — 環境変数を足すとき
 
 参照実装は `src/features/tasks`（CRUD + ports）。テストは `bun test <file>`、
-機械検査は `bun run arch:check`（ルート）。
+機械的なチェックは `bun run arch:check`（ルート）。
 
 ## Architecture: api-service
 
@@ -154,7 +154,7 @@ feature の切り方そのものを見直す:
 - `createFakeApp(overrides?)` — 本物のミドルウェアスタック（`app.ts` の `buildApp`: requestId /
   requestLogger / timing / timeout / secureHeaders / CORS / bodyLimit / rate-limit / onError /
   notFound）を、DB 不要の fake 依存で組み立てたテスト用アプリを返す。DB は使わず、tasks /
-  activity は **in-memory リポジトリ上の本物のサービス**、セッションは既定で「認証済み」。
+  activity は **in-memory リポジトリ上の本物のサービス**、セッションはデフォルトで「認証済み」。
   返り値は Hono アプリそのものなので `app.request(...)` で直接叩けるし、`hc<AppType>` に
   `fetch: app.request.bind(app)` で注入もできる。
 - Exported from `api-service/test-helpers`（`src/test-helpers/create-fake-app.ts`）

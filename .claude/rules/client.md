@@ -13,7 +13,7 @@ paths:
 `mock.module("hono/client", ...)` + `let mockOk / mockBody / lastJson` の雛形を**テストファイルに
 手書きしない**。`createApiMock()`（+ serverFn なら `reactStartModule` / `reactStartServerModule`）を
 使う — 書き始めは import + `mock.module` 2行で済む。手書き雛形は feature の数だけ写経され、
-派生プロダクトの実測で actions テストの21%・queries テストの25%（計4,100行）に達した。
+派生プロダクトで計測したところ actions テストの21%・queries テストの25%（計4,100行）に達した。
 行カバレッジゲート（80%）の下では写経テストが閾値を満たす最安の方法になるので、ヘルパを先に用意して
 書き始めの手数で写経に負けない状態を保っている。
 実例: `features/tasks/actions/create-task.test.ts` / `features/tasks/queries/get-tasks.test.ts`。
@@ -77,21 +77,21 @@ SSR を止める効果は無い。
 
 ## UI 文言のリネームは Playwright ロケーターの部分一致衝突を全ファイル横断で確認する
 
-`page.getByRole("link", { name: "..." })` 等の `name` は既定で**部分一致**(substring)なため、
+`page.getByRole("link", { name: "..." })` 等の `name` はデフォルトで**部分一致**(substring)なため、
 UI 文言をリネームして新しい文字列が既存の別要素の文字列を包含する形になると、リネーム前は
-一意だったロケーターが複数要素にマッチして strict mode violation で壊れる。
+一意だったロケーターが複数要素にマッチして strict mode violation で失敗する。
 
 - リネーム対象の文言を `grep -rn` で **spec ファイルだけでなく `tests/e2e/helpers/` 配下の
   共有ヘルパーも含めて** `apps/client/tests/e2e/` 全体から検索する。
 - 衝突を避ける修正は該当ロケーターに `exact: true` を追加する。
 
-## デザイン規約（トークン・部品・AI slop）
+## デザイン規約（トークン・コンポーネント・AI slop）
 
 AI が書く UI は、1 つずつは正しく動くため typecheck・lint・test をすべて通過したまま見た目が漂流する
 （`text-zinc-500` の直書き、紫のグラデーション、ページごとに違う余白）。これを止めるため、使える語彙を
-トークンと部品に絞り、絞った語彙から外れたものを `scripts/check/client-styles.mjs`（`bun run check:styles`。
+トークンとコンポーネントに絞り、絞った語彙から外れたものを `scripts/check/client-styles.mjs`（`bun run check:styles`。
 `bun run arch:check` にも含まれる）で機械的に検出する。下の各項目の【ガード】は機械検証済み、【目視】は画面を見て確認するもの。
-ガードはコメントも全規則で検査する（絵文字を含む）。禁止クラス名や絵文字をコメントに書かない
+ガードはコメントも全規則でチェックする（絵文字を含む）。禁止クラス名や絵文字をコメントに書かない
 （「旧 `text-zinc-500` から置換」のような変更履歴は git に残る。旧実装の説明が要るなら言葉で書く）。
 
 ### 色は semantic トークンだけ
@@ -99,7 +99,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 | トークン | 用途 |
 |---|---|
 | `background` / `foreground` | ページの地と本文（body に適用済み。ページ側で背景を塗らない） |
-| `card` / `popover`（+ `-foreground`） | 面を分ける部品の地 |
+| `card` / `popover`（+ `-foreground`） | 面を分けるコンポーネントの地 |
 | `muted` / `muted-foreground` | 補助の面・補足テキスト（日付、件数、説明文） |
 | `primary`（+ `-foreground`） | 主要操作。**1 画面で目立たせるのは 1 か所** |
 | `secondary` / `accent` | 副次操作・hover の面 |
@@ -109,7 +109,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 
 - 【ガード】既定パレット（`text-zinc-500` / `bg-blue-600` / `text-white` …）は使えない。
   `packages/tailwind-config/shared-styles.css` で既定パレットの生成自体を止めてあるが、**未定義のクラスは
-  ビルドエラーにならず黙って無色になるだけ**なので、ソース上の使用はガードが検出する
+  ビルドエラーにならず、何も出力されないまま無色になるだけ**なので、ソース上の使用はガードが検出する
 - 【ガード】`dark:` を手書きしない。トークンは `.dark` で値が切り替わるので、トークンを使えば自動で対応する
 - 語彙（どのトークンが存在するか）は `packages/tailwind-config/shared-styles.css`、値（ブランドの色）は
   `apps/client/app/globals.css` が持つ。ブランドの差し替えは `globals.css` の値だけで完結させ、
@@ -118,7 +118,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 ### スケールから選ぶ
 
 - 【ガード】任意値（`w-[347px]` / `bg-[#7c3aed]` / `bg-(--brand)`）と任意プロパティ（`[color:#7c3aed]`）は使えない。Tailwind のスケール
-  （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `components/` に部品として閉じ込める
+  （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `components/` にコンポーネントとして閉じ込める
   （`data-[state=open]:` のような任意バリアントは対象外）
 - 文字サイズと太さの組み合わせを画面ごとに発明しない。使う組み合わせは次の 4 つだけ:
 
@@ -129,27 +129,27 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
   | 本文・UI | `text-sm`（強調は `font-medium`） |
   | 補足・注記 | `text-xs text-muted-foreground` |
 
-  `font-bold` は `PageHeader` の中だけに使い、`font-semibold` は使わない（shadcn の部品が `font-medium` で
-  揃っているため。部品を再生成しても規約とずれない側に合わせる）。
+  `font-bold` は `PageHeader` の中だけに使い、`font-semibold` は使わない（shadcn のコンポーネントが `font-medium` で
+  揃っているため。コンポーネントを再生成しても規約とずれない側に合わせる）。
 - 字間は Tailwind のスケール（`tracking-tight` / `tracking-wide` / `tracking-wider` / `tracking-widest`
   = 0.1em）から選ぶ。`tracking-[0.1em]` は `tracking-widest` と同じ値なので任意値にしない。日本語の見出し
   などでスケールに無い字間が要るなら、`apps/client/app/globals.css` の `@theme` に `--tracking-*` の
   トークンとして足し（`tracking-<名前>` で使える）、同じ値を画面ごとに書かない
-- 【ガード】並べるときの間隔は親の `flex` / `grid` + `gap-*`、部品の内側は padding で作る。margin
+- 【ガード】並べるときの間隔は親の `flex` / `grid` + `gap-*`、コンポーネントの内側は padding で作る。margin
   （`mt-2` / `-mx-4`）と `space-y-*` / `space-x-*` は使えない（中央寄せの `mx-auto` 等 `auto` は可）
 - 正方形は `size-*`（`w-* h-*` を並べない）、条件付きクラスは `cn()`（`@/shared/lib/utils`）で合成する
 
-### 部品を先に探す
+### 既存のコンポーネントを先に探す
 
-新しい UI を書く前に、既存の部品で組めないかを確認する。
+新しい UI を書く前に、既存のコンポーネントで組めないかを確認する。
 
-- `components/ui/`: shadcn の部品（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
-  手で書き換えない。足りない部品は shadcn CLI で追加する（`components.json` の `style: base-vega` /
-  Base UI 前提。Radix 前提の例をそのまま貼らない）。同じ場所にある `ThemeToggle` は手書きの部品で
+- `components/ui/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
+  手で書き換えない。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
+  Base UI 前提。Radix 前提の例をそのまま貼らない）。同じ場所にある `ThemeToggle` は手書きのコンポーネントで
   書き換えてよいが、スタイルガードの対象外なので規約は目視で守る
 - `components/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
 - `components/layout/`: ページ枠（`CenteredPage`）と常駐バナー
-- 部品に渡す `className` は**配置（余白・幅・並び）だけ**に使い、色や文字を上書きしない。見た目の違いは
+- コンポーネントに渡す `className` は**配置（余白・幅・並び）だけ**に使い、色や文字を上書きしない。見た目の違いは
   `variant` / `size` で表す（例: 削除は `<Button variant="destructive">`、控えめな操作は `variant="ghost"`）
 
 ### 状態を必ず作る
@@ -164,10 +164,12 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 LLM は学習データの多数派に収束するため、指示が無いと「どこかで見た AI 製の画面」を出す。業務アプリの
 テンプレートとして、**情報密度と一貫性を優先し、装飾で差をつけない**。
 
+<!-- textlint-disable -->
+
 | パターン | 検出 |
 |---|---|
 | グラデーション背景・グラデーション文字（`bg-linear-*` / `bg-clip-text`） | 【ガード】 |
-| すりガラス（`backdrop-blur-*`） | 【ガード】（オーバーレイは `components/ui` の部品に任せる） |
+| すりガラス（`backdrop-blur-*`） | 【ガード】（オーバーレイは `components/ui` のコンポーネントに任せる） |
 | 絵文字をアイコン代わりに使う | 【ガード】（アイコンは `lucide-react`。`components.json` の `iconLibrary` と揃えてある） |
 | 紫・青の差し色を既定パレットから持ち込む | 【ガード】（既定パレット禁止で検出） |
 | Card の中に Card を入れる | 【目視】 |
@@ -176,6 +178,8 @@ LLM は学習データの多数派に収束するため、指示が無いと「�
 | 順序でない項目への 01/02/03 の番号振り・全大文字の小見出しラベル | 【目視】 |
 | 意味の無いアイコンを見出しごとに散らす | 【目視】 |
 | 「シームレスに」「次のレベルへ」のような中身の無い定型文言 | 【ガード】語彙の一部（下の「UI 文言の書き方」）。残りは【目視】 |
+
+<!-- textlint-enable -->
 
 slop とされるパターンは流行とともに変わる（2026-09-25 時点の一覧。出典は Anthropic の frontend-design
 skill と shadcn の agent skill）。**半年を目安に見直し**、機械検出できる項目が増えたら

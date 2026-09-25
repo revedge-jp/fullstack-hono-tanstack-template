@@ -1,6 +1,6 @@
 # AGENTS.md — client
 
-`apps/client` 固有の規約の正典。リポジトリ全体の規約（Stack・コマンド・TypeScript Style 等）は
+`apps/client` 固有の規約の本体。リポジトリ全体の規約（Stack・コマンド・TypeScript Style 等）は
 ルートの `../../AGENTS.md` にあり、ここには複製しない。Claude Code は同じディレクトリの `CLAUDE.md`
 （`@AGENTS.md` を取り込むだけ）経由で、このディレクトリのファイルを読んだときにこれを読み込む。
 
@@ -65,7 +65,7 @@ function XxxPage() {
 実例: `features/tasks/queries/get-tasks.ts`（401/403 を `isSsrAuthIndeterminate` で判定して空ページで返す扱いも含む。下の「Auth pattern」）と
 `app/routes/_authenticated/tasks.tsx`。レスポンスは `res.json()` をそのまま返さず、`schemas.ts` の Zod で検証している。
 
-**クライアントサイド**: ユーザー操作で動的に変わるデータに `useQuery`
+**クライアントサイド**: 画面の操作で動的に変わるデータに `useQuery`
 
 ```typescript
 // queries/xxx.ts
@@ -88,7 +88,7 @@ export function xxxQueryOptions() {
 
 - **認証ガード**: `_authenticated.tsx` (レイアウトルート) の **`beforeLoad`** で `context.queryClient.fetchQuery(sessionQueryOptions())` を呼び、未認証なら `/signin` にリダイレクト。`loader` に置かないこと — `loader` の結果は staleTime / intent プリロードの間は再利用され、セッションが切れても画面内遷移でリダイレクトされない。`beforeLoad` は遷移のたびに必ず実行され、取得は `sessionQueryOptions` が 30 秒デデュープする。`ensureQueryData` は使わない（古いキャッシュをそのまま返し、セッション切れを既定 5 分見逃す）
 - **ユーザー情報**: 親ルートの `beforeLoad` が `{ user }` を返し、子ルートは `getRouteApi("/_authenticated").useRouteContext()` で参照
-- **SSR の 401/403**: serverFn は `isSsrAuthIndeterminate(res.status)`（`shared/lib/ssr-auth.ts`）で判定し、フォールバック値（null / 空ページ）を返す（リダイレクトはガードに任せる）。401 だけを見る判定を serverFn ごとに書かない。**ただしガードはセッション（`/api/me`）しか見ないので、ログイン済みユーザーへの権限不足の 403 ではリダイレクトされず、フォールバック値（空ページ等）が黙って出る**。権限不足を画面で伝える必要がある serverFn は、この述語より先に 403 を別に扱う（今の api-service は 403 を返さない）
+- **SSR の 401/403**: serverFn は `isSsrAuthIndeterminate(res.status)`（`shared/lib/ssr-auth.ts`）で判定し、フォールバック値（null / 空ページ）を返す（リダイレクトはガードに任せる）。401 だけを見る判定を serverFn ごとに書かない。**ただしガードはセッション（`/api/me`）しか見ないので、ログイン済みユーザーへの権限不足の 403 ではリダイレクトされず、フォールバック値（空ページ等）がエラーなしで表示される**。権限不足を画面で伝える必要がある serverFn は、この述語より先に 403 を別に扱う（今の api-service は 403 を返さない）
 - **サインイン**: `authClient.signIn.social({ provider: "google" })` — クライアントサイドのみ
 - **サインアウト**: `authClient.signOut()` 後に `queryClient.clear()`（前ユーザーの react-query キャッシュを破棄）してから `/signin` へ遷移
 

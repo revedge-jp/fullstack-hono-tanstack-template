@@ -20,7 +20,7 @@
 
 - **WorktreeCreate は置換フック**。設定されていると Claude Code は自前の `git worktree add` を実行せず、
   フックが worktree を作って**絶対パスだけを stdout に出す**ことを期待する。進捗ログや `bun install`
-  の出力を stdout に出すと worktree 作成が壊れるので、スクリプトは実 stdout を fd 3 に退避している
+  の出力を stdout に出すと worktree 作成が失敗するので、スクリプトは実 stdout を fd 3 に退避している
 - 置換フックなので、途中で異常終了すると「DB の無い worktree」ではなく「worktree が作られない」になる。
   Docker 停止中・main に `.env` が無い・共有コンテナの名前衝突では DB だけ飛ばして成功させる
 - フックは **main チェックアウトのコピー**（`$CLAUDE_PROJECT_DIR`）が実行される。設定の読み込みも
@@ -41,7 +41,7 @@ volume が積み上がる。共有コンテナ内に DB を1つ切る方式な�
 - main の `.env` のコンテナ名・volume 名が、このテンプレートから作った他プロジェクトと同じ既定値
   （`app_postgres` / `app-postgres-data` 等）だと衝突する。フックは既存のコンテナ・volume が別の compose
   プロジェクトの持ち物なら共有 Postgres に触れずに DB を飛ばす（他プロジェクトの稼働中 DB の volume を
-  2つ目の Postgres がマウントするとデータが壊れる）。main の `.env` で固有の値に変えてから復旧する
+  2つ目の Postgres がマウントするとデータが不整合になる）。main の `.env` で固有の値に変えてから復旧する
 - `agent-a*` / `wf_*` / `job-*` / `bg-*` の機械生成名（サブエージェント・ワークフロー）は DB を作らない。
   必要なら `CLAUDE_WORKTREE_FULL_SETUP=1`
 

@@ -6,7 +6,7 @@ set -euo pipefail
 #  - CI=true or CI_MODE=1 : 簡素(機械可読寄り)出力
 #  - NO_COLOR: 色無し
 #  - TURBO_FILTER : turbo の filter（例: '...[origin/main]'）
-#  - SKIP_LINT, SKIP_TYPECHECK, SKIP_BUILD, SKIP_TEST, SKIP_ARCH, SKIP_FILENAME, SKIP_PROCESS_ENV, SKIP_DEPRECATED : 各ステップをスキップ
+#  - SKIP_LINT, SKIP_TYPECHECK, SKIP_BUILD, SKIP_TEST, SKIP_ARCH, SKIP_FILENAME, SKIP_PROSE, SKIP_PROCESS_ENV, SKIP_DEPRECATED : 各ステップをスキップ
 #  - SKIP_FSD, SKIP_DEPS, SKIP_DC, SKIP_GUARDS, SKIP_KNIP : アーキテクチャ個別スキップ（SKIP_ARCH=1 のときは無視）
 
 if [ "${CI:-}" = "true" ] || [ "${CI_MODE:-0}" = "1" ]; then PRETTY=0; else PRETTY=1; fi
@@ -87,6 +87,11 @@ if [ "${SKIP_FILENAME:-}" != "1" ]; then
   run_step_bg "Filename" node scripts/check/check-kebab-case.mjs
 fi
 
+# 指示ファイルと docs の文体（AI が書く文章に出やすい語。設定は .textlintrc.json）
+if [ "${SKIP_PROSE:-}" != "1" ]; then
+  run_step_bg "Prose" bun run lint:prose
+fi
+
 # migration journal の when 順序チェック（詳細は check-migration-journal-order.mjs 冒頭）
 if [ "${SKIP_MIGRATION_ORDER:-}" != "1" ]; then
   run_step_bg "MigrationOrder" bun run check:migration-order
@@ -128,7 +133,7 @@ done
 
 # 結果を表示（Deprecated は警告のみで FAIL にしない）
 WARN_ONLY_STEPS="Deprecated"
-for name in Lint Typecheck Tests ScriptTests Filename MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
+for name in Lint Typecheck Tests ScriptTests Filename Prose MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")

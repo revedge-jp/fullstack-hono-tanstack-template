@@ -9,6 +9,13 @@
         "allows": ["ゲート"]
       }
     },
-    "@textlint-ja/preset-ai-writing": true
+    "@textlint-ja/preset-ai-writing": {
+      "no-ai-list-formatting": false,
+      "no-ai-emphasis-patterns": false,
+      "no-ai-colon-continuation": false,
+      "ai-tech-writing-guideline": {
+        "enableDocumentAnalysis": false
+      }
+    }
   }
 }
