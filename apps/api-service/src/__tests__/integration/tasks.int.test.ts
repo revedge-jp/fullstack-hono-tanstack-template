@@ -3,7 +3,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { makeTaskTitle } from "@app/features/tasks/domain/models";
 import { createTasksRepository } from "@app/features/tasks/infrastructure/tasks.repository.drizzle";
 import { createTransactionalDb } from "@app/test-helpers/transactional-db";
-import { authUsers, type Database } from "@repo/db";
+import { authUsers, type Database, tasks } from "@repo/db";
 
 // 各テストは BEGIN → ROLLBACK で包まれる（test-helpers/transactional-db.ts）。
 // テスト中に作ったユーザー・タスクは終了時に自動で消えるので、手書きの delete は書かない。
@@ -104,24 +104,29 @@ describe("TasksRepository (実DB)", () => {
     }
   });
 
-  // 1テスト内の行は同じトランザクションなので created_at（defaultNow()）がすべて同じ値になる。
-  // そのためこのテストは (created_at, id) の同着タイブレークまで含めて検証している。
-  test("keyset ページネーション: limit 件ずつ取得し、重複も欠落もなく全件を辿れる", async () => {
+  // created_at は明示してシードする。1テスト内の行は同じトランザクションなので、defaultNow() に
+  // 任せると全行が同時刻になり、カーソルの `lt(created_at)` 側がどの行にも効かず検証から抜ける
+  // （同着タイブレークの `id` 側しか通らない）。時刻がすべて別の行と、同着の組の両方を入れる。
+  test("keyset ページネーション: limit 件ずつ取得し、重複も欠落もなく (created_at, id) 降順で全件を辿れる", async () => {
     const db = getDb();
     const tasksRepository = createTasksRepository({ db });
     const pgOwner = await seedOwner(db, "int-test-pagination");
 
-    const createdIds: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      const created = await tasksRepository.create({
-        ownerId: pgOwner,
-        title: title(`Page task ${i} ${crypto.randomUUID()}`),
-      });
-      expect(created.isOk()).toBe(true);
-      if (created.isOk()) {
-        createdIds.push(created.value.id);
-      }
-    }
+    const base = Date.UTC(2026, 0, 1);
+    const offsetsMs = [0, 1000, 2000, 2000, 3000];
+    const inserted = await db
+      .insert(tasks)
+      .values(
+        offsetsMs.map((offset, i) => ({
+          ownerId: pgOwner,
+          title: `Page task ${i} ${crypto.randomUUID()}`,
+          createdAt: new Date(base + offset),
+        })),
+      )
+      .returning({ id: tasks.id, createdAt: tasks.createdAt });
+    const expectedOrder = [...inserted]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1))
+      .map((row) => row.id);
 
     const seen: string[] = [];
     let after: { createdAt: Date; id: string } | undefined;
@@ -145,10 +150,9 @@ describe("TasksRepository (実DB)", () => {
       after = { createdAt: last.createdAt, id: last.id };
     }
 
-    // 5件を limit=2 で辿ると 3 ページ、重複・欠落なし
+    // 5件を limit=2 で辿ると 3 ページ、重複・欠落なし、(created_at, id) 降順
     expect(pages).toBe(3);
-    expect(new Set(seen).size).toBe(5);
-    expect(seen.sort()).toEqual([...createdIds].sort());
+    expect(seen).toEqual(expectedOrder);
   });
 
   test("所有者が異なる delete は NotFound を返す", async () => {

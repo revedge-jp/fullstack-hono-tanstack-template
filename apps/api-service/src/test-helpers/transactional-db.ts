@@ -24,7 +24,13 @@ import { createDb, type Database } from "@repo/db";
 // 包んで savepoint 単位に閉じ込める。
 //
 // 【now() はトランザクション開始時刻で固定される】1テスト内で作った行の `defaultNow()` 列は
-// すべて同じ値になる。時刻順に依存するテストは、同着のタイブレーク（id 等）まで含めて検証される。
+// すべて同じ値になる。時刻順に依存するテスト（keyset ページネーション等）は時刻の列を明示して
+// シードすること。任せると全行が同時刻になり、時刻での絞り込みが一度も通らないまま緑になる。
+//
+// 【テスト本体と beforeEach では rawDb / $client を使わない】createDb は接続が1本（max: 1、
+// ADR-002）で、テスト中はそれをこの fixture のトランザクションが握っている。ルートの接続を通る
+// クエリは afterEach で接続が空くまで待たされ、テストのタイムアウトで落ちる（原因の読めない
+// タイムアウトになる）。
 export function createTransactionalDb(databaseUrl: string): {
   // beforeEach 完了後〜afterEach 開始前（= テスト本体）以外で呼ぶと undefined。呼び出し側
   // （常に *.test.ts）で `getDb()!` として受け取る — 非 null アサーションは *.test.ts でのみ
@@ -46,9 +52,10 @@ export function createTransactionalDb(databaseUrl: string): {
           reachedCallback = true;
           // drizzle の型上、トランザクションハンドル（PgTransaction）はルートの Database 型が持つ
           // `$client`（生の postgres.js 接続）を欠く（クエリビルダーとしての実体は互換）。`as` で型だけ
-          // 偽るのではなく、実際に `$client` を書き足す（`Object.assign` は `T & U` として型付け
-          // されるので、キャスト無しで `Database` を満たす。配下の接続は元の `db` と同じ postgres.js
-          // クライアントなので値としても正しい）。
+          // 偽るのではなく、`$client` を書き足して `Database` を満たす（`Object.assign` は `T & U` と
+          // して型付けされるのでキャスト不要）。**この `$client` は型を満たすためだけのもので、
+          // トランザクションの接続ではなくルートの接続を指す**。テスト内で使うとトランザクションの外で
+          // 動き（ロールバックされない）、しかも上の理由で接続待ちのまま固まる。
           tx = Object.assign(t, { $client: db.$client });
           resolveStarted();
           await new Promise((_resolve, reject) => {
@@ -78,9 +85,10 @@ export function createTransactionalDb(databaseUrl: string): {
 
   return {
     getDb: () => tx,
-    // beforeAll/afterAll でファイル全体が共有する読み取り専用フィクスチャを作る/消すための、
-    // トランザクションに包まれない生ハンドル。rawDb でコミットした行は、READ COMMITTED の下で
-    // 以降開始する全ての per-test トランザクションから見える。
+    // ファイル直下の beforeAll/afterAll で、ファイル全体が共有する読み取り専用フィクスチャを
+    // 作る/消すための、トランザクションに包まれない生ハンドル。rawDb でコミットした行は、
+    // READ COMMITTED の下で以降開始する全ての per-test トランザクションから見える。
+    // テスト本体・beforeEach（describe 内の入れ子を含む）では使わない（接続待ちで固まる。上述）。
     rawDb: db,
     // 接続のクローズはここでは自動登録しない — bun:test の afterAll は登録順に実行されるため、
     // ここで先に afterAll(end) を登録すると、呼び出し側が rawDb で行う後始末より先に接続が
