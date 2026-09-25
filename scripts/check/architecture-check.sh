@@ -4,7 +4,7 @@ set -euo pipefail
 # Options:
 #  - CI=true or CI_MODE=1 : 簡素(機械可読寄り)出力
 #  - NO_COLOR: 色無し
-#  - SKIP_FSD=1 / SKIP_DEPS=1 / SKIP_DC=1 / SKIP_GUARDS=1 / SKIP_KNIP=1 / SKIP_DUP=1 / SKIP_INSTRUCTIONS=1 / SKIP_SELFTEST=1 : 各チェックをスキップ
+#  - SKIP_FSD=1 / SKIP_DEPS=1 / SKIP_DC=1 / SKIP_GUARDS=1 / SKIP_KNIP=1 / SKIP_DUP=1 / SKIP_INSTRUCTIONS=1 / SKIP_FILENAME=1 / SKIP_PROCESS_ENV=1 / SKIP_SELFTEST=1 : 各チェックをスキップ
 
 if [ "${CI:-}" = "true" ] || [ "${CI_MODE:-0}" = "1" ]; then PRETTY=0; else PRETTY=1; fi
 if [ -n "${NO_COLOR:-}" ] || [ "$PRETTY" = "0" ] || [ ! -t 1 ]; then
@@ -113,9 +113,22 @@ else
   warn "指示ファイルチェックは SKIP_INSTRUCTIONS=1 によりスキップ"
 fi
 
-# 9) scripts/ 配下のテスト(開発用スクリプトの解析ロジック等)。どのワークスペースにも属さず turbo の
-#    test:unit に乗らないので、ここで回す(arch:check と、CI の ci ジョブが動く PR = apps / packages / 依存の
-#    変更を含む PR・merge queue の Architecture & FSD Checks で走る。scripts だけの PR は pre-push の check-all が拾う)
+# 9) ファイル名の kebab-case と api-service の process.env 直参照。check-all(pre-push)にもあるが、
+#    pre-push を通らない変更(Web 上の編集・--no-verify)を CI で止めるためにここでも回す
+if [ "${SKIP_FILENAME:-0}" != "1" ]; then
+  run_step_bg "Filename" node scripts/check/check-kebab-case.mjs
+else
+  warn "ファイル名チェックは SKIP_FILENAME=1 によりスキップ"
+fi
+if [ "${SKIP_PROCESS_ENV:-0}" != "1" ]; then
+  run_step_bg "ProcessEnv" bash scripts/check/api-process-env.sh
+else
+  warn "process.env 直参照チェックは SKIP_PROCESS_ENV=1 によりスキップ"
+fi
+
+# 10) scripts/ 配下のテスト(開発用スクリプトの解析ロジック等)。どのワークスペースにも属さず turbo の
+#    test:unit に乗らないので、ここで回す(arch:check と、CI の ci ジョブの Architecture & FSD Checks で走る。
+#    ci ジョブは scripts/ だけの PR でも tooling フィルタで動く)
 if [ "${SKIP_SCRIPT_TESTS:-0}" != "1" ]; then
   run_step_bg "ScriptTests" bun test ./scripts
 else
@@ -127,7 +140,7 @@ for pid in "${PIDS[@]}"; do
   wait "$pid" || true
 done
 
-# 9) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
+# 11) ガード自己テスト（fixture を一時作成して既存ガードを発火させるため、
 #    Guards と並列に走らせると同じ fixture パスを奪い合いフレーキーになる。
 #    並列バッチが完全に終わってから単独で実行する）
 if [ "${SKIP_SELFTEST:-0}" != "1" ]; then
@@ -187,9 +200,11 @@ Dup:重複(jscpd)
 MigrationOrder:migration journal 順序
 Instructions:指示ファイルの参照整合
 ScriptTests:scripts のテスト
+Filename:ファイル名(kebab-case)
+ProcessEnv:api-service の process.env 直参照
 Selftest:ガード自己テスト"
 
-for name in FSD Deps DC Guards Knip Dup MigrationOrder Instructions ScriptTests Selftest; do
+for name in FSD Deps DC Guards Knip Dup MigrationOrder Instructions ScriptTests Filename ProcessEnv Selftest; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")

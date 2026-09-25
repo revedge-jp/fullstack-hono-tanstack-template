@@ -28,8 +28,8 @@
 | 依存脆弱性（bun audit） | 既知の高脆弱性 | `bun audit --audit-level=high` | ✗ | ✓（別ジョブ、deps変更時） |
 
 > **⚠ 対象範囲は `src/features/*/{domain,application}` に限られる。**
-> カバレッジ閾値（api）・ミューテーション・`arch:guards` の一部（`process.env` 直参照禁止、
-> application 層の import 禁止）は、いずれも `src/features` 配下しか見ていない。**feature から
+> カバレッジ閾値（api）・ミューテーション・`arch:guards` の一部（application 層の import 禁止）は、
+> いずれも `src/features` 配下しか見ていない（`process.env` 直参照は `api-process-env.sh` が `src/` 全体を見る）。**feature から
 > `src/shared/` へロジックを移すと、これらのゲートから静かに外れる**（エラーは出ず CI も緑のまま）。
 > `integrations/composition/` の adapter も同様に対象外。移したら `stryker.config.json` の
 > `mutate` へ個別に列挙して戻すこと。詳細は
@@ -38,6 +38,11 @@
 
 - **pre-push（`bun run check-all`）= 速い中核**。lint/type/test/arch/guards/knip を回す。
 - **重め・専門的なゲート（jscpd・自己テスト・カバレッジ・ミューテーション・integration・audit）は CI 主体**。pre-push を軽く保つため。
+- **CI の `ci` ジョブ（lint/type と arch:check 一式。テスト・カバレッジ・ミューテーションは apps/packages の変更時だけ）は、
+  コード・`scripts/`・ゲートの設定ファイル・依存のどれかに触れる PR で必ず走る**。
+  `ci.yml` の `changes` ジョブが paths-filter で判定し、どのフィルタにも当たらないコード変更も受け皿（`catchall`）で拾う。
+  走らないのは `docs/`・`*.md`・`.claude/` など受け皿の除外に書いたものだけで、そのうち指示ファイル（`*.md`・`.claude/`）は
+  軽量な `instructions` ジョブが参照整合だけを見る。新しい設定ファイルを足しても追記は不要（受け皿に当たる）。
 - ローカルでアーキ一式（jscpd・自己テスト込み）を回したいときは **`bun run arch:check`**。`FAST=1` を付けると knip/deps/dc/jscpd/自己テストをスキップして高速化できる。
 
 ---

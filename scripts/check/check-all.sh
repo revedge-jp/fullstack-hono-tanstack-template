@@ -113,7 +113,7 @@ fi
 
 # process.env 直接参照チェック（api-service アプリケーションコードのみ）
 if [ "${SKIP_PROCESS_ENV:-}" != "1" ]; then
-  run_step_bg "ProcessEnv" bash -c 'grep -rn "process\.env\." apps/api-service/src/ --include="*.ts" --exclude="*.test.ts" --exclude-dir="__tests__" --exclude="config.ts" 2>/dev/null; r=$?; [ $r -eq 1 ] && exit 0; exit 1'
+  run_step_bg "ProcessEnv" bash scripts/check/api-process-env.sh
 fi
 
 # 非推奨コードの検索（パターン検索のみ。typecheck は Group 1 に委ねる）
