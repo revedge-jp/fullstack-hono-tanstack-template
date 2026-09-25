@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["alchemy.run.ts"]
+      "entry": ["alchemy.run.ts", "scripts/**/*.test.mjs"]
     },
     "apps/api-service": {
       "entry": ["src/index.ts", "src/features/**/*.ts", "src/__tests__/**/*.ts"],

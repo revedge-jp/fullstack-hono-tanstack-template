@@ -43,6 +43,8 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
   差分しか見ない）
 - DB: `bun run db:up`（Docker で起動）→ スキーマを変えたら `bun run db:generate` → `bun run db:migrate`
 - 各ゲートの閾値と全体像は [品質ゲート ガイド](docs/dev/quality-gates.md)
+- `bun run metrics [-- --days 30]` はマージ済み PR からレビュー周回・リードタイム・マージ待ち・衝突での停止・
+  レビュアー別の検出数・取りこぼしを集計する（入力は PR 本文の記録。`.claude/commands/ship.md` の「計測用の記録」）
 
 ## Debugging: ローカルトレース（Local Explorer API）
 

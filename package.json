@@ -49,6 +49,7 @@
     "check:styles": "node scripts/check/client-styles.mjs",
     "check:instructions": "node scripts/check/instruction-files.mjs",
     "check-all": "bash scripts/check/check-all.sh",
+    "metrics": "node scripts/dev/dev-metrics.mjs",
     "dup:check": "jscpd .",
     "dup:report": "jscpd . --reporters html --output ./report",
     "infra:deploy:staging": "sh -c 'cd apps/client && bun run build' && dotenv -e .env -- bunx alchemy deploy --stage staging",

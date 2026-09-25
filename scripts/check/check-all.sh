@@ -77,6 +77,11 @@ if [ "${SKIP_TEST:-}" != "1" ]; then
   run_step_bg "Tests" bash -lc "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx drizzle-kit migrate && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
 fi
 
+# scripts/ 配下のテスト（turbo のワークスペース外なので Tests には含まれない）
+if [ "${SKIP_TEST:-}" != "1" ]; then
+  run_step_bg "ScriptTests" bun test ./scripts
+fi
+
 # Filename check
 if [ "${SKIP_FILENAME:-}" != "1" ]; then
   run_step_bg "Filename" node scripts/check/check-kebab-case.mjs
@@ -123,7 +128,7 @@ done
 
 # 結果を表示（Deprecated は警告のみで FAIL にしない）
 WARN_ONLY_STEPS="Deprecated"
-for name in Lint Typecheck Tests Filename MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
+for name in Lint Typecheck Tests ScriptTests Filename MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")

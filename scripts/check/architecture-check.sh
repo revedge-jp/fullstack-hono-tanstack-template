@@ -113,6 +113,15 @@ else
   warn "指示ファイルチェックは SKIP_INSTRUCTIONS=1 によりスキップ"
 fi
 
+# 9) scripts/ 配下のテスト(開発用スクリプトの解析ロジック等)。どのワークスペースにも属さず turbo の
+#    test:unit に乗らないので、ここで回す(arch:check と、CI の ci ジョブが動く PR = apps / packages / 依存の
+#    変更を含む PR・merge queue の Architecture & FSD Checks で走る。scripts だけの PR は pre-push の check-all が拾う)
+if [ "${SKIP_SCRIPT_TESTS:-0}" != "1" ]; then
+  run_step_bg "ScriptTests" bun test ./scripts
+else
+  warn "scripts のテストは SKIP_SCRIPT_TESTS=1 によりスキップ"
+fi
+
 # バックグラウンドジョブの完了を待機
 for pid in "${PIDS[@]}"; do
   wait "$pid" || true
@@ -177,9 +186,10 @@ Knip:未使用(knip)
 Dup:重複(jscpd)
 MigrationOrder:migration journal 順序
 Instructions:指示ファイルの参照整合
+ScriptTests:scripts のテスト
 Selftest:ガード自己テスト"
 
-for name in FSD Deps DC Guards Knip Dup MigrationOrder Instructions Selftest; do
+for name in FSD Deps DC Guards Knip Dup MigrationOrder Instructions ScriptTests Selftest; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")
