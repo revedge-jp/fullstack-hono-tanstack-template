@@ -93,6 +93,25 @@ if [ -f package.json ]; then
   APP_NAME="$APP_NAME" perl -0pi -e 's/("name":\s*)"[^"]*"/$1 . "\"" . $ENV{APP_NAME} . "\""/e' package.json
 fi
 
+# .env.example の DB コンテナ名・volume 名をアプリ名入りにする。既定の app_* のままだと、
+# このテンプレートから作った別プロジェクトと Docker 上で同じ名前になり、db:up が他プロジェクトの
+# DB の volume をマウントし、db:down が消しうる（docker の named volume はプロジェクトを跨いで共有される）。
+# 既に作ってある .env は書き換えない（稼働中の volume 名を変えると空の DB で起動するため）。
+if [ -f .env.example ]; then
+  echo "  • .env.example (DB コンテナ名・volume 名)"
+  APP_NAME="$APP_NAME" perl -pi -e '
+    s/^POSTGRES_CONTAINER_NAME=.*/POSTGRES_CONTAINER_NAME=$ENV{APP_NAME}_postgres/;
+    s/^POSTGRES_TEST_CONTAINER_NAME=.*/POSTGRES_TEST_CONTAINER_NAME=$ENV{APP_NAME}_postgres_test/;
+    s/^POSTGRES_VOLUME_NAME=.*/POSTGRES_VOLUME_NAME=$ENV{APP_NAME}-postgres-data/;
+    s/^PGADMIN_CONTAINER_NAME=.*/PGADMIN_CONTAINER_NAME=$ENV{APP_NAME}_pgadmin/;
+    s/^PGADMIN_VOLUME_NAME=.*/PGADMIN_VOLUME_NAME=$ENV{APP_NAME}-pgadmin-data/;
+  ' .env.example
+  if [ -f .env ]; then
+    echo "  ⚠️  既存の .env は書き換えていません。DB の名前を揃えるなら .env.example の5行を手で反映してください"
+    echo "     （稼働中の DB があるなら、先に bun run db:down するとデータは消えます）"
+  fi
+fi
+
 echo ""
 echo "✅ 初期化が完了しました。"
 

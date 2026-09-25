@@ -162,43 +162,27 @@ compose_main() {
 }
 
 # compose が解決する postgres / postgres-test のコンテナ名と volume 名のうち、既に存在するものが
-# **別の compose プロジェクトの持ち物**なら 1 を返す。
+# **別の compose プロジェクトの持ち物**なら 1 を返す（判定の本体と理由は
+# scripts/lib/compose-ownership.sh。db:up / db:down と共通）。
 #
-# docker-compose.yml の既定名（app_postgres / app-postgres-data 等）は汎用的で、このテンプレートから
-# 作った別プロジェクトも同じ既定を持つ。main の .env で上書きしていないと、ここで compose up した
-# 瞬間に**他プロジェクトの稼働中 DB の volume を2つ目の Postgres がマウントする**（データ破損）か、
-# 同名コンテナを奪い合う。compose の --no-recreate は自プロジェクト内の作り直しを防ぐだけで、
-# 他プロジェクトの volume の流用は防がない。
+# 共通 lib はこのフックと同じチェックアウトから読む（フックは main チェックアウトのコピーが
+# 実行されるので、同じコミットに lib もある）。読めなければ安全側に倒して触らない。
 compose_resources_owned_by_main() {
-  local cfg project res owner conflict=0
-  if ! cfg="$(compose_main config --format json 2>/dev/null)"; then
+  local lib="$_HOOK_DIR/../../scripts/lib/compose-ownership.sh" foreign rc=0
+  if [ ! -f "$lib" ]; then
+    log "$lib が見つからないため、共有 Postgres の持ち主を確認できません"
+    return 1
+  fi
+  # shellcheck source=../../scripts/lib/compose-ownership.sh
+  source "$lib"
+  foreign="$(compose_foreign_resources "$MAIN_ROOT" postgres postgres-test)" || rc=$?
+  if [ "$rc" -ne 0 ]; then
     log "main の compose 設定を解決できません"
     return 1
   fi
-  project="$(printf '%s' "$cfg" | jq -r '.name')"
-  while IFS= read -r res; do
-    [ -n "$res" ] || continue
-    owner="$(docker container inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$res" 2>/dev/null)" || continue
-    if [ "$owner" != "$project" ]; then
-      log "コンテナ $res は別プロジェクト（${owner:-compose 外}）のものです"
-      conflict=1
-    fi
-  done < <(printf '%s' "$cfg" | jq -r '.services | to_entries[] | select(.key == "postgres" or .key == "postgres-test") | .value.container_name // empty')
-  while IFS= read -r res; do
-    [ -n "$res" ] || continue
-    owner="$(docker volume inspect -f '{{index .Labels "com.docker.compose.project"}}' "$res" 2>/dev/null)" || continue
-    if [ "$owner" != "$project" ]; then
-      log "volume $res は別プロジェクト（${owner:-compose 外}）のものです"
-      conflict=1
-    fi
-  done < <(printf '%s' "$cfg" | jq -r '
-    . as $root
-    | [.services["postgres", "postgres-test"]?.volumes[]? | select(.type == "volume") | .source]
-    | unique[]
-    | $root.volumes[.].name // empty')
-  if [ "$conflict" -eq 1 ]; then
-    log "  main の .env で POSTGRES_CONTAINER_NAME / POSTGRES_TEST_CONTAINER_NAME / POSTGRES_VOLUME_NAME を"
-    log "  このプロジェクト固有の値にしてから、フックを再実行してください（.env.example 参照）"
+  if [ -n "$foreign" ]; then
+    printf '%s\n' "$foreign" | print_foreign_resources
+    log "  直したらフックを再実行してください（worktree のルートで bash scripts/agent-worktree-setup.sh）"
     return 1
   fi
   return 0
