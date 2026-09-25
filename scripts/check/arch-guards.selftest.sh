@@ -199,6 +199,20 @@ expect_guard "features 配下 process.env 直接参照禁止（分割代入）" 
 export const selftestEnv = SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
+expect_guard "features 配下 process.env 直接参照禁止（node:process の env）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  'import { env } from "node:process";
+export const selftestEnv = env.SELFTEST;' \
+  "features 配下で process.env を直接参照できません"
+
+expect_guard "features 配下 process.env 直接参照禁止（const { env } = process）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  'const { env } = process;
+export const selftestEnv = env.SELFTEST;' \
+  "features 配下で process.env を直接参照できません"
+
 expect_guard "features 配下 process.env 直接参照禁止（Bun.env）" \
   guard_features_no_process_env \
   "$D/application/__selftest_env.ts" \
@@ -637,6 +651,11 @@ export const selftestDcDb = tasks;'
 export const selftestDcHono = Hono;'
   mkfix "$D/domain/__selftest_dc_zod.ts" 'import { z } from "zod";
 export const selftestDcZod = z;'
+  # 実際のコードで使う形（サブパスと import type）。素の値 import だけを試すと、この 2 つの空振りに気づけない
+  mkfix "$D/application/__selftest_dc_hono_subpath.ts" 'import { createMiddleware } from "hono/factory";
+export const selftestDcHonoSubpath = createMiddleware;'
+  mkfix "$D/application/__selftest_dc_hono_type.ts" 'import type { Context } from "hono";
+export type SelftestDcHonoType = Context;'
   DC_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/api-service/src 2>/dev/null || true)
   for rule in server-application-cross-features-tasks server-presentation-no-infra-or-domain server-domain-no-db \
     server-features-no-web-framework server-domain-no-framework-libs; do
@@ -647,8 +666,17 @@ export const selftestDcZod = z;'
       FAIL=1
     fi
   done
+  for fixture in __selftest_dc_hono_subpath __selftest_dc_hono_type; do
+    if printf '%s' "$DC_OUT" | grep "server-features-no-web-framework" -A 2 | grep -q "$fixture"; then
+      echo "✅ dep-cruiser: server-features-no-web-framework（${fixture#__selftest_dc_}）"
+    else
+      echo "❌ dep-cruiser: $fixture の hono を検出しませんでした（exports の解決・tsPreCompilationDeps を確認）"
+      FAIL=1
+    fi
+  done
   rm -f "$D/application/__selftest_dc_cross_feature.ts" "$D/presentation/__selftest_dc_infra.ts" "$D/domain/__selftest_dc_db.ts" \
-    "$D/application/__selftest_dc_hono.ts" "$D/domain/__selftest_dc_zod.ts"
+    "$D/application/__selftest_dc_hono.ts" "$D/domain/__selftest_dc_zod.ts" \
+    "$D/application/__selftest_dc_hono_subpath.ts" "$D/application/__selftest_dc_hono_type.ts"
 
   # パスに dist / build / generated を含むだけのソース（feature 名 distribution 等）が解析から外れないこと
   mkfix "$D/application/__selftest_dc_distribution.ts" 'import { reconstituteActivity } from "@app/features/activity/domain/models";

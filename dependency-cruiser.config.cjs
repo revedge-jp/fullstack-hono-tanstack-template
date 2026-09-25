@@ -55,6 +55,16 @@ module.exports = {
     // （含めるとエッジ自体がグラフから消え、npm パッケージを禁止する to.path ルールが
     // 全く発火しなくなる — 実際にこの不具合が存在していた）。
     doNotFollow: { path: "node_modules" },
+    // hono はサブパス（hono/factory・hono/http-exception 等）と import type で使うのが普通なので、どちらも
+    // 辺にしないと npm パッケージのルールが空振りする。サブパスは package.json の exports で解決する
+    // （既定では解決できず "hono/factory" という名前のまま残り、node_modules/…/hono/ のパターンに当たらない）。
+    // import type は tsPreCompilationDeps で辺にする（`import type { Context } from "hono"` を application に
+    // 持ち込む形が、hono のルールが防ぎたいものそのもの）。
+    tsPreCompilationDeps: true,
+    enhancedResolveOptions: {
+      exportsFields: ["exports"],
+      conditionNames: ["import", "require", "node", "default"],
+    },
     // `.claude/worktrees` はメインのチェックアウト配下に作られる git worktree の置き場で、
     // 中身は別ブランチのソース一式。depcruise はリポジトリルート(`.`)から走査し gitignore も
     // 見ないため、除外しないと他ブランチのコードまで解析対象になる。実害は2つ:
