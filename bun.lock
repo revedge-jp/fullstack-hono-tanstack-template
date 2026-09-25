@@ -56,6 +56,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "hono": "^4.13.5",
+        "lucide-react": "^1.47.0",
         "react": "19.2.6",
         "react-dom": "19.2.6",
         "tailwind-merge": "^3.6.0",
@@ -1525,6 +1526,8 @@
     "loglevel": ["loglevel@1.9.2", "", {}, "sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg=="],
 
     "lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
+
+    "lucide-react": ["lucide-react@1.47.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-o8C23aXpNQypRY73W7fW02EyvWJinEMXgKeGjFoKym0zj3Q73hD97A1IQps1g8C14HTGsOpZL0Am+xjfgFZAbg=="],
 
     "madge": ["madge@8.0.0", "", { "dependencies": { "chalk": "^4.1.2", "commander": "^7.2.0", "commondir": "^1.0.1", "debug": "^4.3.4", "dependency-tree": "^11.0.0", "ora": "^5.4.1", "pluralize": "^8.0.0", "pretty-ms": "^7.0.1", "rc": "^1.2.8", "stream-to-array": "^2.3.0", "ts-graphviz": "^2.1.2", "walkdir": "^0.4.1" }, "peerDependencies": { "typescript": "^5.4.4" }, "optionalPeers": ["typescript"], "bin": { "madge": "bin/cli.js" } }, "sha512-9sSsi3TBPhmkTCIpVQF0SPiChj1L7Rq9kU2KDG1o6v2XH9cCw086MopjVCD+vuoL5v8S77DTbVopTO8OUiQpIw=="],
 

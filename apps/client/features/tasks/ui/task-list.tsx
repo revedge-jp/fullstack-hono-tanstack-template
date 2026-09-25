@@ -1,8 +1,10 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { ListTodo } from "lucide-react";
 import { useState } from "react";
 
+import { EmptyState } from "@/components/patterns/empty-state";
 import { Button } from "@/components/ui/button";
 
 import { advanceTask } from "../actions/advance-task";
@@ -45,7 +47,13 @@ export function TaskList({ items }: { items: TaskItem[] }) {
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">タスクはまだありません。</p>;
+    return (
+      <EmptyState
+        icon={<ListTodo />}
+        title="タスクはまだありません"
+        description="上のフォームから最初のタスクを追加できます。"
+      />
+    );
   }
 
   return (

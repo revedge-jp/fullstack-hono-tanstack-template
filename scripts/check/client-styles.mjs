@@ -64,6 +64,17 @@ const RULES = [
       "任意プロパティ（[color:#7c3aed] / [background:linear-gradient(...)] 等）は使えません。トークンとスケールのクラスを使ってください",
   },
   {
+    id: "margin-spacing",
+    // 間隔は親の gap-* / 部品の padding で作る。子の margin と space-* は、並びや条件付き描画が
+    // 変わると間隔が崩れ、部品ごとに間隔の作り方がばらつく。mx-auto 等の auto は対象外。
+    pattern: new RegExp(
+      `${CLASS_START}-?(?:m[trblxyse]?|space-[xy])-(?:\\d+(?:\\.\\d+)?|px)${CLASS_END}`,
+      "g",
+    ),
+    message:
+      "margin（mt-2 / -mx-4 等）と space-y-* / space-x-* で間隔を作らないでください。親の flex / grid + gap-* か、部品の padding で作ってください（mx-auto 等の auto は可）",
+  },
+  {
     id: "manual-dark-variant",
     // `{ dark: "Dark" }` のようなオブジェクトキーを拾わないよう、直後が区切りのものは除く
     // （2xl: や @md: のように数字・記号で始まるバリアントが続く形は拾う）。

@@ -172,6 +172,16 @@ expect_guard "スタイル規約: dark: 手書きの禁止" \
   'export const SelftestUi = () => <div className="bg-card dark:bg-muted">x</div>;' \
   "違反 [manual-dark-variant]"
 
+expect_guard "スタイル規約: 子の margin で間隔を作らない" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="sm:mt-2">x</p>;' \
+  "違反 [margin-spacing]"
+
+expect_guard "スタイル規約: space-y で間隔を作らない" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="space-y-4">x</div>;' \
+  "違反 [margin-spacing]"
+
 expect_guard "スタイル規約: 数字始まりのバリアントが続く dark: の禁止" \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="dark:2xl:bg-card">x</div>;' \

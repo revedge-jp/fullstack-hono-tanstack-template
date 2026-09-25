@@ -9,17 +9,21 @@ export function EmptyState(props: {
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-      {props.icon && (
-        <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          {props.icon}
+    <div className="flex flex-col items-center gap-5 px-6 py-16 text-center">
+      <div className="flex flex-col items-center gap-3">
+        {props.icon && (
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            {props.icon}
+          </div>
+        )}
+        <div className="flex flex-col gap-1">
+          <p className="text-base leading-normal font-medium">{props.title}</p>
+          {props.description && (
+            <p className="text-sm text-muted-foreground">{props.description}</p>
+          )}
         </div>
-      )}
-      <div className="flex flex-col gap-1">
-        <p className="text-base leading-normal font-medium">{props.title}</p>
-        {props.description && <p className="text-sm text-muted-foreground">{props.description}</p>}
       </div>
-      {props.action && <div className="mt-2">{props.action}</div>}
+      {props.action}
     </div>
   );
 }
