@@ -23,7 +23,7 @@ function HomePage() {
           <p className="text-sm font-medium">{user.name}</p>
           <p className="text-sm text-muted-foreground">{user.email}</p>
         </div>
-        <p className="text-muted-foreground">Coming soon.</p>
+        <p className="text-sm text-muted-foreground">Coming soon.</p>
         <div className="flex gap-3">
           <Link to="/tasks" className="text-sm text-muted-foreground underline">
             tasks
