@@ -1,4 +1,5 @@
-import { queryOptions } from "@tanstack/react-query";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
+import { redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 
@@ -36,9 +37,26 @@ export const getSessionServerFn = createServerFn().handler(
 // 呼ぶ側は fetchQuery を使う（ensureQueryData は古いキャッシュをそのまま返し、セッション切れを
 // 見逃す。_authenticated.tsx 参照）。
 // サインアウト時は queryClient.clear() でこのキャッシュも破棄される（sign-out-button.tsx）。
+//
+// staleTime は全体の既定に頼らず明示する（全体の既定はハイドレーション直後の再取得を避けるための値で、
+// 変わると「セッション切れを何秒で検出するか」まで黙って変わるため）。
+const SESSION_STALE_TIME_MS = 30_000;
+
 export function sessionQueryOptions() {
   return queryOptions({
     queryKey: ["session"],
     queryFn: () => getSessionServerFn(),
+    staleTime: SESSION_STALE_TIME_MS,
   });
+}
+
+// _authenticated の beforeLoad が使うガード本体。未ログインなら /signin へ redirect を throw する。
+// fetchQuery を使うこと（ensureQueryData は古いキャッシュをそのまま返し、セッション切れを gc まで
+// 見逃す）。この性質は get-session.test.ts が時刻を進めて確かめている。
+export async function requireSessionUser(queryClient: QueryClient): Promise<SessionUser> {
+  const user = await queryClient.fetchQuery(sessionQueryOptions());
+  if (!user) {
+    throw redirect({ to: "/signin" });
+  }
+  return user;
 }

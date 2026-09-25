@@ -1,6 +1,6 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
-import { sessionQueryOptions } from "@/features/auth";
+import { requireSessionUser } from "@/features/auth";
 
 export const Route = createFileRoute("/_authenticated")({
   // 未認証リダイレクトは loader ではなく beforeLoad に置く。loader の結果は staleTime や
@@ -13,13 +13,8 @@ export const Route = createFileRoute("/_authenticated")({
   // **ensureQueryData ではなく fetchQuery を使う。** ensureQueryData はキャッシュがあれば古さに
   // 関係なくそれを返す（revalidateIfStale も裏で取り直すだけ）ので、セッションが切れた後も
   // キャッシュが gc されるまで（既定 5 分）ログイン済みとして素通りする。fetchQuery は staleTime を
-  // 過ぎていれば取り直してから返すので、遅れは最大で staleTime（30 秒）に収まる（実測で確認）。
-  beforeLoad: async ({ context }) => {
-    const user = await context.queryClient.fetchQuery(sessionQueryOptions());
-    if (!user) {
-      throw redirect({ to: "/signin" });
-    }
-    return { user };
-  },
+  // 過ぎていれば取り直してから返すので、遅れは最大で staleTime（30 秒）に収まる（requireSessionUser と
+  // そのテスト参照）。
+  beforeLoad: async ({ context }) => ({ user: await requireSessionUser(context.queryClient) }),
   component: () => <Outlet />,
 });

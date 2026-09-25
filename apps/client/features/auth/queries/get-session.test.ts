@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
+
+import { QueryClient } from "@tanstack/react-query";
+import { isRedirect } from "@tanstack/react-router";
 
 import type { SessionUser } from "@/shared/lib/api-client";
 import { createApiMock, reactStartModule, reactStartServerModule } from "@/test-helpers/api-mock";
@@ -10,7 +13,8 @@ await mock.module("@/shared/lib/api-client", api.apiClientModule);
 await mock.module("@tanstack/react-start", reactStartModule);
 await mock.module("@tanstack/react-start/server", reactStartServerModule());
 
-const { getSessionServerFn, sessionQueryOptions } = await import("./get-session");
+const { getSessionServerFn, requireSessionUser, sessionQueryOptions } =
+  await import("./get-session");
 
 describe("auth.getSessionServerFn", () => {
   beforeEach(() => api.reset());
@@ -52,5 +56,62 @@ describe("auth.sessionQueryOptions", () => {
     expect(await queryFn!({} as never)).toEqual(mockUser);
     api.reset({ ok: false, status: 401, body: { ok: false, error: "Unauthorized" } });
     expect(await queryFn!({} as never)).toBeNull();
+  });
+});
+
+// _authenticated の beforeLoad が使うガード。**今回直した不具合そのもの**（セッションが切れても
+// キャッシュのせいでガードを素通りする）を、本物の QueryClient と時刻の差し替えで確かめる。
+// ensureQueryData に戻すと「30 秒を過ぎたら /signin」のテストが落ちる。
+describe("auth.requireSessionUser", () => {
+  const start = new Date("2026-01-01T00:00:00Z");
+
+  beforeEach(() => {
+    api.reset();
+    setSystemTime(start);
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  async function expectRedirectToSignin(promise: Promise<unknown>) {
+    const error = await promise.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(isRedirect(error)).toBe(true);
+    expect((error as { options: { to: string } }).options.to).toBe("/signin");
+  }
+
+  test("ログイン済みならユーザーを返す", async () => {
+    const queryClient = new QueryClient();
+    expect(await requireSessionUser(queryClient)).toEqual(mockUser);
+  });
+
+  test("未ログインなら /signin への redirect を throw する", async () => {
+    api.reset({ ok: false, status: 401, body: { ok: false, error: "Unauthorized" } });
+    await expectRedirectToSignin(requireSessionUser(new QueryClient()));
+  });
+
+  test("セッションが切れても 30 秒以内はキャッシュで通し（遷移ごとに /api/me を叩かない）、30 秒を過ぎたら取り直して /signin へ送る", async () => {
+    const queryClient = new QueryClient();
+    expect(await requireSessionUser(queryClient)).toEqual(mockUser);
+
+    api.reset({ ok: false, status: 401, body: { ok: false, error: "Unauthorized" } });
+    setSystemTime(new Date(start.getTime() + 29_000));
+    expect(await requireSessionUser(queryClient)).toEqual(mockUser);
+    // reset 後に /api/me が呼ばれていない（キャッシュで通った）
+    expect(api.state.lastPath).toBeUndefined();
+
+    setSystemTime(new Date(start.getTime() + 31_000));
+    await expectRedirectToSignin(requireSessionUser(queryClient));
+  });
+
+  test("staleTime は全体の既定に頼らず 30 秒を明示している（既定が 0 の QueryClient でも同じ）", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 0 } } });
+    expect(await requireSessionUser(queryClient)).toEqual(mockUser);
+    api.reset({ ok: false, status: 401, body: { ok: false, error: "Unauthorized" } });
+    setSystemTime(new Date(start.getTime() + 10_000));
+    expect(await requireSessionUser(queryClient)).toEqual(mockUser);
   });
 });

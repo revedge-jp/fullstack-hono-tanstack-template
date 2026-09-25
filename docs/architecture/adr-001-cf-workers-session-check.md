@@ -11,7 +11,7 @@
 
 SSR の `loader` / `createServerFn` は api-service の機能を必要とする。代表例:
 
-- 認証ガード (`/_authenticated` レイアウトルート) の `loader` が `getSessionServerFn()` でセッションを検証する（Better Auth が DB にアクセス）
+- 認証ガード (`/_authenticated` レイアウトルート) の `beforeLoad` が `requireSessionUser()` → `queryClient.fetchQuery(sessionQueryOptions())` → `getSessionServerFn()` でセッションを検証する（Better Auth が DB にアクセス）
 - `getTasksServerFn()` が初回表示用のタスク一覧を取得する
 
 ---
@@ -100,7 +100,8 @@ Browser → CF Worker (server.ts)
   runWithApiClient(
     createInProcessApiClient(app),        # hc<AppType> + app.request を ALS にスレッド
     () => handler(request))
-      → /_authenticated loader
+      → /_authenticated beforeLoad
+          → requireSessionUser() → queryClient.fetchQuery(sessionQueryOptions())
           → getSessionServerFn()
               → getApiClient()            # AsyncLocalStorage から取得
               → .api.me.$get({ cookie })  # app.request 直呼び（ネットワークなし）
