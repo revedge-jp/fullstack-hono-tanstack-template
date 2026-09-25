@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { createFakeApp } from "api-service/test-helpers";
 
+import { createLoggerSpy } from "../../test-helpers/create-logger-spy";
+
 describe("createApp middleware stack — via createFakeApp", () => {
   test("未知パス: 404 + { ok: false, error: 'Not Found' }", async () => {
     const app = createFakeApp();
@@ -59,6 +61,34 @@ describe("createApp middleware stack — via createFakeApp", () => {
     expect(ok2.status).toBe(200);
     expect(blocked.status).toBe(429);
     expect(await blocked.json()).toEqual({ ok: false, error: "Too Many Requests" });
+  });
+
+  // 本番(Workers)は createApp → buildApp をリクエストごとに呼ぶ(client の app/server.ts)。
+  // カウントが buildApp の中にあると毎回 0 から数え直し、上限に届かない。
+  test("rateLimit: アプリをリクエストごとに作り直しても上限が効く（isolate 共有のストア）", async () => {
+    const headers = { "CF-Connecting-IP": "203.0.113.77" };
+    const build = () =>
+      createFakeApp({ rateLimit: { windowMs: 60_000, max: 1 }, rateLimitStores: "isolate" });
+    const first = await build().request("/api/client-errors", { method: "POST", headers });
+    const second = await build().request("/api/client-errors", { method: "POST", headers });
+    expect(first.status).not.toBe(429);
+    expect(second.status).toBe(429);
+  });
+
+  test("timeout: 504 を返し、5xx の HTTPException を error ログに残す", async () => {
+    const spy = createLoggerSpy();
+    const slowAuth = {
+      handler: () =>
+        new Promise<Response>((resolve) => setTimeout(() => resolve(new Response("late")), 50)),
+    };
+    const app = createFakeApp({ requestTimeoutMs: 5, auth: slowAuth, logger: spy.logger });
+    const res = await app.request("/api/auth/session");
+    expect(res.status).toBe(504);
+    expect(spy.error).toHaveLength(1);
+    expect(spy.error[0]).toEqual([
+      expect.objectContaining({ status: 504, path: "/api/auth/session", err: "HTTPException 504" }),
+      "http exception",
+    ]);
   });
 
   describe("onError: 500 の形状と環境別マスキング", () => {

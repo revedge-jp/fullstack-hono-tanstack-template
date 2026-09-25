@@ -35,7 +35,7 @@ const ConfigSchema = z
     GOOGLE_CLIENT_SECRET: z.string().min(1),
     // リクエストタイムアウト（ミリ秒）。ハングしたハンドラが接続を占有し続けるのを防ぐ。
     REQUEST_TIMEOUT_MS: numberEnv(30_000),
-    // 認証エンドポイント（OAuth）向けレート制限。per-isolate のメモリストアで数える
+    // /api/auth/* と /api/client-errors/* のレート制限。isolate ごとのメモリで数える
     // （middlewares/rate-limit.ts 参照）。ウィンドウ長とウィンドウあたりの最大許容数。
     RATE_LIMIT_WINDOW_MS: numberEnv(60_000),
     RATE_LIMIT_MAX: numberEnv(20),

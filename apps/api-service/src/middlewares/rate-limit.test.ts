@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { Hono } from "hono";
 
-import { rateLimit } from "./rate-limit";
+import { createRateLimitStore, rateLimit, type RateLimitOptions } from "./rate-limit";
 
-function appWith(options: Parameters<typeof rateLimit>[0]) {
-  return new Hono().use("*", rateLimit(options)).get("/", (c) => c.json({ ok: true }));
+function appWith(options: RateLimitOptions, store = createRateLimitStore()) {
+  return new Hono()
+    .use("*", rateLimit({ ...options, store }))
+    .get("/", (c) => c.json({ ok: true }));
 }
 
 const ipHeaders = { "CF-Connecting-IP": "1.2.3.4" };
@@ -54,12 +56,43 @@ describe("rateLimit middleware", () => {
 
   test("keyGenerator を差し替えられる", async () => {
     const app = new Hono()
-      .use("*", rateLimit({ windowMs: 60_000, max: 1, keyGenerator: () => "everyone" }))
+      .use(
+        "*",
+        rateLimit({
+          windowMs: 60_000,
+          max: 1,
+          keyGenerator: () => "everyone",
+          store: createRateLimitStore(),
+        }),
+      )
       .get("/", (c) => c.json({ ok: true }));
     const first = await app.request("/", { headers: { "CF-Connecting-IP": "10.0.0.1" } });
     const second = await app.request("/", { headers: { "CF-Connecting-IP": "10.0.0.2" } });
     expect(first.status).toBe(200);
     // 別 IP でも同一キーに畳まれるため 2 回目でブロックされる
     expect(second.status).toBe(429);
+  });
+
+  // Workers ではアプリ（ミドルウェアごと）をリクエストのたびに作り直す。カウントが store 側に
+  // あるので、作り直したミドルウェアでも同じ store なら上限が効く。
+  test("同じ store を渡せば、作り直したミドルウェアでもカウントを引き継ぐ", async () => {
+    const store = createRateLimitStore();
+    const first = await appWith({ windowMs: 60_000, max: 1 }, store).request("/", {
+      headers: ipHeaders,
+    });
+    const second = await appWith({ windowMs: 60_000, max: 1 }, store).request("/", {
+      headers: ipHeaders,
+    });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+  });
+
+  test("別の store は独立に数える", async () => {
+    const first = await appWith({ windowMs: 60_000, max: 1 }).request("/", { headers: ipHeaders });
+    const second = await appWith({ windowMs: 60_000, max: 1 }).request("/", {
+      headers: ipHeaders,
+    });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
   });
 });

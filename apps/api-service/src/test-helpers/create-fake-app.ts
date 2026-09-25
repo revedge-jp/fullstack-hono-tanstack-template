@@ -1,4 +1,4 @@
-import { type AppRuntime, buildApp } from "@app/app";
+import { type AppRuntime, buildApp, createRateLimitStores, type RateLimitStores } from "@app/app";
 import type { AppConfig } from "@app/config";
 import { createActivityService } from "@app/features/activity/application/service";
 import type { ActivityService } from "@app/features/activity/application/service";
@@ -31,6 +31,9 @@ export type FakeAppOverrides = {
   corsOrigin?: string;
   requestTimeoutMs?: number;
   rateLimit?: { windowMs: number; max: number };
+  // 既定は呼び出しごとに新しいストア（テスト間でカウントを共有しない）。"isolate" は本番と同じ
+  // モジュールスコープの共有ストアを使う（作り直しても効くことの検証用。使う側は一意な IP を付ける）。
+  rateLimitStores?: RateLimitStores | "isolate";
   version?: { appVersion: string; gitSha: string };
   // --- 認証 / セッション ---
   // 既定は「DEFAULT_USER で認証済み」。未認証をテストしたい場合は getSession を差し替える。
@@ -120,5 +123,8 @@ export function createFakeApp(overrides: FakeAppOverrides = {}) {
     "nodeEnv" | "corsOrigin" | "requestTimeoutMs" | "rateLimit" | "version"
   >;
 
-  return buildApp(config, runtime);
+  if (overrides.rateLimitStores === "isolate") {
+    return buildApp(config, runtime);
+  }
+  return buildApp(config, runtime, overrides.rateLimitStores ?? createRateLimitStores());
 }
