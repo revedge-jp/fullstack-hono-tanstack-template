@@ -96,8 +96,15 @@ git log origin/main
 
 ### Q: worktree が削除できない
 
-Claude Code の worktree は `ExitWorktree`（remove）で消す。WorktreeRemove フックがポートの登録と `wt_<name>` DB も
-片付ける。`git worktree remove` で直接消すとそれらが残る。
+Claude Code の worktree は、作ったセッションの中なら `ExitWorktree`（remove）で消す。WorktreeRemove フックが
+ポートの登録と `wt_<name>` DB も片付ける。前のセッションで残した worktree（`ExitWorktree` の対象外）は、main の
+ルートからフックを直接流す（ディレクトリが既に無くても worktree 登録の prune から続きを片付ける）:
+
+```bash
+echo '{"worktree_path":"<worktree の絶対パス>"}' | bash .claude/hooks/worktree-remove.sh
+```
+
+共有 DB 方式の worktree を `git worktree remove` で直接消すと、ポートの登録と DB が残る（旧方式の片付けは上の「復旧」）。
 
 ### Q: 「already checked out」エラー
 
