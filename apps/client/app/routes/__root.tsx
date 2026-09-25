@@ -36,7 +36,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       {
         name: "description",
         content:
-          "{{APP_NAME}} — Hono + TanStack Start で構築したフルスタックアプリのテンプレート。",
+          "{{APP_NAME}} は Hono + TanStack Start で構築したフルスタックアプリのテンプレートです。",
       },
     ],
     links: [

@@ -10,7 +10,7 @@
 // （画面に出ないため。行単位で読む client-styles.mjs はコメントも見る）。
 //
 // 全角ダッシュだけはここの正規表現で見る。kuromoji は前後の文字次第でダッシュを名詞 1 つにも記号 2 つにも
-// 分けるため、辞書の形態素では拾い漏れる。表の空欄に置く「—」単独は文の途中ではないので対象外。
+// 分けるため、辞書の形態素では拾えない。前後の空白の有無は問わない。表の空欄に置く「—」単独は文の途中ではないので対象外。
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 
@@ -26,7 +26,7 @@ const ROOTS = [
   "apps/client/shared",
 ];
 const JAPANESE = /[\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Han}]/u;
-const DASH = /(?<=\S)[—―─⸺⸻]+(?=\S)/gu;
+const DASH = /(?<=\S)\s*[—―─⸺⸻]+\s*(?=\S)/gu;
 const DASH_RULE_ID = "fullwidth-dash";
 const DASH_MESSAGE =
   "全角ダッシュで文をつながないでください。句点で文を分けるか、読点・括弧を使ってください";
@@ -71,9 +71,11 @@ function extractTexts(file) {
 }
 
 // 列（0 始まり）から元ファイルの行を戻す。エスケープ（\n 等）を含む文字列では数文字ずれうるが、行の特定には足りる。
+// 行は \n だけで数える。TypeScript の getLineAndCharacterOfPosition は U+2028/U+2029 も改行に数えるので、
+// エディタや git の行番号とずれる。
 function locate(entry, column) {
-  const { line } = entry.source.getLineAndCharacterOfPosition(entry.start + column);
-  return `${relative(".", entry.file)}:${line + 1}`;
+  const line = entry.source.text.slice(0, entry.start + column).split("\n").length;
+  return `${relative(".", entry.file)}:${line}`;
 }
 
 const files = collectClientSources(ROOTS, "scripts/check/ui-copy.mjs");

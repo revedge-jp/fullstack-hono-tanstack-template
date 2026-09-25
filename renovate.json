@@ -45,7 +45,7 @@
       "automerge": false
     },
     {
-      "description": "AI 文章チェックの辞書（ui-copy.mjs / lint:prose の判定そのもの）。語が消える更新はガードを緩めても CI が通るので、自動マージせず差分を見てマージする",
+      "description": "AI 文章チェックの辞書（ui-copy.mjs / lint:prose の判定そのもの）。語が消える更新はガードを緩めても CI が通るので、自動マージせず差分を見てマージする。lockFileMaintenance（自動マージ）で範囲内の新しい版が入らないよう、package.json では版を固定している",
       "matchPackageNames": [
         "textlint-rule-preset-ai-words-ja",
         "@textlint-ja/textlint-rule-preset-ai-writing"

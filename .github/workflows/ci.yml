@@ -89,12 +89,15 @@ jobs:
               - '.oxfmtrc.json'
               - 'lefthook.yml'
               - 'alchemy.run.ts'
-            # lint:prose の設定と辞書を変えたら、文書を検査し直す
+            # lint:prose の設定・辞書・textlint とプリセットの版を変えたら、文書をチェックし直す
+            # （依存の更新だけの PR では ci ジョブの arch:guards は走るが lint:prose は走らない）
             instructions:
               - '**/*.md'
               - '.claude/**'
               - '.textlintrc.json'
               - 'scripts/check/ai-words.json'
+              - 'package.json'
+              - 'bun.lock'
       # 受け皿: 上の filters のどれにも当たらないコード変更でも ci ジョブを開く(除外は denylist)。
       # filters への追記漏れが「ガードもテストも走らないまま緑」になるのを防ぐ向き。別 step なのは、
       # 否定パターンを効かせる predicate-quantifier: every が step 単位の入力で、上の OR 前提の

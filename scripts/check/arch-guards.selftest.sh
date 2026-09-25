@@ -318,6 +318,12 @@ expect_guard "UI 文言: 全角ダッシュ" \
   'export const selftestCopy = "保存しました——一覧に戻ります";' \
   "違反 [fullwidth-dash]"
 
+expect_guard "UI 文言: 前後に空白のある全角ダッシュ" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const selftestCopy = "保存しました — 一覧に戻ります";' \
+  "違反 [fullwidth-dash]"
+
 # 逆向き（誤検出）の回帰テスト: 正当なコードで client-styles.mjs が通ることを確認する。
 mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
