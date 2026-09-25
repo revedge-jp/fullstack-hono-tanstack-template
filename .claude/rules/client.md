@@ -115,11 +115,12 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
   | 用途 | クラス |
   |---|---|
   | ページ見出し（h1） | 【ガード】`PageHeader` を使う（h1 の直書きは禁止。中身は `text-2xl font-bold`） |
-  | セクション見出し（h2 / h3） | `text-base font-semibold` |
+  | セクション見出し（h2 / h3） | `text-base font-medium`（shadcn の `CardTitle` と `EmptyState` の見出しと同じ） |
   | 本文・UI | `text-sm`（強調は `font-medium`） |
   | 補足・注記 | `text-xs text-muted-foreground` |
 
-  `font-bold` は `PageHeader` の中だけ、`font-semibold` はセクション見出しだけに使う。
+  `font-bold` は `PageHeader` の中だけに使い、`font-semibold` は使わない（shadcn の部品が `font-medium` で
+  揃っているため。部品を再生成しても規約とずれない側に合わせる）。
 - 字間は Tailwind のスケール（`tracking-tight` / `tracking-wide` / `tracking-wider` / `tracking-widest`
   = 0.1em）から選ぶ。`tracking-[0.1em]` は `tracking-widest` と同じ値なので任意値にしない。日本語の見出し
   などでスケールに無い字間が要るなら、`apps/client/app/globals.css` の `@theme` に `--tracking-*` の

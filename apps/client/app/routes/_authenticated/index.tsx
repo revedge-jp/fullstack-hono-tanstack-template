@@ -20,7 +20,7 @@ function HomePage() {
       <main className="flex flex-col items-center gap-4">
         <PageHeader title="{{APP_NAME}}" />
         <div className="flex flex-col items-center gap-1">
-          <p className="font-medium">{user.name}</p>
+          <p className="text-sm font-medium">{user.name}</p>
           <p className="text-sm text-muted-foreground">{user.email}</p>
         </div>
         <p className="text-muted-foreground">Coming soon.</p>
