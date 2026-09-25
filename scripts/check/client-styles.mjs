@@ -27,8 +27,6 @@ const ROOTS = [
   "apps/client/components",
   "apps/client/shared",
 ];
-const EXCLUDED_DIRS = ["apps/client/components/ui"];
-const EXCLUDED_FILES = [/\.test\.tsx?$/, /\.spec\.tsx?$/, /routeTree\.gen\.ts$/];
 
 const PALETTE_NAMES =
   "red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white";
@@ -115,6 +113,22 @@ const RULES = [
     allowedIn: ["apps/client/components/patterns/page-header.tsx"],
     message:
       "h1 を直接書かないでください。ページ見出しは @/components/patterns/page-header の PageHeader を使ってください",
+  },
+  {
+    id: "centered-text",
+    // 日本語の文章を中央揃えで折り返すと行頭が毎行ずれて読みにくい。塊は中央、文字は左
+    // （.claude/rules/client.md「文章を中央揃えにしない」）。flex-col items-center で中身を中央に並べる形は
+    // アイコンの中央寄せ等と区別できないので検出しない（目視）。style の textAlign も拾う（components/ は
+    // inline-style の対象外なので、ここで見ないと素通りする）。align="center" は Popover 等の配置の prop と
+    // 区別できないので見ない。.css（@apply 等）は走査対象外。
+    pattern: new RegExp(
+      `${CLASS_START}text-center${CLASS_END}|\\btextAlign:\\s*["']center["']`,
+      "g",
+    ),
+    // 中央のままでよいもの（帳票の表題・数値の欄等）はファイル単位でここに足す
+    allowedIn: [],
+    message:
+      "文章を中央揃え（text-center）にしないでください。塊を中央に置き（flex justify-center / CenteredPage / mx-auto max-w-*）、中の文字は左揃えにします（.claude/rules/client.md「文章を中央揃えにしない」）。帳票の表題など中央のままでよいものは、scripts/check/client-styles.mjs の centered-text の allowedIn にファイルを足してください",
   },
   {
     id: "inline-style",

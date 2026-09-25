@@ -162,6 +162,24 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 - エラー: `role="alert"` + `text-destructive`
 - 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingId` が実例）
 
+### 文章を中央揃えにしない — 塊は中央、文字は左
+
+日本語は 1 行に入る文字数が多く、中央揃えで折り返すと行頭が毎行ずれて読みにくい。画面の真ん中に置く塊
+（空状態・エラー表示・サインイン画面等）は、**塊を中央に置き、中の見出し・本文・アイコン・ボタンはすべて
+左揃え**にする。見出しだけ中央に残す形も採らない（見出しもスマホでは折り返す）。
+
+- 【ガード】`text-center`（と style の `textAlign` での中央揃え）は使えない（`scripts/check/client-styles.mjs`
+  の `centered-text`）。`flex-col items-center` で中身を中央に並べる形はアイコンの中央寄せ等と区別できないので【目視】
+- `components/ui`（shadcn の生成物）はガードの対象外で、Dialog のヘッダー等は `text-center` を持つことがある。
+  生成物は書き換えず、呼び出し側の `className` で `text-left` に上書きする
+- 書き方: 外側で中央に寄せ（`flex justify-center` / `CenteredPage` / `mx-auto max-w-*`）、内側は `items-start`。
+  内側を内容幅に縮める形（`EmptyState`）にすると、短い 1 行でも塊ごと中央に見える
+- 文中の `<br />` は中央揃え用の改行であることが多い。左揃えにしたら外す（折り返しと重なって
+  「す。」だけの行ができる）
+- 中央のままでよいもの: 帳票の表題・数値の欄・写真のキャプション・ファイルのドロップ領域の 1 行案内・
+  掲示として正面から読ませる画面（QR の提示画面等）。`text-center` が要るなら、そのファイルを `centered-text` の
+  `allowedIn` に足す（許可が PR の差分に出るのでレビューで判断できる）
+
 ### AI slop を避ける
 
 LLM は学習データの多数派に収束するため、指示が無いと「どこかで見た AI 製の画面」を出す。業務アプリの

@@ -17,11 +17,11 @@ function HomePage() {
 
   return (
     <CenteredPage>
-      <main className="flex flex-col items-center gap-4">
+      <main className="flex max-w-sm flex-col items-start gap-4 px-6">
         <PageHeader title="{{APP_NAME}}" />
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-start gap-1">
           <p className="text-sm font-medium">{user.name}</p>
-          <p className="text-sm text-muted-foreground">{user.email}</p>
+          <p className="text-sm wrap-anywhere text-muted-foreground">{user.email}</p>
         </div>
         <p className="text-sm text-muted-foreground">Coming soon.</p>
         <div className="flex gap-3">

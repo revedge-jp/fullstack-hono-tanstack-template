@@ -20,7 +20,7 @@ export const Route = createFileRoute("/signin")({
 function SignInPage() {
   return (
     <CenteredPage>
-      <main className="flex flex-col items-center gap-6">
+      <main className="flex max-w-sm flex-col items-start gap-6 px-6">
         <PageHeader title="{{APP_NAME}}" />
         <GoogleSignInButton />
         {import.meta.env.DEV && <DevSignInButton />}
