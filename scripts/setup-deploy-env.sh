@@ -50,7 +50,7 @@ gh api -X PUT "repos/$REPO/environments/$STAGE" --silent
 # item: "名前|kind|説明" （kind: secret = 隠し入力 / var = 通常入力）
 # bash 3.2（macOS 標準）互換のため連想配列は使わない
 ITEMS="APP_NAME|var|Worker / Hyperdrive / DB の命名ベース。init-template.sh のアプリ名と同じ値。全 stage 共通
-PLANETSCALE_ORGANIZATION|var|PlanetScale の組織名。全 stage 共通
+PLANETSCALE_ORGANIZATION|var|PlanetScale の組織名。preview は staging と同じ組織（staging DB のブランチを使うため）。production は別の組織を推奨（docs/dev/alchemy-iac.md「state と資格情報の権限境界」）
 WORKERS_SUBDOMAIN|var|CF アカウントの workers.dev サブドメイン（bunx wrangler whoami で確認可）。カスタムドメイン運用でも preview 環境が使うため設定推奨
 CUSTOM_DOMAIN|var|Worker に割り当てるカスタムドメインのホスト名（例: app.example.com。zone が CF アカウントにあること）。DNS/TLS/公開 URL は Alchemy が自動設定。workers.dev 運用なら空 Enter でスキップ
 EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ごとの分間リクエスト数、例: 300）。CUSTOM_DOMAIN 必須。zone の http_ratelimit フェーズを専有するため zone を共有する場合は 1 stage のみで設定（管理外の既存ルールを検知した場合、deploy は上書きせず中断する）。不要なら空 Enter
