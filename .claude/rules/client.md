@@ -168,8 +168,10 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 （空状態・エラー表示・サインイン画面等）は、**塊を中央に置き、中の見出し・本文・アイコン・ボタンはすべて
 左揃え**にする。見出しだけ中央に残す形も採らない（見出しもスマホでは折り返す）。
 
-- 【ガード】`text-center` は使えない（`scripts/check/client-styles.mjs` の `centered-text`）。`flex-col items-center` で
-  中身を中央に並べる形はアイコンの中央寄せ等と区別できないので【目視】
+- 【ガード】`text-center`（と style の `textAlign` での中央揃え）は使えない（`scripts/check/client-styles.mjs`
+  の `centered-text`）。`flex-col items-center` で中身を中央に並べる形はアイコンの中央寄せ等と区別できないので【目視】
+- `components/ui`（shadcn の生成物）はガードの対象外で、Dialog のヘッダー等は `text-center` を持つことがある。
+  生成物は書き換えず、呼び出し側の `className` で `text-left` に上書きする
 - 書き方: 外側で中央に寄せ（`flex justify-center` / `CenteredPage` / `mx-auto max-w-*`）、内側は `items-start`。
   内側を内容幅に縮める形（`EmptyState`）にすると、短い 1 行でも塊ごと中央に見える
 - 文中の `<br />` は中央揃え用の改行であることが多い。左揃えにしたら外す（折り返しと重なって

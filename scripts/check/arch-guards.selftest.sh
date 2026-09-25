@@ -317,6 +317,13 @@ expect_guard "スタイル規約: バリアント付きの text-center" \
   'export const SelftestUi = () => <p className="text-left md:text-center">x</p>;' \
   "違反 [centered-text]"
 
+# components/ は inline-style の対象外なので、style で中央揃えにする形は centered-text が拾う
+expect_guard "スタイル規約: style の textAlign で中央揃え（components/）" \
+  guard_client_styles \
+  "apps/client/components/__selftest/selftest-style.tsx" \
+  'export const SelftestUi = () => <p style={{ textAlign: "center" }}>x</p>;' \
+  "違反 [centered-text]"
+
 # コメントも検査対象（禁止クラス名を書いたコメントは変更履歴なので書かない）。
 # 行内・行全体のどちらのコメントも検出することを確認する。
 expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
@@ -369,7 +376,8 @@ mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
 export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
 export const D = () => <p>© 2026 → 次へ</p>;
 export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /></svg>;
-export const F = () => <div className="flex items-center justify-center text-left">x</div>;'
+export const F = () => <div className="flex items-center justify-center text-left">x</div>;
+export const G = () => <Popover align="center">x</Popover>;'
 # style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
 mkfix "apps/client/components/__selftest/selftest-style-ok.tsx" \
   'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'

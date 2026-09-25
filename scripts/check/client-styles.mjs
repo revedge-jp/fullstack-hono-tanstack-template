@@ -118,8 +118,13 @@ const RULES = [
     id: "centered-text",
     // 日本語の文章を中央揃えで折り返すと行頭が毎行ずれて読みにくい。塊は中央、文字は左
     // （.claude/rules/client.md「文章を中央揃えにしない」）。flex-col items-center で中身を中央に並べる形は
-    // アイコンの中央寄せ等と区別できないので検出しない（目視）。
-    pattern: new RegExp(`${CLASS_START}text-center${CLASS_END}`, "g"),
+    // アイコンの中央寄せ等と区別できないので検出しない（目視）。style の textAlign も拾う（components/ は
+    // inline-style の対象外なので、ここで見ないと素通りする）。align="center" は Popover 等の配置の prop と
+    // 区別できないので見ない。.css（@apply 等）は走査対象外。
+    pattern: new RegExp(
+      `${CLASS_START}text-center${CLASS_END}|\\btextAlign:\\s*["']center["']`,
+      "g",
+    ),
     // 中央のままでよいもの（帳票の表題・数値の欄等）はファイル単位でここに足す
     allowedIn: [],
     message:
