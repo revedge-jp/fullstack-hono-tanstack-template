@@ -62,7 +62,7 @@ bash scripts/setup-deploy-env.sh production
 
 | Secret | 用途 |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | Hyperdrive / Worker の作成・デプロイ（Workers 編集権限が必要）。オプション機能を使う場合は追加権限が必要: `CUSTOM_DOMAIN` → 対象 zone の Zone:Read + DNS:Edit、`EDGE_RATE_LIMIT_RPM` → Zone WAF:Edit、`LOGPUSH_DESTINATION` → Logs:Edit。発行時のトークン名は `<APP_NAME>-deploy` 推奨（staging / production で共有するトークンのため。**preview には共有せず**専用に発行する: preview は PR のコードをこの資格情報で実行する） |
+| `CLOUDFLARE_API_TOKEN` | Hyperdrive / Worker の作成・デプロイ（Workers 編集権限が必要）。オプション機能を使う場合は追加権限が必要: `CUSTOM_DOMAIN` → 対象 zone の Zone:Read + DNS:Edit、`EDGE_RATE_LIMIT_RPM` → Zone WAF:Edit、`LOGPUSH_DESTINATION` → Logs:Edit。発行時のトークン名は `<APP_NAME>-deploy` 推奨（同じ CF アカウントの staging / production で共有するトークンのため。production を別アカウントに置くならそのアカウント用に発行する。**preview には共有せず**専用に発行する: preview は PR のコードをこの資格情報で実行する） |
 | `CLOUDFLARE_ACCOUNT_ID` | 同上 |
 | `PLANETSCALE_SERVICE_TOKEN_ID` | PlanetScale DB / Role の作成。発行時のトークン名は `<APP_NAME>-deploy` 推奨（staging / production で共有するトークンのため。**preview には共有せず**専用に発行する: preview は PR のコードをこの資格情報で実行する） |
 | `PLANETSCALE_SERVICE_TOKEN` | 同上 |

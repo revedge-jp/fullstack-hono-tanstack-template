@@ -55,7 +55,7 @@ WORKERS_SUBDOMAIN|var|CF アカウントの workers.dev サブドメイン（bun
 CUSTOM_DOMAIN|var|Worker に割り当てるカスタムドメインのホスト名（例: app.example.com。zone が CF アカウントにあること）。DNS/TLS/公開 URL は Alchemy が自動設定。workers.dev 運用なら空 Enter でスキップ
 EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ごとの分間リクエスト数、例: 300）。CUSTOM_DOMAIN 必須。zone の http_ratelimit フェーズを専有するため zone を共有する場合は 1 stage のみで設定（管理外の既存ルールを検知した場合、deploy は上書きせず中断する）。不要なら空 Enter
 SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL（例: https://<app>-staging.<subdomain>.workers.dev）。空だと smoke は skip される
-CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。staging / production では同じ値を使い回してよい（preview は専用に発行）。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
+CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。同じ CF アカウントの staging / production では同じ値を使い回してよい（production を別アカウントに置くならそのアカウント用に、preview は専用に発行）。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
 PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（staging / production 用は org: create_databases + 全 DB read/write/delete 権限、無期限）。staging / production では共有可。preview は専用に発行し、権限を preview が使う DB に絞る。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 PLANETSCALE_SERVICE_TOKEN|secret|同サービストークンの secret
@@ -79,7 +79,7 @@ if [ "$STAGE" = "preview" ]; then
   echo "   CLOUDFLARE_API_TOKEN / PLANETSCALE_SERVICE_TOKEN は production と共有せず、preview 専用に発行してください"
   echo "   （.claude/rules/agent-permissions.md の Rule of Two。PR を書くエージェントに本番を消せる資格情報を渡さない）"
   echo "   ALCHEMY_STATE_TOKEN と CF トークンは同じアカウントの全プロジェクト・全 stage に届くため、preview を使う"
-  echo "   CF アカウントにはどのプロジェクトの production も置かず、production 用アカウントのトークンは共有しないでください"
+  echo "   CF アカウントにはどのプロジェクトの production も置かず、production に届くトークンを preview に渡さないでください"
   echo "   （docs/dev/alchemy-iac.md「state と資格情報の権限境界」）"
 fi
 

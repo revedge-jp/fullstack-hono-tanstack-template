@@ -56,7 +56,7 @@
 
 ```bash
 bun run infra:deploy:staging      # client をビルドして staging をデプロイ（DB がなければ作成）
-bun run infra:deploy:production   # production をデプロイ
+bun run infra:deploy:production   # production をデプロイ（通常は CI。ローカルからなら production 用アカウントの値だけを入れた env で）
 bun run infra:destroy:staging     # staging のリソースを削除
 
 # ローカルでマイグレーションを流したい時: 接続 URL の取り出し口
@@ -134,8 +134,11 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
 依存パッケージは届く（`.claude/rules/agent-permissions.md` の Rule of Two）。
 
 - **preview を使うプロジェクトが 1 つでもある Cloudflare アカウントには、どのプロジェクトの production も置かない**。
-  production 用のアカウントでは `ALCHEMY_STATE_TOKEN`・`CLOUDFLARE_API_TOKEN`・PlanetScale のサービストークンを
-  すべてそのアカウント専用の値にする（トークンを共有すると、アカウントを分けても届く）
+  production 用のアカウントの `ALCHEMY_STATE_TOKEN` と `CLOUDFLARE_API_TOKEN` はそのアカウント専用の値にする
+  （同じ値を使うと、アカウントを分けても公開 URL・API 経由で届く）
+- preview Environment には production に届くトークンを渡さない。PlanetScale のサービストークンは CF アカウントに
+  紐づかないので、preview 用を別に発行する（staging / production の Environment は main へのマージ後にしか
+  動かないので、両者の間で共有してよい）
 - preview ラベルを付けた PR は、push のたびに再デプロイされる。人がコードを読んで信頼できると判断した PR に
   だけ付け、読んでいない push が続くならラベルを外す
 
