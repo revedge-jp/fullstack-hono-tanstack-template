@@ -3,6 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import { getApiClient } from "@/shared/lib/api-client";
+import { isSsrAuthIndeterminate } from "@/shared/lib/ssr-auth";
 
 import { type TasksPage, TasksListResponseSchema } from "./schemas";
 
@@ -11,8 +12,8 @@ const GetTasksInputSchema = z.object({ cursor: z.string().optional() });
 // SSR でもブラウザ経路と同じ /api/tasks を通す（インプロセス RPC。api-client.ts 参照）。
 // バックエンド障害を「タスク 0 件」と区別するため、取得失敗は throw して
 // ルートの errorComponent（エラーバウンダリ）に委譲する。
-// 未認証だけは空ページで返す（_authenticated ガードがリダイレクトを担うため、
-// SSR 中の一瞬のセッション切れでエラーページを出さない）。
+// 未認証・判定不能（401/403。shared/lib/ssr-auth.ts）だけは空ページで返す（_authenticated ガードが
+// リダイレクトを担うため、SSR 中の一瞬のセッション切れでエラーページを出さない）。
 export const getTasksServerFn = createServerFn()
   .validator(GetTasksInputSchema)
   .handler(async ({ data }): Promise<TasksPage> => {
@@ -22,7 +23,7 @@ export const getTasksServerFn = createServerFn()
       { query: data.cursor ? { cursor: data.cursor } : {} },
       { init: { headers: { cookie } } },
     );
-    if (res.status === 401) {
+    if (isSsrAuthIndeterminate(res.status)) {
       return { items: [], nextCursor: null };
     }
     if (!res.ok) {

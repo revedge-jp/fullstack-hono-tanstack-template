@@ -86,8 +86,9 @@ export function xxxQueryOptions() {
 
 ### Auth pattern
 
-- **認証ガード**: `_authenticated.tsx` (レイアウトルート) の `loader` で `getSessionServerFn` を呼び、未認証なら `/signin` にリダイレクト
-- **ユーザー情報**: 親ルートの `loader` が `user` を返し、子ルートは `getRouteApi("/_authenticated").useLoaderData()` で参照
+- **認証ガード**: `_authenticated.tsx` (レイアウトルート) の **`beforeLoad`** で `context.queryClient.fetchQuery(sessionQueryOptions())` を呼び、未認証なら `/signin` にリダイレクト。`loader` に置かないこと — `loader` の結果は staleTime / intent プリロードの間は再利用され、セッションが切れても画面内遷移でリダイレクトされない。`beforeLoad` は遷移のたびに必ず実行され、取得は `sessionQueryOptions` が 30 秒デデュープする。`ensureQueryData` は使わない（古いキャッシュをそのまま返し、セッション切れを既定 5 分見逃す）
+- **ユーザー情報**: 親ルートの `beforeLoad` が `{ user }` を返し、子ルートは `getRouteApi("/_authenticated").useRouteContext()` で参照
+- **SSR の 401/403**: serverFn は `isSsrAuthIndeterminate(res.status)`（`shared/lib/ssr-auth.ts`）で判定し、フォールバック値（null / 空ページ）を返す（リダイレクトはガードに任せる）。401 だけを見る判定を serverFn ごとに書かない
 - **サインイン**: `authClient.signIn.social({ provider: "google" })` — クライアントサイドのみ
 - **サインアウト**: `authClient.signOut()` 後に `queryClient.clear()`（前ユーザーの react-query キャッシュを破棄）してから `/signin` へ遷移
 
