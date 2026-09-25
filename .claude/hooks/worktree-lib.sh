@@ -8,7 +8,7 @@
 #     worktree に耐える。旧方式（agent-worktree-setup.sh のスロット方式）は worktree ごとに
 #     コンテナ2つ + volume を作り、派生プロダクトでは実測で21コンテナ・0.8GiB が常駐した。
 #   - アプリのポート（CLIENT/API）だけは worktree ごとに割り当てる。レジストリ + lsof の実測で
-#     決め、旧方式の worktree や scripts/worktree.sh の手動 worktree が .env に持つポートも予約扱い。
+#     決め、旧方式の worktree や以前の手動 worktree（削除した scripts/worktree.sh 製）が .env に持つポートも予約扱い。
 #   - ポートレジストリは git-common-dir（全 worktree で共有される main の .git）に置く。
 
 set -euo pipefail
@@ -101,7 +101,7 @@ find_free_port() {
 reserved_ports() {
   local name="$1" registry="$2" envfile
   printf '%s' "$registry" | jq -r --arg n "$name" 'to_entries[] | select(.key != $n) | .value | .client, .api'
-  # scripts/worktree.sh が作る手動 worktree（../<project>-<branch>/.env）も予約に含める
+  # 以前の scripts/worktree.sh（削除済み）が作った手動 worktree（../<project>-<branch>/.env）も予約に含める
   # （停止中は lsof で捕まらないため）
   for envfile in "$MAIN_ROOT/.env" "$MAIN_ROOT"/.claude/worktrees/*/.env "$(dirname "$MAIN_ROOT")/$(basename "$MAIN_ROOT")"-*/.env; do
     [ -f "$envfile" ] || continue

@@ -55,9 +55,9 @@ WORKERS_SUBDOMAIN|var|CF アカウントの workers.dev サブドメイン（bun
 CUSTOM_DOMAIN|var|Worker に割り当てるカスタムドメインのホスト名（例: app.example.com。zone が CF アカウントにあること）。DNS/TLS/公開 URL は Alchemy が自動設定。workers.dev 運用なら空 Enter でスキップ
 EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ごとの分間リクエスト数、例: 300）。CUSTOM_DOMAIN 必須。zone の http_ratelimit フェーズを専有するため zone を共有する場合は 1 stage のみで設定（管理外の既存ルールを検知した場合、deploy は上書きせず中断する）。不要なら空 Enter
 SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL（例: https://<app>-staging.<subdomain>.workers.dev）。空だと smoke は skip される
-CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。stage 間で同じ値を使い回してよい。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy）
+CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。staging / production では同じ値を使い回してよい（preview は専用に発行）。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
-PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（org: create_databases + 全 DB read/write/delete 権限、無期限）。stage 間で共有可。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy）
+PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（staging / production 用は org: create_databases + 全 DB read/write/delete 権限、無期限）。staging / production では共有可。preview は専用に発行し、権限を preview が使う DB に絞る。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 PLANETSCALE_SERVICE_TOKEN|secret|同サービストークンの secret
 ALCHEMY_STATE_TOKEN|secret|Alchemy state store の認証トークン。CF アカウント内の全プロジェクト・全 stage で【同一の値】にすること
 ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。プロジェクトごとに固有の値を推奨（openssl rand -base64 32 で生成）
@@ -72,6 +72,13 @@ echo "secret はエコーバックされません（画面に表示されない�
 
 set_items=""
 skipped_items=""
+
+if [ "$STAGE" = "preview" ]; then
+  echo ""
+  echo "⚠️  preview は PR のコード（bun install / build / migrate）をこの Environment の資格情報で実行します。"
+  echo "   CLOUDFLARE_API_TOKEN / PLANETSCALE_SERVICE_TOKEN は production と共有せず、preview 専用に発行してください"
+  echo "   （.claude/rules/agent-permissions.md の Rule of Two。PR を書くエージェントに本番を消せる資格情報を渡さない）"
+fi
 
 # アイテムリストは fd 3 から読む（stdin はユーザー入力用に空けておく）
 while IFS='|' read -r name kind desc <&3; do

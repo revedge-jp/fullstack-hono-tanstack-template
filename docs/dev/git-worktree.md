@@ -57,12 +57,6 @@ bash scripts/agent-worktree-setup.sh
 `ExitWorktree remove` はこの方式を片付けずに止まり、手順（worktree のルートで `docker compose down -v`
 → `git worktree remove`）を表示する。
 
-## 手動 worktree（`bun run worktree`）は使わない
-
-`scripts/worktree.sh` は DB のポート・コンテナ名を main の `.env` から引き継がず固定値で書き込むため、
-`init-template.sh` 後のプロジェクトや同じマシンの別プロジェクトと DB が衝突する（削除予定）。人が並行作業する
-ときも Claude Code の worktree（上）で作る。作成時のセットアップも、破棄時のポート・DB の片付けもフックが担う。
-
 ## worktree 共通の注意
 
 ### ビルド成果物
@@ -98,17 +92,15 @@ git log origin/main
 
 Claude Code の worktree は、作ったセッションの中なら `ExitWorktree`（remove）で消す。WorktreeRemove フックが
 ポートの登録と `wt_<name>` DB も片付ける。前のセッションで残した worktree（`ExitWorktree` の対象外）は、main の
-ルートからフックを直接流す（ディレクトリが既に無くても続きを片付ける）。**フックは `git worktree remove --force`
-で消すので、未コミット・未追跡・ignore 対象（`.env` 等）のファイルは確認なしに失われ、ブランチに乗っていない
-コミット（detached HEAD）も辿れなくなる**。ディレクトリが残っているなら、先に確かめる:
+ルートからフックを直接流す（ディレクトリが既に無くても続きを片付ける）:
 
 ```bash
-git -C <worktree の絶対パス> status --short --branch --ignored
-# ① 2 行目以降に残したいファイルがあれば、先にコミットか退避をする
-# ② その後で 1 行目が "## HEAD (no branch)" なら、残すコミットにブランチを付ける（rebase 途中でも通る形）:
-#    git -C <path> branch <branch> HEAD
 echo '{"worktree_path":"<worktree の絶対パス>"}' | bash .claude/hooks/worktree-remove.sh
 ```
+
+手で流したときは、未コミット・未追跡の変更か、どのブランチにも乗っていないコミット（detached HEAD・rebase の
+途中）が残っていると、フックは内容を表示して止まる（`git worktree remove --force` はそれらを確認なしに消すため）。
+確かめたうえで消すなら `WORKTREE_REMOVE_FORCE=1` を付ける。gitignore 対象のファイル（`.env` 等）は確認しない。
 
 共有 DB 方式の worktree を `git worktree remove` で直接消すと、ポートの登録と DB が残る（旧方式の片付けは上の「復旧」）。
 
