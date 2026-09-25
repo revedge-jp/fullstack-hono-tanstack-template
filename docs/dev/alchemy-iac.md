@@ -145,10 +145,15 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
   （DB 単位に権限を絞って防げるかは未検証）
 - preview ラベルを付けた PR は、push のたびに再デプロイされる。人がコードを読んで信頼できると判断した PR に
   だけ付け、読んでいない push が続くならラベルを外す
-- この節が扱うのは、preview（PR のコード）が同じアカウントの state・Worker に届く場合だけ。次の 2 つは
-  この節の対策では塞がらない: GitHub の Environment（PR がワークフローを足して `environment: production` を
-  参照する）と、未マージのコミットへの `vX.Y.Z` タグ push（`deploy.yml` が祖先を確かめずにそのコミットを
-  production の資格情報で動かす）
+- GitHub 側からの 2 つは別の仕組みで塞いでいる:
+  - PR がワークフローを足して `environment: production` を参照する → `scripts/setup-deploy-env.sh` が
+    staging / production のデプロイ元を main に限る（`deploy.yml` は `workflow_run` で main 上のジョブとして
+    動くので止まらない）。既に作った Environment は `bash scripts/setup-deploy-env.sh <stage>` を再実行すると
+    制限が入る（secrets の入力は空 Enter で飛ばせる。承認者・待機時間は引き継ぎ、main 以外の既存の許可は
+    消さずに一覧を出すので、不要なら手で削除する）。private リポジトリの Free プランなど、デプロイ元の
+    制限が使えない環境ではこれが残る
+  - 未マージのコミットに `vX.Y.Z` タグを push する → `deploy.yml` の「Verify the commit is on main」が、
+    main に含まれないコミットのデプロイを失敗させる
 
 ## オプションリソース（環境変数で opt-in）
 

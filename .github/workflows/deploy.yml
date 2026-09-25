@@ -25,8 +25,10 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     # Environment 存在チェック（gh api）に actions: read が必要
     # （environments の GET は fine-grained では Actions (read) にマップされる）。
+    # contents: read は main に含まれるコミットかの確認（compare API）に使う。
     permissions:
       actions: read
+      contents: read
     timeout-minutes: 5
     outputs:
       target: ${{ steps.detect.outputs.target }}
@@ -66,6 +68,29 @@ jobs:
             fi
           fi
           echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      # デプロイするコミットが main に含まれるか確かめる。ブランチに push できる人はタグも push でき、
+      # 未マージのコミットに vX.Y.Z を付けると CI → この workflow_run が production の資格情報でその
+      # コミットを checkout して動かしてしまう（Environment のデプロイ元制限は、workflow_run が main 上の
+      # ジョブとして動くので効かない）。main が含んでいる（identical / ahead）ときだけ通し、それ以外
+      # （diverged / behind / 存在しない）はジョブを失敗させて目に見える形で止める。
+      # 比較先は refs/heads/main と完全修飾で書く（main という名前のタグを push されると、裸の main はタグに解決されうる）。
+      - name: Verify the commit is on main
+        if: steps.detect.outputs.target != 'none'
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$HEAD_SHA...refs/heads/main" --jq .status 2>&1); then
+            echo "::error::$HEAD_SHA と main の比較に失敗しました（main に無いコミットの可能性）: $status"
+            exit 1
+          fi
+          case "$status" in
+            identical|ahead) echo "$HEAD_SHA は main に含まれています（$status）" ;;
+            *)
+              echo "::error::$HEAD_SHA は main に含まれていません（$status）。マージ前のコミットはデプロイしません"
+              exit 1 ;;
+          esac
 
   deploy:
     name: Deploy (Alchemy)
