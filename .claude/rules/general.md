@@ -32,9 +32,11 @@ typecheck / lint / test:unit は通り、`git push` の pre-push で初めて原
 - 実装前に `.env` に `WORKTREE_SHARED_DB=1` と `WORKTREE_DB_READY=1` があるか確かめる（`/start-dev` の 3b）。
   無ければ worktree のルートで `bash scripts/agent-worktree-setup.sh`（冪等）
 - worktree から `db:up` / `db:down` を実行しない。逆に **main で `db:down` すると全 worktree の `wt_*` DB が消える**
-- セットアップが volume を「別プロジェクトのもの」として DB を飛ばしたら、main の `.env` の DB コンテナ名・
-  volume 名が他プロジェクトと衝突している。直すのは worktree ではなく **main の `.env`**（名前は
-  `docs/dev/environment-variables.md` の「Docker / インフラ」に従う）
+- セットアップが volume / コンテナを「別プロジェクト（X）のもの」として DB を飛ばしたら、直すのは worktree
+  ではなく **main 側**で、原因は 2 通りある。X が main の以前のディレクトリ名なら（改名・移動した）ディレクトリ名を
+  戻す（名前を変えると空の volume で起動する）。そうでなければ main の `.env` の DB コンテナ名・volume 名が
+  他プロジェクトと衝突しているので固有にする（`docs/dev/environment-variables.md` の「Docker / インフラ」）。
+  どちらも main のチェックアウトに手を入れる作業なのでユーザーに依頼する（`.env` はフックでエージェントから編集できない）
 - `.worktreeinclude` で `.env` を worktree に複製しない
 
 フックの動作・衝突検出・`.worktreeinclude` を置かない理由は `.claude/rules/worktree.md`。

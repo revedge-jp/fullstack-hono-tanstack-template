@@ -9,7 +9,7 @@ paths:
 
 # worktree のセットアップ（詳細）
 
-要点（実装前の検証・`db:up` / `db:down` の禁止・衝突時は main の `.env` を直す）は `.claude/rules/general.md` の
+要点（実装前の検証・`db:up` / `db:down` の禁止・「別プロジェクトのもの」と判定されたときの対処）は `.claude/rules/general.md` の
 「worktree のセットアップはフックが行う — ただし発火を検証してから実装に入る」にあり、常時ロードされる。
 ここはフックの動作と、その要点の根拠。
 
