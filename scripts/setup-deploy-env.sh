@@ -52,17 +52,52 @@ else
   # staging / production のデプロイ元を main に限る。制限の無い Environment の secrets は、それを参照する
   # どのジョブにも渡る（同じリポジトリの PR がワークフローを足して environment: production を参照すれば、
   # マージ前に読める）。deploy.yml は workflow_run で main 上のジョブとして動くので、main に限っても止まらない。
-  # 再実行のたびに同じ設定を送る（本文なしの PUT で既存の制限を消さないため）
-  if gh api -X PUT "repos/$REPO/environments/$STAGE" --silent --input - <<'JSON'
-{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
-JSON
-  then
-    if ! gh api "repos/$REPO/environments/$STAGE/deployment-branch-policies" \
-      --jq '.branch_policies[] | select(.name == "main" and (.type // "branch") == "branch") | .id' | grep -q .; then
-      gh api -X POST "repos/$REPO/environments/$STAGE/deployment-branch-policies" \
-        -f name=main -f type=branch --silent
+  #
+  # Environment の PUT は保護設定をまるごと置き換える（送らなかった承認者・待機時間は消える）ので、既存の
+  # Environment は現在の設定を読んで引き継ぐ。読めない理由が「存在しない」以外なら、消さないよう中断する
+  if env_json_err=$(gh api "repos/$REPO/environments/$STAGE" --jq '
+    (.protection_rules // []) as $rules
+    | ([$rules[] | select(.type == "required_reviewers")] | first) as $review
+    | ([$rules[] | select(.type == "wait_timer")] | first) as $wait
+    | {deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}}
+      + (if .can_admins_bypass == null then {} else {can_admins_bypass: .can_admins_bypass} end)
+      + (if $wait == null then {} else {wait_timer: $wait.wait_timer} end)
+      + (if $review == null then {} else {
+          prevent_self_review: ($review.prevent_self_review // false),
+          reviewers: [$review.reviewers[] | {type: .type, id: .reviewer.id}]
+        } end)' 2>&1); then
+    env_body=$env_json_err
+  elif printf '%s' "$env_json_err" | grep -q 'HTTP 404'; then
+    env_body='{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}'
+  else
+    echo "エラー: Environment '${STAGE}' の現在の設定を読めませんでした（既存の保護設定を消さないよう中断します）: $env_json_err" >&2
+    exit 1
+  fi
+  if printf '%s' "$env_body" | gh api -X PUT "repos/$REPO/environments/$STAGE" --silent --input -; then
+    branch_policy_failed="    再実行してください: bash scripts/setup-deploy-env.sh ${STAGE}（デプロイ元の許可が 0 件のままだと ${STAGE} へのデプロイはすべて拒否されます）"
+    if ! policies=$(gh api "repos/$REPO/environments/$STAGE/deployment-branch-policies" \
+      --jq '.branch_policies[] | "\(.type // "branch")\t\(.name)"'); then
+      echo "エラー: デプロイ元の許可一覧を読めませんでした" >&2
+      echo "$branch_policy_failed" >&2
+      exit 1
     fi
-    echo "    デプロイ元を main に限りました"
+    if ! printf '%s\n' "$policies" | grep -qx "$(printf 'branch\tmain')"; then
+      if ! gh api -X POST "repos/$REPO/environments/$STAGE/deployment-branch-policies" \
+        -f name=main -f type=branch --silent; then
+        echo "エラー: デプロイ元に main を追加できませんでした" >&2
+        echo "$branch_policy_failed" >&2
+        exit 1
+      fi
+    fi
+    # 既にある main 以外の許可は意図して足したものかもしれないので消さない。残っている限り「main に限った」とは言わない
+    others=$(printf '%s\n' "$policies" | grep -vx "$(printf 'branch\tmain')" | grep . || true)
+    if [ -z "$others" ]; then
+      echo "    デプロイ元を main に限りました"
+    else
+      echo "⚠️  デプロイ元に main を許可しましたが、main 以外の許可も残っています（種別・名前）:"
+      printf '%s\n' "$others" | sed 's/^/      /'
+      echo "   不要なら Settings → Environments → ${STAGE} → Deployment branches and tags で削除してください"
+    fi
   else
     # private リポジトリの Free プラン等、デプロイ元の制限が使えない場合。既にある Environment には触らない
     # （本文なしの PUT は既存の制限を消しうるので、一時的な失敗で制限を外さない）

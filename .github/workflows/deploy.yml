@@ -74,13 +74,14 @@ jobs:
       # コミットを checkout して動かしてしまう（Environment のデプロイ元制限は、workflow_run が main 上の
       # ジョブとして動くので効かない）。main が含んでいる（identical / ahead）ときだけ通し、それ以外
       # （diverged / behind / 存在しない）はジョブを失敗させて目に見える形で止める。
+      # 比較先は refs/heads/main と完全修飾で書く（main という名前のタグを push されると、裸の main はタグに解決されうる）。
       - name: Verify the commit is on main
         if: steps.detect.outputs.target != 'none'
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$HEAD_SHA...main" --jq .status 2>&1); then
+          if ! status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$HEAD_SHA...refs/heads/main" --jq .status 2>&1); then
             echo "::error::$HEAD_SHA と main の比較に失敗しました（main に無いコミットの可能性）: $status"
             exit 1
           fi

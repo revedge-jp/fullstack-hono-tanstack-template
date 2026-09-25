@@ -149,7 +149,8 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
   - PR がワークフローを足して `environment: production` を参照する → `scripts/setup-deploy-env.sh` が
     staging / production のデプロイ元を main に限る（`deploy.yml` は `workflow_run` で main 上のジョブとして
     動くので止まらない）。既に作った Environment は `bash scripts/setup-deploy-env.sh <stage>` を再実行すると
-    制限が入る（secrets の入力は空 Enter で飛ばせる）。private リポジトリの Free プランなど、デプロイ元の
+    制限が入る（secrets の入力は空 Enter で飛ばせる。承認者・待機時間は引き継ぎ、main 以外の既存の許可は
+    消さずに一覧を出すので、不要なら手で削除する）。private リポジトリの Free プランなど、デプロイ元の
     制限が使えない環境ではこれが残る
   - 未マージのコミットに `vX.Y.Z` タグを push する → `deploy.yml` の「Verify the commit is on main」が、
     main に含まれないコミットのデプロイを失敗させる
