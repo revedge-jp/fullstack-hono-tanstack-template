@@ -11,7 +11,8 @@
       "@app/*": ["apps/api-service/src/*"],
       "@features/*": ["apps/api-service/src/features/*"],
       "@shared/*": ["apps/api-service/src/shared/*"],
-      "@repo/db": ["packages/database/src/index.ts"]
+      "@repo/db": ["packages/database/src/index.ts"],
+      "@/*": ["apps/client/*"]
     }
   },
   "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "packages/**/*.tsx"],

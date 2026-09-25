@@ -58,7 +58,7 @@ expect_guard() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture�
   if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "$5"; then
     echo "✅ $1"
   else
-    echo "❌ $1: $2 が期待した違反 '$5' を検出できませんでした（ガードが壊れている可能性。exit=$rc）"
+    echo "❌ $1: $2 が期待した違反 '$5' を検出できませんでした（ガードが壊れている可能性。exit=${rc}）"
     FAIL=1
   fi
   rm -f "$3"
@@ -186,12 +186,21 @@ expect_guard "client features process.env 直接参照禁止" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "client features 配下で process.env を直接参照できません"
 
-expect_guard "UI からの processXxx 直接 import 禁止" \
-  guard_ui_no_process_import \
+expect_guard "createServerFn の配置（queries 以外は禁止）" \
+  guard_server_fn_placement \
   "apps/client/features/__selftest/ui/x.tsx" \
-  'import { processFoo } from "../actions/foo";
-export const SelftestUi = processFoo;' \
-  "UI コンポーネントから processXxx を直接 import できません"
+  'import { createServerFn } from "@tanstack/react-start";
+export const selftestFn = createServerFn().handler(() => null);' \
+  "createServerFn は features/**/queries/**"
+
+# mutation を createServerFn にして actions/ に置く形も検出する（Workers では自オリジンへの
+# ループバックができない。apps/client/AGENTS.md）
+expect_guard "createServerFn の配置（actions/ の mutation も禁止）" \
+  guard_server_fn_placement \
+  "apps/client/features/__selftest/actions/x.ts" \
+  'import { createServerFn } from "@tanstack/react-start";
+export const selftestFn = createServerFn({ method: "POST" }).handler(() => null);' \
+  "createServerFn は features/**/queries/**"
 
 # client のスタイル規約(client-styles.mjs)は規則ごとに 1 件ずつ既知違反を置く。
 expect_guard "スタイル規約: 既定パレット色の禁止" \
@@ -278,6 +287,24 @@ expect_guard "スタイル規約: 絵文字の禁止" \
   'export const SelftestUi = () => <p>🚀 Launch</p>;' \
   "違反 [emoji]"
 
+expect_guard "スタイル規約: style 属性の禁止" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p style={{ color: "#7c3aed", marginTop: 12 }}>x</p>;' \
+  "違反 [inline-style]"
+
+expect_guard "スタイル規約: SVG の fill に直接書いた色の禁止" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <svg><path fill="#ff0000" d="M0 0" /></svg>;' \
+  "違反 [svg-raw-color]"
+
+expect_guard "スタイル規約: shared/ 配下も走査する" \
+  guard_client_styles \
+  "apps/client/shared/__selftest/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-zinc-500">x</p>;' \
+  "違反 [raw-palette]"
+
 # コメントも検査対象（禁止クラス名を書いたコメントは変更履歴なので書かない）。
 # 行内・行全体のどちらのコメントも検出することを確認する。
 expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
@@ -328,7 +355,11 @@ expect_guard "UI 文言: 前後に空白のある全角ダッシュ" \
 mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
 export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
-export const D = () => <p>© 2026 → 次へ</p>;'
+export const D = () => <p>© 2026 → 次へ</p>;
+export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /></svg>;'
+# style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
+mkfix "apps/client/components/__selftest/selftest-style-ok.tsx" \
+  'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'
 if STYLE_OK_OUT=$(node scripts/check/client-styles.mjs 2>&1); then
   echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号）を誤検出しない"
 else
@@ -336,7 +367,7 @@ else
   printf '%s\n' "$STYLE_OK_OUT"
   FAIL=1
 fi
-rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx"
+rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx" "apps/client/components/__selftest/selftest-style-ok.tsx"
 
 # 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、文をつないでいないダッシュ（空欄の「—」・括弧の中・
 # 区切り線・数字の範囲）では ui-copy.mjs が落ちない。ダッシュの例は日本語を含めて、ダッシュの判定まで届くようにしている。
@@ -518,7 +549,7 @@ if [ "$e2e_rc" -ne 0 ] && [ "$e2e_headers" -eq "$defined_count" ] &&
   printf '%s' "$e2e_out" | grep -qF "usecase.test.ts がありません"; then
   echo "✅ arch-guards.sh が全 ${defined_count} 検査を実行し、違反で失敗する"
 else
-  echo "❌ arch-guards.sh: exit=$e2e_rc、実行した検査 ${e2e_headers}/${defined_count}（全検査を実行して違反で失敗するはず）"
+  echo "❌ arch-guards.sh: exit=${e2e_rc}、実行した検査 ${e2e_headers}/${defined_count}（全検査を実行して違反で失敗するはず）"
   FAIL=1
 fi
 rm -rf "$SELFTEST_ACTION_DIR"
@@ -542,7 +573,7 @@ if ! printf '%s' "$stop_out" | grep -qF "export * の使用が禁止"; then
 elif [ "$stop_rc" -ne 0 ] && [ "$stop_headers" -eq "$stop_index" ]; then
   echo "✅ arch-guards.sh が途中の違反（${STOP_GUARD}、${stop_index} 番目）で止まる"
 else
-  echo "❌ arch-guards.sh: ${stop_index} 番目の $STOP_GUARD の違反で exit=$stop_rc、実行した検査 ${stop_headers}（そこで止まるはず。本体の set -e が外れていないか）"
+  echo "❌ arch-guards.sh: ${stop_index} 番目の $STOP_GUARD の違反で exit=${stop_rc}、実行した検査 ${stop_headers}（そこで止まるはず。本体の set -e が外れていないか）"
   FAIL=1
 fi
 rm -f "$D/application/__selftest_export_star.ts"
@@ -568,16 +599,43 @@ export const selftestDcDb = tasks;'
     fi
   done
   rm -f "$D/application/__selftest_dc_cross_feature.ts" "$D/presentation/__selftest_dc_infra.ts" "$D/domain/__selftest_dc_db.ts"
+
+  # client は @/ alias 経由の import が主流。tsconfig.depcruise.json に @/* が無いと解決できずに
+  # ルールが空振りする（相対 import だけ検出して緑になる）ので、alias の形で置く
+  CD="apps/client/features/tasks"
+  mkfix "$CD/ui/__selftest_dc_client_cross.tsx" 'import { signOut } from "@/features/auth/actions/sign-out";
+export const selftestDcClientCross = signOut;'
+  mkfix "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" 'import { advanceTask } from "@/features/tasks/actions/advance-task";
+export const selftestDcShared = advanceTask;'
+  DC_CLIENT_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/client 2>/dev/null || true)
+  for rule in client-cross-features-tasks client-shared-to-features; do
+    if printf '%s' "$DC_CLIENT_OUT" | grep -q "$rule"; then
+      echo "✅ dep-cruiser: ${rule}（@/ alias 経由）"
+    else
+      echo "❌ dep-cruiser: $rule が @/ alias 経由の違反を検出しませんでした（tsconfig.depcruise.json の paths を確認）"
+      FAIL=1
+    fi
+  done
+  rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts"
 fi
 
 echo "=== 指示ファイル参照チェック自己テスト ==="
 mkfix ".claude/rules/__selftest_refs.md" \
   '参照: `scripts/check/nope.sh` と `bun run no-such-script` と AGENTS.md の「存在しない見出し」
 アプリ別: `apps/api-service/AGENTS.md` の「Feature structure」「パス付きの存在しない見出し」と apps/no-such-app/AGENTS.md の「X」'
+# docs/ と README も対象(旧構成のまま古くなったガイドがゲートを素通りしていた)。相対リンクも見る。
+# gitignore 対象の生成物(ビルド成果物)への参照は誤検出しない
+mkfix "docs/dev/__selftest_refs.md" \
+  '参照: `scripts/check/docs-nope.sh` と [壊れたリンク](no-such-doc.md) と [正しいリンク](testing.md) と `apps/client/dist/server/index.js`'
 INSTR_OUT=$(node scripts/check/instruction-files.mjs 2>&1 || true)
-rm -f ".claude/rules/__selftest_refs.md"
+rm -f ".claude/rules/__selftest_refs.md" "docs/dev/__selftest_refs.md"
+if printf '%s' "$INSTR_OUT" | grep -qE "testing\.md|dist/server"; then
+  echo "❌ instruction-files: 実在するリンク・gitignore 対象の生成物を誤検出しました"
+  FAIL=1
+fi
 for expected in "nope.sh" "no-such-script" "「存在しない見出し」" \
-  "apps/api-service/AGENTS.md に見出し「パス付きの存在しない見出し」" "apps/no-such-app/AGENTS.md\` が実在しない"; do
+  "apps/api-service/AGENTS.md に見出し「パス付きの存在しない見出し」" "apps/no-such-app/AGENTS.md\` が実在しない" \
+  "docs-nope.sh" "リンク先 no-such-doc.md"; do
   if printf '%s' "$INSTR_OUT" | grep -qF "$expected"; then
     echo "✅ instruction-files: $expected を検出"
   else

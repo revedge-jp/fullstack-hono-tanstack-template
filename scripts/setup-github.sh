@@ -133,9 +133,9 @@ else
     echo "❌ Ruleset の適用に失敗しました: $ERR"; exit 1
   fi
   if [ -n "$RULESET_ID" ]; then
-    echo "✅ 既存の Ruleset (id: $RULESET_ID) を更新しました（$QUEUE_NOTE）"
+    echo "✅ 既存の Ruleset (id: ${RULESET_ID}) を更新しました（${QUEUE_NOTE}）"
   else
-    echo "✅ Ruleset を作成しました（$QUEUE_NOTE）"
+    echo "✅ Ruleset を作成しました（${QUEUE_NOTE}）"
   fi
 fi
 rm -f /tmp/setup-github-rulesets.json

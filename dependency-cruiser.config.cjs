@@ -39,7 +39,7 @@ const clientCrossFeatureRules = CLIENT_FEATURE_DIRS.map((feature) => ({
   name: `client-cross-features-${feature}`,
   severity: "error",
   comment:
-    "client: features 間の直接参照を禁止（機能間の独立性を担保）。共通コンポーネントは apps/client/shared へ。",
+    "client: features 間の直接参照を禁止（機能間の独立性を担保）。共通の UI 部品は apps/client/components、共通ロジックは apps/client/shared へ。",
   from: { path: `^apps/client/features/${feature}/` },
   to: { path: `^apps/client/features/(?!${feature}/)` },
 }));

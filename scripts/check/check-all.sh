@@ -6,7 +6,7 @@ set -euo pipefail
 #  - CI=true or CI_MODE=1 : 簡素(機械可読寄り)出力
 #  - NO_COLOR: 色無し
 #  - TURBO_FILTER : turbo の filter（例: '...[origin/main]'）
-#  - SKIP_LINT, SKIP_TYPECHECK, SKIP_BUILD, SKIP_TEST, SKIP_ARCH, SKIP_FILENAME, SKIP_PROSE, SKIP_PROCESS_ENV, SKIP_DEPRECATED : 各ステップをスキップ
+#  - SKIP_LINT, SKIP_TYPECHECK, SKIP_TEST, SKIP_ARCH, SKIP_FILENAME, SKIP_PROSE, SKIP_PROCESS_ENV, SKIP_DEPRECATED : 各ステップをスキップ
 #  - SKIP_FSD, SKIP_DEPS, SKIP_DC, SKIP_GUARDS, SKIP_KNIP : アーキテクチャ個別スキップ（SKIP_ARCH=1 のときは無視）
 
 if [ "${CI:-}" = "true" ] || [ "${CI_MODE:-0}" = "1" ]; then PRETTY=0; else PRETTY=1; fi
@@ -62,17 +62,21 @@ run_step_bg() {
   PIDS+=($!)
 }
 
-# Lint（変更影響に限定）
-if [ "${SKIP_LINT:-}" != "1" ]; then
-  run_step_bg "Lint" bunx turbo run lint --filter="${TURBO_FILTER}"
+# Lint / Typecheck（変更影響に限定）。1 回の turbo 呼び出しにまとめる: 別プロセスで並列に起動すると、
+# client#lint と client#typecheck がどちらも先行させる api-service#build（dist/*.d.ts の出力）が
+# 2 つの tsc で同時に走り、型定義を書き合って偶発的に落ちる（turbo は 1 回の呼び出しの中でしか重複を排除しない）。
+# --continue は lint と typecheck の両方の失敗を出すため。dependencies-successful にするのは、依存の build が
+# 落ちたまま lint を走らせると型情報を使うルールが空振りし、その「成功」がキャッシュに残るため
+# （代償: 上流の typecheck が落ちた回は、それに依存する client の typecheck は次の回まで出ない）
+LINT_TASKS=()
+if [ "${SKIP_LINT:-}" != "1" ]; then LINT_TASKS+=(lint); fi
+if [ "${SKIP_TYPECHECK:-}" != "1" ]; then LINT_TASKS+=(typecheck); fi
+if [ "${#LINT_TASKS[@]}" -gt 0 ]; then
+  run_step_bg "LintTypecheck" bunx turbo run "${LINT_TASKS[@]}" --filter="${TURBO_FILTER}" --continue=dependencies-successful
 fi
 
-# Typecheck（変更影響に限定）
-if [ "${SKIP_TYPECHECK:-}" != "1" ]; then
-  run_step_bg "Typecheck" bunx turbo run typecheck --filter="${TURBO_FILTER}"
-fi
-
-# Tests（常時フル実行。DB migrate deploy を含む）
+# Tests（TURBO_FILTER で変更の影響を受けるパッケージだけ。既定は origin/main との差分なので、
+# main と同じ内容なら何も走らない。全件は `bun run test`。DB migrate を含む）
 if [ "${SKIP_TEST:-}" != "1" ]; then
   run_step_bg "Tests" bash -lc "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx drizzle-kit migrate && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
 fi
@@ -133,7 +137,7 @@ done
 
 # 結果を表示（Deprecated は警告のみで FAIL にしない）
 WARN_ONLY_STEPS="Deprecated"
-for name in Lint Typecheck Tests ScriptTests Filename Prose MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
+for name in LintTypecheck Tests ScriptTests Filename Prose MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
   status_file="$STEP_RESULTS/$name.status"
   [ -f "$status_file" ] || continue
   status=$(cat "$status_file")
@@ -145,23 +149,22 @@ for name in Lint Typecheck Tests ScriptTests Filename Prose MigrationOrder FSD D
   else
     if echo "$WARN_ONLY_STEPS" | grep -qw "$name"; then
       warn "$name: 警告"
-      if [ "$PRETTY" = "1" ]; then
-        if [ -f "$STEP_RESULTS/$name.out" ]; then
-          { grep -E "(ERROR|Error|error|✖|failed|violation|TS[0-9]+|⚠️|deprecated|非推奨)" "$STEP_RESULTS/$name.out" || true; } | head -n 10 | sed -e 's/^/  • /'
-        fi
-        if [ -f "$STEP_RESULTS/$name.err" ]; then
-          { tail -n 20 "$STEP_RESULTS/$name.err" || true; } | sed -e 's/^/  • /'
-        fi
+      if [ -f "$STEP_RESULTS/$name.out" ]; then
+        # 件数の切り詰めは sed で行う(head はパイプを先に閉じ、pipefail で書き手の SIGPIPE が失敗扱いになる)
+        { grep -E "(ERROR|Error|error|✖|×|failed|violation|TS[0-9]+|⚠️|deprecated|非推奨)" "$STEP_RESULTS/$name.out" || true; } | sed -n '1,10p' | sed -e 's/^/  • /'
+      fi
+      if [ -f "$STEP_RESULTS/$name.err" ]; then
+        { tail -n 20 "$STEP_RESULTS/$name.err" || true; } | sed -e 's/^/  • /'
       fi
     else
+      # 失敗の詳細は PRETTY に関係なく出す（pre-push は CI=true で呼ぶので、ここを PRETTY で絞ると
+      # 「❌ Tests: ERROR」の 1 行だけが残り、原因がどこにも残らない。結果は直後に消す）
       err "$name: ERROR"
-      if [ "$PRETTY" = "1" ]; then
-        if [ -f "$STEP_RESULTS/$name.out" ]; then
-          { grep -E "(ERROR|Error|error|✖|failed|violation|TS[0-9]+|process\.env)" "$STEP_RESULTS/$name.out" || cat "$STEP_RESULTS/$name.out"; } | head -n 20 | sed -e 's/^/  • /'
-        fi
-        if [ -f "$STEP_RESULTS/$name.err" ]; then
-          { tail -n 20 "$STEP_RESULTS/$name.err" || true; } | sed -e 's/^/  • /'
-        fi
+      if [ -f "$STEP_RESULTS/$name.out" ]; then
+        { grep -E "(ERROR|Error|error|✖|×|eslint\(|typescript\(|failed|violation|TS[0-9]+|process\.env)" "$STEP_RESULTS/$name.out" || cat "$STEP_RESULTS/$name.out"; } | sed -n '1,20p' | sed -e 's/^/  • /'
+      fi
+      if [ -f "$STEP_RESULTS/$name.err" ]; then
+        { tail -n 20 "$STEP_RESULTS/$name.err" || true; } | sed -e 's/^/  • /'
       fi
       FAIL=1
     fi

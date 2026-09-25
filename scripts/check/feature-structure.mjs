@@ -11,7 +11,7 @@
 //    （auth のように単一 usecase の feature では集約が不要なため対象外）
 //  - infrastructure: リポジトリ抽象があるのに実装(*.repository.*.ts)が無い
 //  - presentation: router.ts / index.ts
-//  - __tests__/contract/{feature}.contract.test.ts（testing.md: contract は常に必要）
+//  - __tests__/contract/{feature}.contract.test.ts（apps/api-service/AGENTS.md の必須テスト）
 //  - 各 usecase.ts の co-located usecase.test.ts
 //  - 配線: container.ts への登録 / app.ts への router マウント
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";

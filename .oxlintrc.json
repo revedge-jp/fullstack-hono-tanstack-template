@@ -27,7 +27,9 @@
   ],
   "rules": {
     "no-unused-vars": "error",
-    "no-console": ["warn", { "allow": ["warn", "error", "info"] }],
+    // 生の console は使わない（.claude/rules/logging.md）。SSR で描画される UI も Workers のログに出る。
+    // 例外は下の overrides（ロガー実装・Bun 起動エントリ・テストとツール設定）だけ
+    "no-console": "error",
     "no-debugger": "error",
     "curly": "warn",
     "typescript/no-namespace": "error",
@@ -83,22 +85,9 @@
       }
     },
     {
-      "files": [
-        "**/infrastructure/**/*",
-        "**/integrations/**/*",
-        "apps/*/src/index.ts",
-        "packages/logging/src/**/*"
-      ],
-      "rules": {
-        "no-console": "off"
-      }
-    },
-    {
-      "files": [
-        "apps/client/features/*/queries/**/*",
-        "apps/client/features/*/actions/**/*",
-        "apps/client/features/*/ui/**/*"
-      ],
+      // ロガー実装そのものと、ロガーを組み立てる前に動く Bun の起動エントリ（ローカル専用）、
+      // alchemy CLI が実行するデプロイ定義（console.info で ::add-mask:: を CI に渡す）
+      "files": ["apps/*/src/index.ts", "packages/logging/src/**/*", "alchemy.run.ts"],
       "rules": {
         "no-console": "off"
       }
