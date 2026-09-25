@@ -177,6 +177,11 @@ expect_guard "スタイル規約: 子の margin で間隔を作らない" \
   'export const SelftestUi = () => <p className="sm:mt-2">x</p>;' \
   "違反 [margin-spacing]"
 
+expect_guard "スタイル規約: 論理プロパティの margin（mbs）で間隔を作らない" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="mbs-2">x</p>;' \
+  "違反 [margin-spacing]"
+
 expect_guard "スタイル規約: space-y で間隔を作らない" \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="space-y-4">x</div>;' \

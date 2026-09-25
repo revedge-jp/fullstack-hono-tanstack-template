@@ -67,8 +67,9 @@ const RULES = [
     id: "margin-spacing",
     // 間隔は親の gap-* / 部品の padding で作る。子の margin と space-* は、並びや条件付き描画が
     // 変わると間隔が崩れ、部品ごとに間隔の作り方がばらつく。mx-auto 等の auto は対象外。
+    // 論理プロパティ版（ms / me / mbs / mbe）も含む（Tailwind 4.3 の margin ユーティリティ全種）。
     pattern: new RegExp(
-      `${CLASS_START}-?(?:m[trblxyse]?|space-[xy])-(?:\\d+(?:\\.\\d+)?|px)${CLASS_END}`,
+      `${CLASS_START}-?(?:m(?:bs|be|[trblxyse])?|space-[xy])-(?:\\d+(?:\\.\\d+)?|px)${CLASS_END}`,
       "g",
     ),
     message:
