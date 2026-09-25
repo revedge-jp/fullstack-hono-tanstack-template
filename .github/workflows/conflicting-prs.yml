@@ -97,8 +97,16 @@ jobs:
                 case "$author" in
                   app/*) ;;
                   *)
-                    gh pr comment "$number" --body "@$author main と衝突しています。この状態では CI が走らず、auto-merge / merge queue にも入りません。\`git fetch origin && git rebase origin/main\` で解消して push し直してください（手順は \`.claude/commands/ship.md\`）。解消すると \`$LABEL\` ラベルは自動で外れます。" \
-                      || { failed=$((failed + 1)); continue; }
+                    if ! gh pr comment "$number" --body "@$author main と衝突しています。この状態では CI が走らず、auto-merge / merge queue にも入りません。\`git fetch origin && git rebase origin/main\` で解消して push し直してください（手順は \`.claude/commands/ship.md\`）。解消すると \`$LABEL\` ラベルは自動で外れます。"; then
+                      # 会話がロックされた PR にはコメントできず毎回失敗する。ラベルを付けずに失敗扱いにすると
+                      # 目印が付かないままジョブが永久に赤くなるので、ロック中ならラベルだけ付けて先へ進む。
+                      if [ "$(gh api "repos/$GH_REPO/issues/$number" --jq .locked 2>/dev/null)" = "true" ]; then
+                        echo "::warning::#$number は会話がロックされているためコメントできません（ラベルのみ付けます）"
+                      else
+                        failed=$((failed + 1))
+                        continue
+                      fi
+                    fi
                     ;;
                 esac
                 gh pr edit "$number" --add-label "$LABEL" || { failed=$((failed + 1)); continue; }
