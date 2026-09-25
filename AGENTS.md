@@ -67,7 +67,7 @@ curl -s -X POST -H 'content-type: application/json' \
 - ブラウザ UI は `http://localhost:3000/cdn-cgi/local/explorer`（wrangler dev なら端末で `e`）
 - 本番の自動トレースは `wrangler.jsonc` / `alchemy.run.ts` の `observability.traces.enabled` で
   有効化済み（Cloudflare ダッシュボードの Traces に出る）
-- テンプレート原本の `wrangler.jsonc` は `name` が `{{APP_NAME}}` のままなので、vite-plugin の
+- テンプレート原本の `wrangler.jsonc` は `name` が APP_NAME プレースホルダーのままなので、vite-plugin の
   検証で dev サーバーが起動しない。`scripts/init-template.sh` で初期化するか、`scripts/test/test-e2e.sh`
   と同じく一時的に置換する
 

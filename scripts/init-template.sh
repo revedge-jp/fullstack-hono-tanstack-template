@@ -24,7 +24,6 @@ PLACEHOLDER='{{'APP_NAME'}}'
 
 # 置換対象外: プレースホルダーの「仕組み」そのものを説明・処理しているファイル
 EXCLUDES=(
-  ".github/workflows/ci.yml"      # CI がプレースホルダーを検出・置換するステップを含む
   "docs/dev/troubleshooting.md"   # プレースホルダー起因のエラーの説明
   "scripts/init-template.sh"      # 自分自身
 )

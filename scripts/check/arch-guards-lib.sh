@@ -1,6 +1,6 @@
 #!/bin/bash
 # arch-guards.sh の各チェックを関数として定義するライブラリ（source するだけで実行はしない）。
-# 移植元: revedge-jp/chiryonavi#395（自己テスト 約97秒→約10秒）。
+# 派生プロダクトでの実測: 自己テスト 約97秒→約10秒。
 #
 # なぜ分けたか: arch-guards.selftest.sh はルールごとに既知の違反 fixture を置き、「そのルールが
 # 検出するか」を確かめる（30ケース超）。以前は毎回 arch-guards.sh をまるごと再実行しており、

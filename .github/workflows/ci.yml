@@ -423,11 +423,13 @@ jobs:
           if [[ -z "$FILTERS" ]]; then
             echo "No changes detected, skip build"
           else
-            # テンプレート未置換の {{APP_NAME}} を CI ビルド検証用のダミー値に置換
-            # (wrangler は name に英数+ハイフンしか許可しないため)
-            if grep -q '{{APP_NAME}}' apps/client/wrangler.jsonc; then
-              echo "Replacing {{APP_NAME}} placeholder with CI dummy value"
-              sed -i 's/{{APP_NAME}}/template-app/g' apps/client/wrangler.jsonc
+            # テンプレート未置換の APP_NAME プレースホルダーを CI ビルド検証用のダミー値に置換
+            # (wrangler は name に英数+ハイフンしか許可しないため)。init-template.sh の置換対象に
+            # ならないよう、プレースホルダーは動的に組み立てる
+            placeholder='{{'APP_NAME'}}'
+            if grep -qF "$placeholder" apps/client/wrangler.jsonc; then
+              echo "Replacing the APP_NAME placeholder with CI dummy value"
+              PLACEHOLDER="$placeholder" perl -pi -e 's/\Q$ENV{PLACEHOLDER}\E/template-app/g' apps/client/wrangler.jsonc
             fi
             echo "Building changed packages: $FILTERS"
             bunx turbo run build --concurrency=4 --cache-dir=.turbo $FILTERS
@@ -505,10 +507,12 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
         run: bunx drizzle-kit migrate
 
-      - name: Replace {{APP_NAME}} placeholder for E2E
+      - name: Replace the APP_NAME placeholder for E2E
         run: |
-          if grep -q '{{APP_NAME}}' apps/client/wrangler.jsonc; then
-            sed -i 's/{{APP_NAME}}/template-app/g' apps/client/wrangler.jsonc
+          # init-template.sh の置換対象にならないよう、プレースホルダーは動的に組み立てる
+          placeholder='{{'APP_NAME'}}'
+          if grep -qF "$placeholder" apps/client/wrangler.jsonc; then
+            PLACEHOLDER="$placeholder" perl -pi -e 's/\Q$ENV{PLACEHOLDER}\E/template-app/g' apps/client/wrangler.jsonc
           fi
 
       - name: Create .dev.vars for E2E

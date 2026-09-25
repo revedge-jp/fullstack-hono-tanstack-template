@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
 # WorktreeCreate / WorktreeRemove フック共用ロジック。
-# 移植元: kikagaku/kikagaku-training-portal#1292 → revedge-jp/chiryonavi#1218（Drizzle 版）。
 #
 # 設計メモ:
 #   - DB は worktree ごとにコンテナを立てず、main の共有コンテナ（postgres / postgres-test）内に
 #     データベースを1つずつ切る（wt_<slug>）。コンテナ/ボリュームが増えないので使い捨ての
 #     worktree に耐える。旧方式（agent-worktree-setup.sh のスロット方式）は worktree ごとに
-#     コンテナ2つ + volume を作り、ちりょなびでは実測で21コンテナ・0.8GiB が常駐した。
+#     コンテナ2つ + volume を作り、派生プロダクトでは実測で21コンテナ・0.8GiB が常駐した。
 #   - アプリのポート（CLIENT/API）だけは worktree ごとに割り当てる。レジストリ + lsof の実測で
 #     決め、旧方式の worktree や scripts/worktree.sh の手動 worktree が .env に持つポートも予約扱い。
 #   - ポートレジストリは git-common-dir（全 worktree で共有される main の .git）に置く。

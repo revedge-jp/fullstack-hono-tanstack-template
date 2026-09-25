@@ -64,8 +64,8 @@ paths:
   限界として PR に残す
 - 反転テストは「失敗の後にもう一度起きる」ことを確かめる（1回目を失敗させ、2回目で届く／付く）
 
-出典: revedge-jp/chiryonavi#1234（Slack に届かなくても「通知済み」を保存し、劣化の警告が二度と出なかった）
-・#1237（未払いの院の紹介にクレジットが付く処理の流れを作った）。
+出典: 派生プロダクトでの実例（Slack に届かなくても「通知済み」を保存し、劣化の警告が二度と出なかった／
+未払いの顧客の紹介にクレジットが付く処理の流れを作った）。
 
 ## integration テストは手書きの後始末を書かない（トランザクション fixture）
 
@@ -73,7 +73,7 @@ paths:
 書かず、`test-helpers/transactional-db.ts` の `createTransactionalDb()` を使う。各テストを
 BEGIN → ROLLBACK で包むので、テスト中の insert / update / delete は終了時にすべて取り消される。
 後始末の書き忘れ・削除順の誤りで「前のテストの残骸で別のテストが落ちる」型の flaky を構造的に防ぐ
-（移植元 revedge-jp/chiryonavi#1152。46 ファイル・約 36,000 行に手書きの後始末が散らばっていた）。
+（派生プロダクトでは 46 ファイル・約 36,000 行に手書きの後始末が散らばっていた）。
 
 ```ts
 const { getDb: getTx, end } = createTransactionalDb(process.env.DATABASE_URL ?? "");

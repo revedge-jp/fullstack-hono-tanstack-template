@@ -11,10 +11,10 @@ paths:
 
 - `gemini-3.5-flash` — 既定。東京（`asia-northeast1`）で使える。利用者の個人情報を扱う機能はこれ
 - `gemini-3-flash-preview` — `global` リージョンのみ（東京では使えない）
-- `gemini-3-pro-preview` — 東京では使えない（revedge-jp/chiryonavi で試したところ `global` でも 404）
+- `gemini-3-pro-preview` — 東京では使えない（派生プロダクトで試したところ `global` でも 404）
 
 3.6〜3.8 の Flash は後継が出ると 45 日で引退する短期提供モデルで、東京にも無いため候補にしない
-（ちりょなび issue #635 / #1186 の調査。`gemini-2.5-flash` は 2026-10-20 引退）。
+（派生プロダクトでの調査。`gemini-2.5-flash` は 2026-10-20 引退）。
 
 SDK は `@ai-sdk/google-vertex/edge`（Edge / Workers 対応版）を使う。本番は Cloudflare Workers で、
 ファイルシステム・gcloud CLI・メタデータサーバーが無いため **ADC（Application Default Credentials）は
