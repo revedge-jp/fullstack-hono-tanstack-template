@@ -21,6 +21,7 @@ paths:
 - **`window.location.href` への代入禁止**。TanStack Router の `router.navigate()` / `useNavigate()` を使う。
 - `features/` 配下で `process.env` 直参照禁止（`loadConfig()` 経由に統一）。
 - UI コンポーネントから `processXxx` の直接 import 禁止（`xxxAction` 経由に統一）。
+- スタイル規約（既定パレット・任意値・`dark:` の手書き・AI slop の定型パターン）。詳細は下の「デザイン規約」。
 
 ## `window` などブラウザ専用 API はコンポーネントの render 本体で直接参照しない
 
@@ -73,6 +74,94 @@ UI 文言をリネームして新しい文字列が既存の別要素の文字�
 - リネーム対象の文言を `grep -rn` で **spec ファイルだけでなく `tests/e2e/helpers/` 配下の
   共有ヘルパーも含めて** `apps/client/tests/e2e/` 全体から検索する。
 - 衝突を避ける修正は該当ロケーターに `exact: true` を追加する。
+
+## デザイン規約（トークン・部品・AI slop）
+
+AI が書く UI は、1 つずつは正しく動くため typecheck・lint・test をすべて通過したまま見た目が漂流する
+（`text-zinc-500` の直書き、紫のグラデーション、ページごとに違う余白）。これを止めるため、使える語彙を
+トークンと部品に絞り、絞った語彙から外れたものを `scripts/check/client-styles.mjs`（`bun run check:styles`。
+`bun run arch:check` にも含まれる）で機械的に検出する。下の各項目の【ガード】は機械検証済み、【目視】は画面を見て確認するもの。
+
+### 色は semantic トークンだけ
+
+| トークン | 用途 |
+|---|---|
+| `background` / `foreground` | ページの地と本文（body に適用済み。ページ側で背景を塗らない） |
+| `card` / `popover`（+ `-foreground`） | 面を分ける部品の地 |
+| `muted` / `muted-foreground` | 補助の面・補足テキスト（日付、件数、説明文） |
+| `primary`（+ `-foreground`） | 主要操作。**1 画面で目立たせるのは 1 か所** |
+| `secondary` / `accent` | 副次操作・hover の面 |
+| `destructive` | エラー文言・削除操作 |
+| `border` / `input` / `ring` | 罫線・入力枠・フォーカスリング |
+| `chart-1`〜`chart-5` / `sidebar-*` | グラフ系列・サイドバー専用 |
+
+- 【ガード】既定パレット（`text-zinc-500` / `bg-blue-600` / `text-white` …）は使えない。
+  `packages/tailwind-config/shared-styles.css` で既定パレットの生成自体を止めてあるが、**未定義のクラスは
+  ビルドエラーにならず黙って無色になるだけ**なので、ソース上の使用はガードが検出する
+- 【ガード】`dark:` を手書きしない。トークンは `.dark` で値が切り替わるので、トークンを使えば自動で対応する
+- 語彙（どのトークンが存在するか）は `packages/tailwind-config/shared-styles.css`、値（ブランドの色）は
+  `apps/client/app/globals.css` が持つ。ブランドの差し替えは `globals.css` の値だけで完結させ、
+  トークンを足すときは両方に書く
+
+### スケールから選ぶ
+
+- 【ガード】任意値（`w-[347px]` / `bg-[#7c3aed]` / `text-[13px]`）は使えない。Tailwind のスケール
+  （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `components/` に部品として閉じ込める
+  （`data-[state=open]:` のような任意バリアントは対象外）
+- 文字: 本文と UI は `text-sm`、補足は `text-xs`、ページ見出し（h1）は `text-2xl font-bold`。
+  強調は `font-medium` まで。サイズと太さの組み合わせを画面ごとに発明しない
+- 並べるときの間隔は親の `flex` / `grid` + `gap-*` で作る（子の `mt-*` や `space-y-*` で作らない）
+- 正方形は `size-*`（`w-* h-*` を並べない）、条件付きクラスは `cn()`（`@/shared/lib/utils`）で合成する
+
+### 部品を先に探す
+
+新しい UI を書く前に、既存の部品で組めないかを確認する。
+
+- `components/ui/`: shadcn の部品（`Button` / `Card` / `Input` / `Skeleton` / `ThemeToggle`）。
+  shadcn CLI の生成物なので手で書き換えない。足りない部品は shadcn CLI で追加する
+  （`components.json` の `style: base-vega` / Base UI 前提。Radix 前提の例をそのまま貼らない）
+- `components/patterns/`: 画面パターン（`EmptyState` / エラー表示 / NotFound）
+- `components/layout/`: ページ枠（`CenteredPage`）と常駐バナー
+- 部品に渡す `className` は**配置（余白・幅・並び）だけ**に使い、色や文字を上書きしない。見た目の違いは
+  `variant` / `size` で表す（例: 削除は `<Button variant="destructive">`、控えめな操作は `variant="ghost"`）
+
+### 状態を必ず作る
+
+- 読み込み中: `Skeleton`（スピナーだけで画面を空にしない）
+- 空: `EmptyState`（「無い」ではなく次の行動を示す）
+- エラー: `role="alert"` + `text-destructive`
+- 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingId` が実例）
+
+### AI slop を避ける
+
+LLM は学習データの多数派に収束するため、指示が無いと「どこかで見た AI 製の画面」を出す。業務アプリの
+テンプレートとして、**情報密度と一貫性を優先し、装飾で差をつけない**。
+
+| パターン | 検出 |
+|---|---|
+| グラデーション背景・グラデーション文字（`bg-linear-*` / `bg-clip-text`） | 【ガード】 |
+| すりガラス（`backdrop-blur-*`） | 【ガード】（オーバーレイは `components/ui` の部品に任せる） |
+| 絵文字をアイコン代わりに使う | 【ガード】（アイコンは `components.json` の `iconLibrary` に合わせて `lucide-react` を入れて使う） |
+| 紫・青の差し色を既定パレットから持ち込む | 【ガード】（既定パレット禁止で検出） |
+| Card の中に Card を入れる | 【目視】 |
+| 同じ形のカードを 3 列に並べる・中央寄せの hero + 小さなバッジ | 【目視】 |
+| 全要素に hover 演出・スクロールで fade-in・`animate-bounce` | 【目視】 |
+| 順序でない項目への 01/02/03 の番号振り・全大文字の小見出しラベル | 【目視】 |
+| 意味の無いアイコンを見出しごとに散らす | 【目視】 |
+| 「シームレスに」「次のレベルへ」のような中身の無い定型文言 | 【目視】 |
+
+slop とされるパターンは流行とともに変わる（2026-09-25 時点の一覧。出典は Anthropic の frontend-design
+skill と shadcn の agent skill）。**半年を目安に見直し**、機械検出できる項目が増えたら
+`scripts/check/client-styles.mjs` の規則と `scripts/check/arch-guards.selftest.sh` の既知違反を足す。
+
+### 画面で確認してから完了にする
+
+【目視】の項目と余白・揃えの崩れはガードでは拾えない。UI を変えたら dev サーバーで対象ページを開き、
+スクリーンショットを撮って上の表と照らし合わせる。
+
+- 幅はモバイル（375px）とデスクトップの 2 つ、テーマはライトとダークの 2 つ
+- 見るもの: 目立たせている箇所が 1 つか、余白と文字サイズが既存ページと揃っているか、【目視】の項目
+- 確認できなかった場合（dev サーバーが起動しない等）は、確認したと書かずにその旨を PR 本文に残す
 
 ## アクセシビリティ（WCAG 2.2 AA）
 

@@ -27,7 +27,7 @@ export function GoogleSignInButton() {
         {isPending ? "リダイレクト中..." : "Google でサインイン"}
       </Button>
       {error && (
-        <p role="alert" className="text-sm text-red-500">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}

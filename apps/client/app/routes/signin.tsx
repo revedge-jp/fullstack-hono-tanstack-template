@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import { CenteredPage } from "@/components/layout/centered-page";
 import { DevSignInButton, GoogleSignInButton, getSessionServerFn } from "@/features/auth";
 
 export const Route = createFileRoute("/signin")({
@@ -15,12 +16,12 @@ export const Route = createFileRoute("/signin")({
 
 function SignInPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
+    <CenteredPage>
       <main className="flex flex-col items-center gap-6">
         <h1 className="text-2xl font-bold">{"{{APP_NAME}}"}</h1>
         <GoogleSignInButton />
         {import.meta.env.DEV && <DevSignInButton />}
       </main>
-    </div>
+    </CenteredPage>
   );
 }
