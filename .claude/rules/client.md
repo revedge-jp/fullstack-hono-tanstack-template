@@ -121,7 +121,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
   （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `components/` にコンポーネントとして閉じ込める
   （`data-[state=open]:` のような任意バリアントは対象外）
 - 【ガード】`style` 属性で見た目を書かない（クラスの規則をすべて迂回できる）。値が実行時に決まるもの
-  （進捗バーの幅等）だけは `components/` の部品の中で使ってよい。SVG の `fill` / `stroke` に色を直接書かず、
+  （進捗バーの幅等）だけは `components/` のコンポーネントの中で使ってよい。SVG の `fill` / `stroke` に色を直接書かず、
   `currentColor` にして色はクラスで付ける。走査対象は `app/` / `features/` / `components/`（`ui/` を除く）/ `shared/`
 - 文字サイズと太さの組み合わせを画面ごとに発明しない。使う組み合わせは次の 4 つだけ:
 
