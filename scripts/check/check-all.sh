@@ -64,12 +64,14 @@ run_step_bg() {
 
 # Lint / Typecheck（変更影響に限定）。1 回の turbo 呼び出しにまとめる: 別プロセスで並列に起動すると、
 # client#lint と client#typecheck がどちらも先行させる api-service#build（dist/*.d.ts の出力）が
-# 2 つの tsc で同時に走り、型定義を書き合って偶発的に落ちる（turbo は 1 回の呼び出しの中でしか重複を排除しない）
+# 2 つの tsc で同時に走り、型定義を書き合って偶発的に落ちる（turbo は 1 回の呼び出しの中でしか重複を排除しない）。
+# --continue は lint と typecheck の両方の失敗を出すため。dependencies-successful にするのは、依存の build が
+# 落ちたまま lint を走らせると型情報を使うルールが空振りし、その「成功」がキャッシュに残るため
 LINT_TASKS=()
 if [ "${SKIP_LINT:-}" != "1" ]; then LINT_TASKS+=(lint); fi
 if [ "${SKIP_TYPECHECK:-}" != "1" ]; then LINT_TASKS+=(typecheck); fi
 if [ "${#LINT_TASKS[@]}" -gt 0 ]; then
-  run_step_bg "LintTypecheck" bunx turbo run "${LINT_TASKS[@]}" --filter="${TURBO_FILTER}" --continue
+  run_step_bg "LintTypecheck" bunx turbo run "${LINT_TASKS[@]}" --filter="${TURBO_FILTER}" --continue=dependencies-successful
 fi
 
 # Tests（TURBO_FILTER で変更の影響を受けるパッケージだけ。既定は origin/main との差分なので、
