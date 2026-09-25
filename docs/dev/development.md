@@ -458,6 +458,13 @@ bun run check-all
 bun run arch:guards
 ```
 
+検査の本体は `scripts/check/arch-guards-lib.sh` の関数（`guard_xxx`）で、`arch-guards.sh` は
+`ARCH_GUARDS` の順に呼ぶだけ。**ガードを足すときは、関数を足して `ARCH_GUARDS` に並べ、
+`arch-guards.selftest.sh` に既知の違反を検出するケースを `expect_guard` で1つ足す**（自己テストは
+その関数だけを直接呼ぶので速い）。関数は `run_guard` 経由で、条件の中ではなく素の文として呼ぶ
+（`if` や `||` の中で呼ぶと関数内の `set -e` が効かなくなり、途中の失敗を素通りする。
+ライブラリ冒頭の説明を参照）。
+
 #### arch:check
 
 アーキ規約（依存・FSD・knip）一式を実行。

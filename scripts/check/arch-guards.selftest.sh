@@ -6,6 +6,8 @@
 # （期待する違反メッセージを出す）ことを確認する。ガードが壊れて違反を見逃すと、
 # この自己テストが失敗する（= false negative の検出）。
 #
+# 各ケースは arch-guards-lib.sh の検査関数を1つだけ直接呼ぶ（自己テスト全体を速く保つため）。
+#
 # 背景: dependency-cruiser の feature 間依存禁止ルールが正規表現バックリファレンス
 #        （from の capture group を to で \1 参照する書き方）に依存しており、実際には
 #        機能していなかった（dependency-cruiser は from/to 間のバックリファレンスを
@@ -15,6 +17,9 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+
+# shellcheck source=./arch-guards-lib.sh
+source "$ROOT/scripts/check/arch-guards-lib.sh"
 
 FAIL=0
 FIXTURES=()
@@ -41,19 +46,22 @@ mkfix() { # $1 path, $2 content
   FIXTURES+=("$1")
 }
 
-# arch-guards.sh が「期待する違反メッセージ」を出して失敗することを確認。
-# arch-guards.sh は最初の違反で停止するため、fixture は対象ガードだけを発火させる配置にする。
-expect_guard() { # $1 ラベル, $2 fixtureパス, $3 fixture内容, $4 期待メッセージ部分文字列
-  mkfix "$2" "$3"
-  local out
-  out=$(bash scripts/check/arch-guards.sh 2>&1)
-  if printf '%s' "$out" | grep -qF "$4"; then
+# 検査関数を1つだけ直接呼び、「期待する違反メッセージ」を出して失敗することを確認する。
+# 以前は arch-guards.sh をまるごと再実行していたため、後ろの検査を試すたびに前の全検査の
+# スキャンも払っていた（arch-guards-lib.sh 冒頭の説明）。
+# run_guard は条件の中で呼ばない（set -e が無効になり素通りしうる）。コマンド置換で受ける。
+expect_guard() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture内容, $5 期待メッセージ部分文字列
+  mkfix "$3" "$4"
+  local out rc
+  out=$(run_guard "$2" 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "$5"; then
     echo "✅ $1"
   else
-    echo "❌ $1: 期待した違反 '$4' を検出できませんでした（ガードが壊れている可能性）"
+    echo "❌ $1: $2 が期待した違反 '$5' を検出できませんでした（ガードが壊れている可能性。exit=$rc）"
     FAIL=1
   fi
-  rm -f "$2"
+  rm -f "$3"
 }
 
 D="apps/api-service/src/features/tasks"
@@ -61,86 +69,102 @@ D="apps/api-service/src/features/tasks"
 echo "=== arch-guards 自己テスト ==="
 
 expect_guard "window.location.href 代入禁止" \
+  guard_window_location_href \
   "apps/client/features/__selftest/ui/selftest-location.tsx" \
   'export function selftestLocation() { window.location.href = "/foo"; }' \
   "window.location.href への代入は禁止"
 
 expect_guard "GitHub Actions 未ピン留め検出" \
+  guard_actions_pinned_sha \
   ".github/workflows/__selftest_unpinned.yml" \
   $'name: selftest\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n' \
   "commit SHA でピン留め"
 
 expect_guard "id-token: write 検出" \
+  guard_no_id_token_write \
   ".github/workflows/__selftest_idtoken.yml" \
   $'name: selftest\non: push\npermissions:\n  id-token: write\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
   "id-token: write が付与"
 
 expect_guard "throw 禁止" \
+  guard_no_throw \
   "$D/application/__selftest_throw.ts" \
   'export function selftestThrow() { throw new Error("x"); }' \
   "throw の使用が禁止"
 
 expect_guard "class 禁止" \
+  guard_no_class_interface \
   "$D/application/__selftest_class.ts" \
   'export class SelftestFoo {}' \
   "class の使用が禁止"
 
 # 以前の regex `^\s*(export\s+)?class\b` が見逃していた形を回帰テストする
 expect_guard "abstract class 禁止" \
+  guard_no_class_interface \
   "$D/application/__selftest_abstract_class.ts" \
   'abstract class SelftestAbstract {}' \
   "class の使用が禁止"
 
 expect_guard "export default class 禁止" \
+  guard_no_class_interface \
   "$D/application/__selftest_default_class.ts" \
   'export default class SelftestDefault {}' \
   "class の使用が禁止"
 
 expect_guard "interface 禁止" \
+  guard_no_class_interface \
   "$D/application/__selftest_interface.ts" \
   'export interface SelftestBar { x: number }' \
   "interface の使用が禁止"
 
 expect_guard "application→infrastructure 直参照禁止" \
+  guard_application_no_infrastructure \
   "$D/application/__selftest_infra.ts" \
   'import { createTasksRepository } from "../infrastructure/tasks.repository.drizzle";
 export const selftestInfra = createTasksRepository;' \
   "application 層から infrastructure を直接参照できません"
 
 expect_guard "application→integrations 直参照禁止" \
+  guard_application_no_integrations \
   "$D/application/__selftest_integrations.ts" \
   'import { createAuth } from "@app/integrations/external/auth";
 export const selftestIntegrations = createAuth;' \
   "application 層で integrations を直接参照できません"
 
 expect_guard "application→fetch 直叩き禁止" \
+  guard_application_no_fetch \
   "$D/application/__selftest_fetch.ts" \
   'export const selftestFetch = () => fetch("https://example.com");' \
   "application 層で fetch を直接呼び出すことは禁止"
 
 expect_guard "application→axios/node-fetch 禁止" \
+  guard_application_no_http_client \
   "$D/application/__selftest_axios.ts" \
   'import axios from "axios";
 export const selftestAxios = axios;' \
   "直接 HTTP クライアント（axios/node-fetch）の使用が禁止"
 
 expect_guard "application→@google-cloud 禁止" \
+  guard_application_no_google_cloud \
   "$D/application/__selftest_gcp.ts" \
   'import { CloudTasksClient } from "@google-cloud/tasks";
 export const selftestGcp = CloudTasksClient;' \
   "@google-cloud/* を直接参照できません"
 
 expect_guard "features 配下 process.env 直接参照禁止" \
+  guard_features_no_process_env \
   "$D/application/__selftest_env.ts" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
 expect_guard "client features process.env 直接参照禁止" \
+  guard_client_features_no_process_env \
   "apps/client/features/__selftest/queries/get-x.ts" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "client features 配下で process.env を直接参照できません"
 
 expect_guard "UI からの processXxx 直接 import 禁止" \
+  guard_ui_no_process_import \
   "apps/client/features/__selftest/ui/x.tsx" \
   'import { processFoo } from "../actions/foo";
 export const SelftestUi = processFoo;' \
@@ -148,66 +172,79 @@ export const SelftestUi = processFoo;' \
 
 # client のスタイル規約(client-styles.mjs)は規則ごとに 1 件ずつ既知違反を置く。
 expect_guard "スタイル規約: 既定パレット色の禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p className="text-sm text-zinc-500">x</p>;' \
   "違反 [raw-palette]"
 
 expect_guard "スタイル規約: important 付き既定パレット色の禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p className="text-zinc-500!">x</p>;' \
   "違反 [raw-palette]"
 
 expect_guard "スタイル規約: 任意プロパティの禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p className="[color:#7c3aed]">x</p>;' \
   "違反 [arbitrary-property]"
 
 expect_guard "スタイル規約: 任意値の禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="w-[347px]">x</div>;' \
   "違反 [arbitrary-value]"
 
 expect_guard "スタイル規約: dark: 手書きの禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="bg-card dark:bg-muted">x</div>;' \
   "違反 [manual-dark-variant]"
 
 expect_guard "スタイル規約: 子の margin で間隔を作らない" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p className="sm:mt-2">x</p>;' \
   "違反 [margin-spacing]"
 
 expect_guard "スタイル規約: 論理プロパティの margin（mbs）で間隔を作らない" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p className="mbs-2">x</p>;' \
   "違反 [margin-spacing]"
 
 expect_guard "スタイル規約: space-y で間隔を作らない" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="space-y-4">x</div>;' \
   "違反 [margin-spacing]"
 
 expect_guard "スタイル規約: 数字始まりのバリアントが続く dark: の禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="dark:2xl:bg-card">x</div>;' \
   "違反 [manual-dark-variant]"
 
 expect_guard "スタイル規約: グラデーション背景の禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="bg-linear-to-r from-primary to-accent">x</div>;' \
   "違反 [gradient]"
 
 expect_guard "スタイル規約: グラデーション文字の禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <h1 className="bg-clip-text text-transparent">x</h1>;' \
   "違反 [gradient-text]"
 
 expect_guard "スタイル規約: すりガラスの禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="backdrop-blur-md">x</div>;' \
   "違反 [glassmorphism]"
 
 expect_guard "スタイル規約: 絵文字の禁止" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p>🚀 Launch</p>;' \
   "違反 [emoji]"
@@ -215,11 +252,13 @@ expect_guard "スタイル規約: 絵文字の禁止" \
 # コメントも検査対象（禁止クラス名を書いたコメントは変更履歴なので書かない）。
 # 行内・行全体のどちらのコメントも検出することを確認する。
 expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <p className="text-muted-foreground">x</p>; // 旧 text-zinc-500' \
   "違反 [raw-palette]"
 
 expect_guard "スタイル規約: 行全体のコメント中の禁止クラス" \
+  guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   '// 以前は bg-linear-to-r だった
 export const SelftestUi = () => <p className="text-muted-foreground">x</p>;' \
@@ -240,11 +279,13 @@ fi
 rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx"
 
 expect_guard "@hono/zod-validator 直接 import 禁止" \
+  guard_no_direct_zod_validator \
   "$D/presentation/__selftest_zv.ts" \
   'import { zValidator } from "@hono/zod-validator"; export const selftestZv = zValidator;' \
   "@hono/zod-validator を直接 import せず"
 
 expect_guard "旧 @repo/result API (result.type ===) 禁止" \
+  guard_no_legacy_result_api \
   "$D/application/__selftest_legacy_result.ts" \
   'export function selftestLegacy(result: { type: string }) {
   if (result.type === "ok") return true;
@@ -253,6 +294,7 @@ expect_guard "旧 @repo/result API (result.type ===) 禁止" \
   "旧 @repo/result API です"
 
 expect_guard "usecase.ts の async 禁止" \
+  guard_usecase_result_chain \
   "$D/application/__selftest_usecase_async/usecase.ts" \
   'export async function makeSelftestAsync() {
   return async () => null;
@@ -261,6 +303,7 @@ expect_guard "usecase.ts の async 禁止" \
 
 # 以前の regex `\basync\s+function\b|\basync\s*\(` が見逃していた形を回帰テストする
 expect_guard "usecase.ts の async 括弧なしアロー禁止" \
+  guard_usecase_result_chain \
   "$D/application/__selftest_usecase_async_arrow/usecase.ts" \
   'import { okAsync } from "neverthrow";
 export function makeSelftestAsyncArrow() {
@@ -269,6 +312,7 @@ export function makeSelftestAsyncArrow() {
   "usecase.ts で async は禁止です"
 
 expect_guard "usecase.ts の async メソッド短縮記法禁止" \
+  guard_usecase_result_chain \
   "$D/application/__selftest_usecase_async_method/usecase.ts" \
   'import { okAsync } from "neverthrow";
 export const selftestAsyncMethod = {
@@ -279,6 +323,7 @@ export const selftestAsyncMethod = {
   "usecase.ts で async は禁止です"
 
 expect_guard "usecase.ts の try/catch 禁止" \
+  guard_usecase_result_chain \
   "$D/application/__selftest_usecase_try/usecase.ts" \
   'import { okAsync } from "neverthrow";
 export function makeSelftestTry() {
@@ -293,6 +338,7 @@ export function makeSelftestTry() {
   "usecase.ts で try/catch は禁止です"
 
 expect_guard "usecase.ts は Result チェーン必須" \
+  guard_usecase_result_chain \
   "$D/application/__selftest_usecase_chain/usecase.ts" \
   'export function makeSelftestChain() {
   return function selftestChain() {
@@ -302,11 +348,13 @@ expect_guard "usecase.ts は Result チェーン必須" \
   "Result チェーンである必要があります"
 
 expect_guard "ports.ts は application/ 直下のみ" \
+  guard_ports_placement \
   "$D/__selftest_ports/ports.ts" \
   'export type SelftestPort = { x(): void };' \
   "ports.ts は features/<feature>/application/ports.ts にのみ配置してください"
 
 expect_guard "createAuthedApp は requireAuth 必須" \
+  guard_authed_router_requires_auth \
   "$D/presentation/__selftest_authed_router.ts" \
   'import { createAuthedApp } from "@app/factory";
 export function createSelftestAuthedRouter() {
@@ -317,6 +365,7 @@ export function createSelftestAuthedRouter() {
 # 1 ファイルに 2 ルーター。片方だけ requireAuth を付け忘れたケース（以前は「どこかに 1 つでも
 # requireAuth があれば OK」だったため見逃していた）を回帰テストする。
 expect_guard "createAuthedApp 複数ルーターで片方が requireAuth 欠落" \
+  guard_authed_router_requires_auth \
   "$D/presentation/__selftest_two_routers.ts" \
   'import { createAuthedApp } from "@app/factory";
 export function createGuarded(deps) {
@@ -329,6 +378,7 @@ export function createUnguarded() {
 
 # kebab-case: camelCase の（テストでない）ファイルは違反として検出される
 expect_guard "kebab-case: camelCase ファイル名は違反" \
+  guard_kebab_case \
   "$D/application/selftestCamelName.ts" \
   'export const selftestCamel = 1;' \
   "ファイル名は kebab-case にしてください"
@@ -337,7 +387,7 @@ expect_guard "kebab-case: camelCase ファイル名は違反" \
 # expect_guard は「違反を検出する」検証なので、除外（＝違反にならない）はここで個別に検証する。
 KEBAB_NEG="apps/api-service/src/shared/__selftest/fooBarBaz.test.ts"
 mkfix "$KEBAB_NEG" 'export const x = 1;'
-kebab_out=$(bash scripts/check/arch-guards.sh 2>&1)
+kebab_out=$(run_guard guard_kebab_case 2>&1)
 if printf '%s' "$kebab_out" | grep -qF "fooBarBaz.test.ts"; then
   echo "❌ kebab-case 除外（.test.ts）: camelCase なテストファイルが誤検出された"
   FAIL=1
@@ -348,10 +398,10 @@ rm -f "$KEBAB_NEG"
 
 SELFTEST_ACTION_DIR="$D/application/__selftest_action"
 mkdir -p "$SELFTEST_ACTION_DIR"
-# 有効な usecase.ts（先行ガードを通過する）を置くが usecase.test.ts は作らない
+# 有効な usecase.ts を置くが usecase.test.ts は作らない
 # → feature 構造チェックが「co-located テスト欠落」を検出するはず
 printf 'import { okAsync } from "neverthrow";\nexport function makeSelftestAction() {\n  return () => okAsync(null);\n}\n' >"$SELFTEST_ACTION_DIR/usecase.ts"
-st_out=$(bash scripts/check/arch-guards.sh 2>&1)
+st_out=$(run_guard guard_feature_structure 2>&1)
 if printf '%s' "$st_out" | grep -qF "usecase.test.ts がありません"; then
   echo "✅ feature 構造（co-located テスト欠落）"
 else
