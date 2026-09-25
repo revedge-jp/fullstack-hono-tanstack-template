@@ -15,16 +15,17 @@ export function stripBindParams(message: string): string {
  * stack の先頭はメッセージの複製なので、その部分だけをバインド値を落としたメッセージに置き換え、
  * 呼び出しフレームは残す。フレームの始まりを stack の文字列(`at …` の行)から探すと、バインド値
  * 自体が改行と `at ` を含むときに誤認するため、既知のメッセージの位置で切る。stack 中にメッセージが
- * 見つからない(生成後に message が書き換えられた等)ときは、安全側に倒してメッセージだけを返す。
+ * 見つからない(生成後に message が書き換えられた等)ときや、置き換えた後もメッセージの外に
+ * バインド値が残る(内側の例外の stack を連結したラッパー等)ときは、安全側に倒してメッセージだけを返す。
  */
 export function stripBindParamsFromStack(stack: string, message: string): string {
   const messageIndex = stack.indexOf(message);
   if (messageIndex === -1) {
     return stripBindParams(message);
   }
-  return (
+  const replaced =
     stack.slice(0, messageIndex) +
     stripBindParams(message) +
-    stack.slice(messageIndex + message.length)
-  );
+    stack.slice(messageIndex + message.length);
+  return replaced.includes(BIND_PARAMS_MARKER) ? stripBindParams(message) : replaced;
 }

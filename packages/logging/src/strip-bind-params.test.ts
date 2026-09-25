@@ -40,6 +40,11 @@ describe("stripBindParamsFromStack", () => {
     expect(stripBindParamsFromStack(stack, `${QUERY}\nparams: secret`)).toBe(QUERY);
   });
 
+  test("メッセージの外(連結された内側の stack)にバインド値が残るならメッセージだけを返す", () => {
+    const stack = `Error: wrapped\n    at run (app.ts:2:2)\nCaused by: Error: ${QUERY}\nparams: SECRET`;
+    expect(stripBindParamsFromStack(stack, "wrapped")).toBe("wrapped");
+  });
+
   test("バインド値が無ければ stack をそのまま返す", () => {
     const stack = "Error: boom\n    at run (app.ts:2:2)";
     expect(stripBindParamsFromStack(stack, "boom")).toBe(stack);
