@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { createInProcessApiClient } from "@/shared/lib/api-client";
 
-import server, { releaseAfterResponse, withSecurityHeaders } from "./server";
+import server, { isNonHtmlPageRequest, releaseAfterResponse, withSecurityHeaders } from "./server";
 
 // 「Response オブジェクトを返した時点」で cleanup を走らせると、ストリーミング
 // レスポンスの送信中に裏で実行中のクエリのDB接続が閉じられ、同時リクエストが多い環境で
@@ -104,6 +104,38 @@ describe("静的アセットの取りこぼし(/assets/*)", () => {
       undefined,
     );
     expect(res.status).toBe(404);
+  });
+});
+
+// TanStack Start はこの Accept のページ要求に 500 を返し、エラー監視を鳴らす。SSR へ渡す前に
+// 404 で返す。404 の経路は Hono アプリ初期化前に return するので DB なしで叩ける。
+// 通す側(SSR / Hono へ進む)は DB が要るので、判定関数を直接検証する。
+describe("HTML を受け付けないページリクエスト(スキャナの Accept: application/json)", () => {
+  test.each(["/graphql", "/v2/_catalog"])(
+    "Accept: application/json の未知パス %s は SSR へ渡さず 404 を返す",
+    async (path) => {
+      const res = await server.fetch(
+        new Request(`https://app.example.com${path}`, { headers: { accept: "application/json" } }),
+        {},
+        undefined,
+      );
+      expect(res.status).toBe(404);
+    },
+  );
+
+  test.each(["text/html;q=0.9,image/webp", "application/json, */*;q=0.1", "", null])(
+    "上流と同じ先頭一致: Accept %j のページ要求は通す",
+    (accept) => {
+      expect(isNonHtmlPageRequest("/graphql", accept)).toBe(false);
+    },
+  );
+
+  test.each(["/_serverFn/abc", "/api/health"])("%s は Accept が JSON でも対象外", (path) => {
+    expect(isNonHtmlPageRequest(path, "application/json")).toBe(false);
+  });
+
+  test("image/* だけの Accept は対象(上流は text/html も */* も含まないと 500)", () => {
+    expect(isNonHtmlPageRequest("/favicon.ico", "image/avif,image/webp")).toBe(true);
   });
 });
 

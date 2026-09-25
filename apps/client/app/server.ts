@@ -110,6 +110,27 @@ export function releaseAfterResponse(
   return new Response(readable, response);
 }
 
+// TanStack Start の SSR ハンドラ(@tanstack/start-server-core createStartHandler.js の
+// executeRouter)は、Accept に "*/*" も "text/html" も含まないページ要求
+// (例: Accept: application/json で /graphql を探るスキャナ)に
+// {"error":"Only HTML requests are supported here"} を **500** で返す。5xx はエラー監視を
+// 鳴らすので、SSR へ渡す前に 404 で返すための判定。Accept の判定は上流の写し(未指定は
+// "*/*" 扱い、各要素の先頭一致)なので、上流を更新したら突き合わせること。
+// /api/* は Hono、/_serverFn/* は serverFn 経路(Accept は application/json 等)なので対象外。
+// 前提: server route(routes/*.tsx の `server.handlers`)を /api/ の外に置いていない。上流では
+// その handlers は Accept 判定より前に実行されるため、置くならここで除外に加えること。
+// serverFn のパスは TanStack Start の既定(serverFns.base = "/_serverFn")。vite.config.ts で
+// 変えたらここも合わせること。
+export function isNonHtmlPageRequest(pathname: string, accept: string | null): boolean {
+  if (pathname.startsWith("/api/") || pathname.startsWith("/_serverFn/")) {
+    return false;
+  }
+  const acceptParts = (accept || "*/*").split(",");
+  return !["*/*", "text/html"].some((mimeType) =>
+    acceptParts.some((part) => part.trim().startsWith(mimeType)),
+  );
+}
+
 export default {
   async fetch(request: Request, env: CFBindings, ctx: CFContext) {
     const url = new URL(request.url);
@@ -130,6 +151,14 @@ export default {
     // /api/* と同じ理由でここも早期 return する。
     if (url.pathname.startsWith("/assets/")) {
       serverLogger.warn({ requestId, path: url.pathname }, "stale asset request");
+      return new Response("Not Found", { status: 404 });
+    }
+
+    // ---- HTML を受け付けないページリクエスト(isNonHtmlPageRequest 参照) ----------
+    // Hono アプリ(postgres.js クライアント)の初期化より前に返す。
+    const accept = request.headers.get("accept");
+    if (isNonHtmlPageRequest(url.pathname, accept)) {
+      serverLogger.warn({ requestId, path: url.pathname, accept }, "non-html page request");
       return new Response("Not Found", { status: 404 });
     }
 
