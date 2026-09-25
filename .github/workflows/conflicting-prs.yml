@@ -1,0 +1,124 @@
+name: Conflicting PRs
+
+# main と衝突した PR を見つけて知らせる。衝突した PR は CI が走らず(pull_request の merge ref が
+# 作れない)、通知も出ないため、誰も気づかないまま止まる。エージェントが並列に PR を作るほど、
+# 先にマージされた PR が後続を衝突させる頻度が上がる(2026-09-25 に #104 / #109 が気づかれずに止まった)。
+#
+# 衝突していれば `needs-rebase` ラベルを付け、付けた時だけ作者をメンションしてコメントする
+# (毎回コメントすると通知が埋もれる)。解消していればラベルを外す。エージェントは使わない
+# (gh の読み書きだけ。Rule of Two: .claude/rules/agent-permissions.md)。
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * *" # 毎日 09:00 JST(push 直後の判定が間に合わなかった PR の拾い漏れ用)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true ならラベル・コメントを付けず、判定結果だけを出す"
+        default: "false"
+        required: false
+
+concurrency:
+  group: conflicting-prs
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  detect:
+    name: Detect conflicting PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pull-requests: write
+      issues: write # PR へのラベル付与・ラベル作成は issues API を使う
+    steps:
+      - name: 衝突している PR にラベルを付け、解消した PR から外す
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          LABEL: needs-rebase
+        run: |
+          set -euo pipefail
+
+          # main への push 直後は、GitHub が各 PR の mergeable を再計算し終えておらず、push 前の
+          # 値(MERGEABLE)が返ることがある。再計算の猶予を置く(拾い漏れは日次の実行が拾う)。
+          if [ "$EVENT" = "push" ]; then sleep 60; fi
+
+          if [ "$DRY_RUN" != "true" ]; then
+            gh label create "$LABEL" --color B60205 \
+              --description "main と衝突している。rebase して push し直すまで CI が走らない" 2>/dev/null || true
+          fi
+
+          # mergeable は問い合わせを契機に計算されるため、最初は UNKNOWN が返りうる。数回待って取り直す。
+          # 取得自体の失敗は ERROR として返す($(...) の中では set -e が効かず、空文字で素通りするため)。
+          mergeable_of() {
+            local number=$1 state
+            for _ in 1 2 3 4 5 6; do
+              state=$(gh pr view "$number" --json mergeable -q .mergeable) || { printf 'ERROR'; return 0; }
+              if [ "$state" != "UNKNOWN" ]; then
+                printf '%s' "$state"
+                return 0
+              fi
+              sleep 10
+            done
+            printf 'UNKNOWN'
+          }
+
+          # 一覧は変数に受けてから回す。プロセス置換 < <(...) だと gh の失敗が set -e に届かず、
+          # 「0 件」で成功してしまう(検知の仕組みが自分の失敗を緑で隠す)。
+          prs=$(gh pr list --state open --base main --limit 200 --json number,author,labels \
+            -q '.[] | [.number, .author.login, ([.labels[].name] | join(","))] | @tsv')
+
+          conflicting=0
+          failed=0
+          while IFS=$'\t' read -r number author labels; do
+            [ -n "$number" ] || continue
+            state=$(mergeable_of "$number")
+            has_label=false
+            case ",$labels," in *",$LABEL,"*) has_label=true ;; esac
+            echo "#$number ($author): $state label=$has_label"
+
+            if [ "$state" = "ERROR" ]; then
+              failed=$((failed + 1))
+              echo "::warning::#$number の mergeable を取得できませんでした"
+            elif [ "$state" = "CONFLICTING" ]; then
+              conflicting=$((conflicting + 1))
+              echo "::warning::#$number が main と衝突しています"
+              if [ "$has_label" = "false" ] && [ "$DRY_RUN" != "true" ]; then
+                # コメントを先に送り、ラベルは後で付ける。ラベルが「通知済み」の印を兼ねるので、
+                # 逆順だとコメントの失敗・実行のキャンセル(cancel-in-progress)で通知が二度と出なくなる。
+                # この順なら、失敗しても次の実行で同じ通知がもう一度届くだけで済む。
+                # bot(Renovate 等。login は app/xxx)は自分で rebase するのでメンションしない。
+                case "$author" in
+                  app/*) ;;
+                  *)
+                    if ! gh pr comment "$number" --body "@$author main と衝突しています。この状態では CI が走らず、auto-merge / merge queue にも入りません。\`git fetch origin && git rebase origin/main\` で解消して push し直してください（手順は \`.claude/commands/ship.md\`）。解消すると \`$LABEL\` ラベルは自動で外れます。"; then
+                      # 会話がロックされた PR にはコメントできず毎回失敗する。ラベルを付けずに失敗扱いにすると
+                      # 目印が付かないままジョブが永久に赤くなるので、ロック中ならラベルだけ付けて先へ進む。
+                      if [ "$(gh api "repos/$GH_REPO/issues/$number" --jq .locked 2>/dev/null)" = "true" ]; then
+                        echo "::warning::#$number は会話がロックされているためコメントできません（ラベルのみ付けます）"
+                      else
+                        failed=$((failed + 1))
+                        continue
+                      fi
+                    fi
+                    ;;
+                esac
+                gh pr edit "$number" --add-label "$LABEL" || { failed=$((failed + 1)); continue; }
+              fi
+            elif [ "$state" = "MERGEABLE" ] && [ "$has_label" = "true" ] && [ "$DRY_RUN" != "true" ]; then
+              gh pr edit "$number" --remove-label "$LABEL" || { failed=$((failed + 1)); continue; }
+            fi
+          done <<< "$prs"
+
+          echo "衝突している PR: $conflicting 件"
+          # 1 件の失敗で残りの PR を止めないよう最後まで回し、失敗があればジョブを赤にする。
+          if [ "$failed" -gt 0 ]; then
+            echo "::error::$failed 件の PR で取得・更新に失敗しました(次の実行で再試行されます)"
+            exit 1
+          fi

@@ -97,6 +97,9 @@ gh pr merge <番号> --auto --squash
 有効化後は `gh pr view <番号> --json mergeable -q .mergeable` が `MERGEABLE` になることを確認する
 （`UNKNOWN` は未計算なので数秒待って再取得。`CONFLICTING` なら rebase して push し直す。
 衝突で止まった PR は CI が走らず通知も出ないため、確認せずに放置すると誰も気づかない）。
+その後に main が進んで衝突した場合は、`.github/workflows/conflicting-prs.yml` が main への push と
+日次で検出し、`needs-rebase` ラベルと作者へのメンションで知らせる（解消すればラベルは外れる）。
+`needs-rebase` の付いた PR は、rebase して push し直すまで CI もマージも止まっている。
 
 **例外（手動マージ）**: マイグレーション・auth・決済・検証器(`scripts/check/verifier-paths.txt`)に
 触る PR は auto-merge を使わず、ユーザーの確認を待つ。
