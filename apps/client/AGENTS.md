@@ -39,7 +39,8 @@ export const getXxxServerFn = createServerFn().handler(async () => {
   const request = getRequest();
   const cookie = request.headers.get("cookie") ?? "";
   const res = await getApiClient().api.xxx.$get({}, { init: { headers: { cookie } } });
-  if (!res.ok) return null;
+  // 失敗を null や空で返すと「データ 0 件」と区別できない。throw してルートの errorComponent に任せる
+  if (!res.ok) throw new Error("xxx の取得に失敗しました");
   return res.json();
 });
 
@@ -53,14 +54,21 @@ export const Route = createFileRoute("/xxx")({
 });
 
 function XxxPage() {
-  const { data } = Route.useLoaderData(); // SSRで取得済み、ローディング不要
+  const { data: initialData } = Route.useLoaderData(); // SSRで取得済み、ローディング不要
+  // mutation 後の invalidate で再取得できるよう、loader の結果を useQuery の初期値にする
+  const { data } = useQuery({ ...xxxQueryOptions(), initialData });
 }
 ```
+
+実例: `features/tasks/queries/get-tasks.ts`（未認証の 401 だけ空ページで返す扱いも含む）と
+`app/routes/_authenticated/tasks.tsx`。レスポンスは `res.json()` をそのまま返さず、`schemas.ts` の Zod で検証している。
 
 **クライアントサイド**: ユーザー操作で動的に変わるデータに `useQuery`
 
 ```typescript
 // queries/xxx.ts
+import { browserApiClient as apiClient } from "@/shared/lib/browser-api-client";
+
 export function xxxQueryOptions() {
   return queryOptions({
     queryKey: ["xxx"],
@@ -84,9 +92,9 @@ export function xxxQueryOptions() {
 ### Hono RPC
 
 ```typescript
-// ブラウザ（クライアントサイド）: 相対URL
-import type { AppType } from "api-service";
-const apiClient = hc<AppType>("/");
+// ブラウザ（クライアントサイド）: 共有インスタンスを使い、hc<AppType>("/") を各ファイルで作らない
+// （fetch をラップしてデプロイをまたいだ古いタブを検知している。shared/lib/browser-api-client.ts）
+import { browserApiClient as apiClient } from "@/shared/lib/browser-api-client";
 
 // サーバーサイド（createServerFn内）: in-process クライアント + Cookie転送
 // （HTTP ループバックは CF Workers で不可のため、server.ts が app.request を束ねた

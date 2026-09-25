@@ -35,11 +35,12 @@ src/features/{feature}/
 ├── application/
 │   ├── ports.ts                    # Abstract port types this feature needs from other features (optional)
 │   ├── {action}/
-│   │   ├── validators.ts          # DTO definition (XxxInput) + Zod validation
+│   │   ├── validators.ts          # DTO definition (XxxInput) + Zod validation (only if the action takes input to validate)
 │   │   ├── steps.ts               # makeXxxStep(deps) → ResultAsync<T, E>
 │   │   ├── usecase.ts             # makeXxx(deps) → okAsync().andThen() chain
-│   │   └── mappers.ts             # Domain → response shape
-│   └── service.ts                 # Aggregates use cases (injected via DI; required once a feature has 2+ actions)
+│   │   └── mappers.ts             # Domain → response shape (only if the response differs from the step's output)
+│   ├── service.ts                 # Aggregates use cases (injected via DI; required once a feature has 2+ actions)
+│   └── index.ts                   # Re-exports each action's makeXxx (required together with service.ts)
 └── presentation/
     ├── router.ts                  # HTTP I/O only, calls service
     └── index.ts                   # Re-exports router (barrel used by app.ts)
@@ -66,6 +67,8 @@ export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
   };
 }
 ```
+実例: validators・step・mapper が揃うのは `src/features/tasks/application/list/usecase.ts`。入力検証も整形も無い
+action は `okAsync(input).andThen(step)` だけになる（`get` / `delete`）。
 - `usecase.ts` は `async`/`try-catch` 禁止。`okAsync().andThen()...` チェーンのみで表現する（`scripts/check/arch-guards.sh` で強制）
 - リポジトリは `ResultAsync<T, E>` を返す（`Promise<Result<T, E>>` ではない）
 - DB エラーは infrastructure 層で `ResultAsync.fromPromise(promise, errorMapper)` によりラップする
@@ -106,7 +109,7 @@ feature B's behavior:
    ```typescript
    // features/tasks/application/ports.ts
    export type ActivityRecorder = {
-     recordTaskCreated(task: { id: string; title: string }): ResultAsync<void, "Unexpected">;
+     recordTaskCreated(task: { id: string; title: string; ownerId: string }): ResultAsync<void, "Unexpected">;
    };
    ```
 2. **The adapter implementing the port lives in `integrations/composition/`**, and is the only place the
@@ -116,7 +119,10 @@ feature B's behavior:
    export function createActivityRecorder(deps: { activity: ActivityService }): ActivityRecorder {
      return {
        recordTaskCreated: (task) =>
-         deps.activity.recordActivity({ kind: "task_created", message: `...` }).map(() => undefined),
+         deps.activity
+           .recordActivity({ ownerId: task.ownerId, kind: "task_created", message: `...` })
+           .map(() => undefined)
+           .mapErr(() => "Unexpected" as const), // B のエラー型を A のポートのエラー型へ正規化する
      };
    }
    ```
@@ -158,14 +164,8 @@ feature の切り方そのものを見直す:
   別の挙動になる。リポジトリのメソッドや振る舞いを変えたら、Drizzle 実装を正として in-memory を合わせ、
   適合テストにケースを足す
 
-`overrides`（すべて任意、zero-config で動く）:
-- `nodeEnv`（既定 `"test"`）/ `corsOrigin` / `requestTimeoutMs` / `rateLimit` / `version` — config 相当。
-  `onError` の本番マスキングや rate-limit / timeout の挙動を検証するときに差し替える。
-- `user`（既定の認証ユーザーを差し替え）/ `getSession`（セッション解決を丸ごと差し替え。
-  未認証や例外を検証するときに使う）。
-- `tasks` / `activity` — feature のサービスを丸ごと差し替え（メソッド単位の Result を注入）。
-- `seedTasks` / `seedActivities` — 既定の in-memory リポジトリに初期データを投入。
-- `db`（health の `execute` を差し替え）/ `auth`（Better Auth ハンドラの代替）/ `logger`。
+- 差し替えられる項目（config 相当・認証/セッション・feature のサービス・初期データ・インフラ）は
+  `src/test-helpers/create-fake-app.ts` の `FakeAppOverrides` 型を見る。すべて任意で zero-config で動く
 
 ### Test patterns
 ```typescript
