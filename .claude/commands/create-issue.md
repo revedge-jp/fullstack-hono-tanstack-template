@@ -89,10 +89,9 @@ EOF
   --label "[適切なラベル]"
 ```
 
-作成後、Issue番号を変数に保存：
-```bash
-PARENT_NUMBER=$(gh issue list --limit 1 --json number -q '.[0].number')
-```
+`gh issue create` は作成した Issue の URL（`https://github.com/<owner>/<repo>/issues/<番号>`）を出力する。
+末尾の番号を親Issue番号として控え、以降のコマンドには**その番号を直接書く**（シェル変数は Bash の呼び出しを
+跨いで残らない。`gh issue list --limit 1` で拾うと、同時に他の Issue が作られたときに取り違える）。
 
 #### 3-2. サブIssueを順番に作成
 
@@ -108,7 +107,7 @@ gh issue create \
 
 ## 背景
 
-親Issue: #[PARENT_NUMBER]
+親Issue: #[親Issue番号]
 
 ## タスク
 
@@ -126,17 +125,24 @@ EOF
   --label "[工数ラベル]"
 ```
 
-作成後、各 Issue 番号を記録しておく。
+付けるラベルが無い場合は `--label` 行ごと省く（下の注意事項）。作成後、出力された URL から各サブIssue番号を控えておく。
 
 #### 3-3. サブIssueを親Issueに紐付ける
 
-作成したサブIssueをすべて親Issueのサブissueとして登録する：
+作成したサブIssueをすべて親Issueのサブissueとして登録する。API の `sub_issue_id` は Issue **番号ではなく
+Issue の `id`**（REST API の数値 ID）を要求するので、先にサブIssueの `id` を取得する
+（`{owner}` / `{repo}` は `gh api` が現在のリポジトリで埋める）：
 
 ```bash
-REPO=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
-gh api repos/$REPO/issues/$PARENT_NUMBER/sub_issues \
+gh api repos/{owner}/{repo}/issues/[サブIssue番号] --jq .id
+```
+
+出力された `id` を使って登録する（`--field` は数値として送る）：
+
+```bash
+gh api repos/{owner}/{repo}/issues/[親Issue番号]/sub_issues \
   --method POST \
-  --field sub_issue_id=[サブIssue番号]
+  --field sub_issue_id=[サブIssueのid]
 ```
 
 各サブIssueに対して繰り返す。
@@ -144,7 +150,7 @@ gh api repos/$REPO/issues/$PARENT_NUMBER/sub_issues \
 ### Step 4: 結果を報告する
 
 ```bash
-gh issue view $PARENT_NUMBER --web 2>/dev/null || gh issue view $PARENT_NUMBER
+gh issue view [親Issue番号]
 ```
 
 以下の形式で報告してください：
@@ -165,5 +171,7 @@ URL: https://github.com/[owner]/[repo]/issues/[番号]
 **注意事項**:
 - prefix は `feat` / `fix` / `refactor` / `chore` から選ぶ
 - サブIssueのタイトルは「親Issue名 - レイヤー名」の形式を守る（例: `feat: ○○機能 - DBスキーマ変更`）
-- ラベルは `実装工数：少` / `実装工数：中` / `実装工数：多` を工数感に応じて付ける
+- ラベルは Step 1 の `gh label list` に**存在するものだけ**付ける（存在しないラベルを `--label` に渡すと
+  `gh issue create` 自体が失敗する）。工数ラベル（例: `実装工数：少` / `実装工数：中` / `実装工数：多`）が無ければ
+  付けずに作成し、工数感は本文に書く。ラベルを新しく作るのはユーザーが望んだときだけ（`gh label create`）
 - 実装詳細（コード設計・型定義など）はサブIssueに書き、親Issueには書かない

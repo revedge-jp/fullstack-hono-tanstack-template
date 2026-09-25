@@ -48,7 +48,7 @@ cat .env | grep DATABASE_URL
 #### 症状: `database "app_db" does not exist`
 
 ```bash
-# DBを作成
+# DBを作成（コンテナ名の既定は app_postgres。.env の POSTGRES_CONTAINER_NAME で変えていればその名前）
 docker exec -it app_postgres psql -U postgres -c "CREATE DATABASE app_db;"
 ```
 
@@ -117,17 +117,19 @@ bun run db:migrate
 #### 症状: `bun install` が失敗
 
 ```bash
-# キャッシュをクリアして再インストール
+# node_modules だけを消して再インストール（bun.lock は残す）
 rm -rf node_modules
-rm bun.lock
 bun install
 ```
+
+`bun.lock` を消して解決し直さない（`.claude/rules/package-management.md`: lock を信頼する）。
+`minimum release age` を含むエラーで失敗する場合の対処も同ファイルにある。
 
 #### 症状: パッケージが見つからない
 
 ```bash
-# ワークスペースの依存関係を再解決
-bun install --force
+# ワークスペースのリンクを張り直す
+bun install
 ```
 
 ---
@@ -172,16 +174,24 @@ pino の場合、Node ビルドは stream 引数を渡さない限り内部で S
 
 **解決方法:** `./scripts/init-template.sh <app-name>` で一括置換する（テンプレート初期化時に一度だけ実行）。CI ではビルド前にダミー値へ置換している（`.github/workflows/ci.yml` 参照）。
 
-#### 症状: `main` への push で Deploy ワークフローの build/deploy が skip される
+#### 症状: Deploy ワークフローがデプロイせずに終わる（skip される）
 
-**原因:** `.github/workflows/deploy.yml` は、`wrangler.jsonc` に `{{APP_NAME}}` が残っているか、
-`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `DATABASE_URL` の secrets が未設定の場合、
-build/migrate/deploy の各 step を自動的に skip する（テンプレート原本のままでは実デプロイが
-構造的に成立しないため、赤い失敗にせず静かに skip する設計）。
+**原因:** `.github/workflows/deploy.yml` は push で CI Pipeline が成功したときに起動し、次のどちらかに
+当たると赤い失敗にせず notice を出して skip する（テンプレート原本やセットアップ途中のリポジトリを
+赤くしないため）。
 
-**解決方法:** `./scripts/init-template.sh <app-name>` を実行し、GitHub リポジトリ（または
-`staging`/`production` environment）に上記 secrets を設定すれば、次回 push から自動的に
-デプロイが実行されるようになる。ワークフロー自体の編集は不要。
+1. `detect-target` ジョブ: デプロイ先の GitHub Environment が未作成（main への push なら `staging`、
+   `vX.Y.Z` タグなら `production`。それ以外のブランチ・タグはそもそもデプロイ対象外）
+2. `deploy` ジョブの `Check deploy readiness` step: その Environment の secrets / vars が揃っていない
+   （足りない名前が notice に出る）
+
+`wrangler.jsonc` の `{{APP_NAME}}` は skip の条件ではない（deploy は `APP_NAME` 変数で置換してから
+ビルドする）。`DATABASE_URL` も登録不要（Alchemy が provision する）。
+
+**解決方法:** Actions の実行結果の notice で、どちらで skip したかと足りない名前を確認する。
+`bash scripts/setup-deploy-env.sh <staging|production>` で Environment を作り、secrets / vars を登録する
+（一覧は [Cloudflare Workers デプロイガイド](../deploy/cloudflare-workers.md) の「2. GitHub Environments の設定」）。
+ワークフロー自体の編集は不要。
 
 ---
 
@@ -219,14 +229,15 @@ Error: Input required and not supplied: xxx
 **解決方法:**
 
 ```bash
-# Secret名を確認（大文字小文字も含む）
-gh secret list
-
-# Settings → Secrets and variables → Actions で設定
-# デプロイに必要: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / DATABASE_URL
+# デプロイ用の secrets は Environment ごとに登録する（名前は大文字小文字も含めて確認）
+gh secret list --env staging
+gh variable list --env staging
 ```
 
-#### 症状: wrangler deploy が認証エラー
+必要な secrets / vars の一覧は [Cloudflare Workers デプロイガイド](../deploy/cloudflare-workers.md) の
+「2. GitHub Environments の設定」。
+
+#### 症状: デプロイ（`alchemy deploy`）が Cloudflare の認証エラーで落ちる
 
 **確認事項:**
 1. `CLOUDFLARE_API_TOKEN` に Workers 編集権限があるか

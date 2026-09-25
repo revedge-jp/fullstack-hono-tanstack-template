@@ -29,8 +29,8 @@ reject せず、コードを日本語文言に置き換え、`messages` のキ�
 ## 機械的に強制される規約（arch:guards）
 
 - **`window.location.href` への代入禁止**。TanStack Router の `router.navigate()` / `useNavigate()` を使う。
-- `features/` 配下で `process.env` 直参照禁止（`loadConfig()` 経由に統一）。
-- UI コンポーネントから `processXxx` の直接 import 禁止（`xxxAction` 経由に統一）。
+- `features/` 配下で `process.env` 直参照禁止。client には独自の設定機構が無いので、必要な値は api-service の
+  `config.ts` に足して loader / serverFn 経由で受け取る（`.claude/rules/env-vars.md` の「client / Docker のみの場合」）。
 - スタイル規約（既定パレット・任意値・`dark:` の手書き・AI slop の定型パターン）。詳細は下の「デザイン規約」。
 
 ## `window` などブラウザ専用 API はコンポーネントの render 本体で直接参照しない

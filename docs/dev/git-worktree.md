@@ -2,13 +2,8 @@
 
 このドキュメントでは、git worktree を使った並行開発のワークフローについて説明します。
 
-worktree の作り方は2つある。**エージェント（Claude Code）が使うのは前者**で、後者は人間が
-長く使う作業ディレクトリを手で作る場合のもの。
-
-| 方式 | 置き場所 | セットアップ | DB |
-|---|---|---|---|
-| Claude Code の worktree（`EnterWorktree`） | `.claude/worktrees/<name>` | WorktreeCreate フックが自動 | main の共有コンテナ内の `wt_<name>` |
-| 手動 worktree（`bun run worktree`） | `../<project>-<branch>` | `scripts/worktree.sh` | worktree ごとに起動 |
+**並行開発の worktree は Claude Code の worktree（`EnterWorktree`）を使う**。作成時に WorktreeCreate フックが
+ポートと DB（main の共有コンテナ内の `wt_<name>`）を割り当て、`.env`・`bun install`・マイグレーションまで済ませる。
 
 ## Claude Code の worktree（`.claude/worktrees/<name>`）
 
@@ -62,196 +57,23 @@ bash scripts/agent-worktree-setup.sh
 `ExitWorktree remove` はこの方式を片付けずに止まり、手順（worktree のルートで `docker compose down -v`
 → `git worktree remove`）を表示する。
 
-## 手動 worktree（`bun run worktree`）
+## 手動 worktree（`bun run worktree`）は使わない
 
-git worktree を使用すると、同じリポジトリの複数のブランチを**別々のディレクトリで同時に作業**できます。
+`scripts/worktree.sh` は DB のポート・コンテナ名を main の `.env` から引き継がず固定値で書き込むため、
+`init-template.sh` 後のプロジェクトや同じマシンの別プロジェクトと DB が衝突する（削除予定）。人が並行作業する
+ときも Claude Code の worktree（上）で作る。作成時のセットアップも、破棄時のポート・DB の片付けもフックが担う。
 
-### メリット
+## worktree 共通の注意
 
-- **コンテキストスイッチの削減**: ブランチ切り替え不要で複数タスクを並行作業
-- **ビルド状態の維持**: 各 worktree で独立したビルドキャッシュを保持
-- **レビュー作業の効率化**: メイン作業を中断せずに PR レビュー可能
-- **緊急対応**: 長時間タスク中でも hotfix ブランチに即座に切り替え可能
-
-### ディレクトリ構造
-
-```
-~/dev/
-├── fullstack-hono-tanstack-template/               # メインの worktree（main ブランチ）
-├── fullstack-hono-tanstack-template-feat-xxx/      # feature/xxx ブランチ用 worktree
-├── fullstack-hono-tanstack-template-fix-yyy/       # fix/yyy ブランチ用 worktree
-└── ...
-```
-
-## 使い方
-
-### ヘルパースクリプト
-
-プロジェクトには worktree 管理用のヘルパースクリプトが用意されています。
-
-```bash
-# 一覧表示
-bun run worktree list
-
-# worktree 追加（新規ブランチ作成 + セットアップ）
-bun run worktree add feat/new-feature
-
-# worktree 追加（セットアップなし）
-bun run worktree add feat/new-feature --no-setup
-
-# worktree 削除
-bun run worktree remove feat/new-feature
-
-# 既存 worktree のセットアップ
-bun run worktree setup feat/new-feature
-
-# ヘルプ
-bun run worktree help
-```
-
-### 手動操作
-
-```bash
-# worktree 追加（新規ブランチ）
-git worktree add -b feat/xxx ../fullstack-hono-tanstack-template-feat-xxx
-
-# worktree 追加（既存ブランチ）
-git worktree add ../fullstack-hono-tanstack-template-feat-xxx feat/xxx
-
-# worktree 削除
-git worktree remove ../fullstack-hono-tanstack-template-feat-xxx
-
-# 一覧表示
-git worktree list
-
-# 古い参照のクリーンアップ
-git worktree prune
-```
-
-## セットアップ
-
-新しい worktree を作成した後、以下のセットアップが必要です。
-ヘルパースクリプトはこれらを自動実行します。
-
-### 1. 環境変数の設定
-
-```bash
-# メインの .env をコピー（自動実行される）
-cp ../fullstack-hono-tanstack-template/.env .env
-
-# ポート設定は自動追加される（CLIENT_PORT, API_PORT, DATABASE_URL 等）
-```
-
-### 2. 依存関係のインストール
-
-```bash
-bun install
-```
-
-### 3. マイグレーションファイル生成（スキーマ変更時のみ）
-
-```bash
-bun run db:generate
-```
-
-## ポート設定
-
-worktree ごとに異なるポートが自動設定されます。これにより、複数の worktree で同時に `bun run dev` と `bun run db:up` を実行できます。
-
-### ポート割り当て
-
-| スロット | ブランチ例 | Client | API | DB | TestDB |
-|----------|------------|--------|-----|-----|--------|
-| 0 | main | 3000 | 8080 | 5432 | 5433 |
-| 1 | dev-1 | 3001 | 8082 | 5434 | 5435 |
-| 2 | dev-2 | 3002 | 8084 | 5436 | 5437 |
-| 3 | dev-3 | 3003 | 8086 | 5438 | 5439 |
-
-### 自動設定される環境変数
-
-`bun run worktree add dev-1` を実行すると、`.env` に以下が自動追加されます:
-
-```bash
-# Worktree ポート設定 (スロット: 1)
-CLIENT_PORT=3001
-API_PORT=8082
-API_BASE_URL="http://localhost:8082"
-SERVER_PUBLIC_URL="http://localhost:8082"
-
-# Worktree DB設定 (スロット: 1)
-DATABASE_PORT=5434
-TEST_DATABASE_PORT=5435
-DATABASE_URL="postgresql://postgres:postgres@localhost:5434/app_db?schema=public"
-TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5435/app_db?schema=public"
-POSTGRES_CONTAINER_NAME="app_postgres_slot1"
-POSTGRES_TEST_CONTAINER_NAME="app_postgres_test_slot1"
-POSTGRES_VOLUME_NAME="postgres-data_slot1"
-POSTGRES_TEST_VOLUME_NAME="postgres-test-data_slot1"
-```
-
-### 手動でポートを変更する場合
-
-`.env` の値を直接編集してください。
-
-## ベストプラクティス
-
-### 1. AI エージェント並列開発
-
-Claude Code のセッションを並列に走らせるなら、各セッションで `EnterWorktree` を使う（上の
-「Claude Code の worktree」。DB とポートはフックが割り当てる）。以下は、人間が複数のエディタ
-ウィンドウで長く使う作業ディレクトリを手で作る場合:
-
-```bash
-# 開発スロットを作成
-bun run worktree add dev-1
-bun run worktree add dev-2
-
-# 各ウィンドウで別々の worktree を開く
-# ウィンドウ1: ~/dev/fullstack-hono-tanstack-template-dev-1
-# ウィンドウ2: ~/dev/fullstack-hono-tanstack-template-dev-2
-```
-
-### 2. worktree の用途を明確にする
-
-| 用途 | 推奨 worktree 数 |
-|------|------------------|
-| 機能開発（並列） | 2〜3 |
-| main（マージ確認） | 1（既存） |
-| hotfix 用 | 必要時に作成・削除 |
-
-### 3. データベースの扱い
-
-worktree ごとに独立した DB コンテナが自動設定されます。
-
-```bash
-# 各 worktree で独自の DB を起動
-bun run db:up
-
-# マイグレーション実行
-bun run db:migrate
-```
-
-| worktree | 開発 DB ポート | テスト DB ポート | コンテナ名 |
-|----------|----------------|------------------|------------|
-| main | 5432 | 5433 | app_postgres |
-| dev-1 | 5434 | 5435 | app_postgres_slot1 |
-| dev-2 | 5436 | 5437 | app_postgres_slot2 |
-
-**メリット**:
-- マイグレーションの競合なし
-- テストの並列実行が安全
-- 各 worktree で独立した実験が可能
-
-### 4. ビルド成果物
+### ビルド成果物
 
 以下のディレクトリは worktree ごとに独立しているため、競合しません:
 
 - `node_modules/`
-- `.next/`
-- `dist/`
+- `dist/` / `.output/`（ビルド成果物）
 - `.turbo/`
 
-### 5. Git 操作
+### Git 操作
 
 ```bash
 # どの worktree からでも全ブランチを操作可能
@@ -262,7 +84,7 @@ git log origin/main
 # 現在の worktree ではチェックアウトできない
 ```
 
-### 6. IDE の設定
+### IDE の設定
 
 **VS Code 等のエディタ**:
 - 各 worktree を別ウィンドウで開く
@@ -274,14 +96,21 @@ git log origin/main
 
 ### Q: worktree が削除できない
 
-```bash
-# 強制削除
-git worktree remove --force ../fullstack-hono-tanstack-template-feat-xxx
+Claude Code の worktree は、作ったセッションの中なら `ExitWorktree`（remove）で消す。WorktreeRemove フックが
+ポートの登録と `wt_<name>` DB も片付ける。前のセッションで残した worktree（`ExitWorktree` の対象外）は、main の
+ルートからフックを直接流す（ディレクトリが既に無くても続きを片付ける）。**フックは `git worktree remove --force`
+で消すので、未コミット・未追跡・ignore 対象（`.env` 等）のファイルは確認なしに失われ、ブランチに乗っていない
+コミット（detached HEAD）も辿れなくなる**。ディレクトリが残っているなら、先に確かめる:
 
-# それでも失敗する場合
-rm -rf ../fullstack-hono-tanstack-template-feat-xxx
-git worktree prune
+```bash
+git -C <worktree の絶対パス> status --short --branch --ignored
+# ① 2 行目以降に残したいファイルがあれば、先にコミットか退避をする
+# ② その後で 1 行目が "## HEAD (no branch)" なら、残すコミットにブランチを付ける（rebase 途中でも通る形）:
+#    git -C <path> branch <branch> HEAD
+echo '{"worktree_path":"<worktree の絶対パス>"}' | bash .claude/hooks/worktree-remove.sh
 ```
+
+共有 DB 方式の worktree を `git worktree remove` で直接消すと、ポートの登録と DB が残る（旧方式の片付けは上の「復旧」）。
 
 ### Q: 「already checked out」エラー
 
@@ -298,20 +127,9 @@ Bun のグローバルキャッシュにより、2回目以降は高速化され
 
 ### Q: Drizzle のスキーマ変更が反映されない
 
-```bash
-# 各 worktree で再生成が必要
-bun run db:generate
-```
-
-## 関連コマンド
-
-| コマンド | 説明 |
-|----------|------|
-| `bun run worktree add <branch>` | worktree 追加 |
-| `bun run worktree remove <branch>` | worktree 削除 |
-| `bun run worktree list` | 一覧表示 |
-| `bun run worktree setup [branch]` | セットアップ実行 |
-| `bun run sync-main` | main ブランチへの追従（既存） |
+マイグレーションはスキーマを変更したブランチで 1 回だけ `bun run db:generate` してコミットし、他の worktree は
+取り込んだマイグレーションを `bun run db:migrate` で当てる（各 worktree で生成し直すと、同じ変更の
+マイグレーションが別名で重複する）。
 
 ## 参照
 

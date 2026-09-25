@@ -6,8 +6,12 @@
 
 ## ステップ0: 差分取得
 
+ローカルの `main` は `origin/main` より古いことがあり、そのまま比べると無関係な差分が混ざる
+（`.claude/rules/general.md` の「`git diff main` はローカル main の鮮度に依存する」）。
+
 ```bash
-git diff main
+git fetch origin main
+git diff origin/main...HEAD
 ```
 
 ---
@@ -87,12 +91,12 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 
 ### 3-A: アーキテクチャ依存方向
 
-依存方向: `presentation → application → domain ← infrastructure → integrations`
+依存方向は `apps/api-service/AGENTS.md` の「Architecture: api-service」と「Feature-to-feature integration (ports + adapter + DI)」が正（dependency-cruiser が強制する）。
 
 - `domain/` 配下に Zod・Drizzle・HTTP の import がないか
 - DTOやバリデーション定義（`XxxInput`）が `application/validators.ts` にあるか
 - 外部SDK（GCP等）が `src/integrations/` 以外で直接 import されていないか
-- `features/` 配下で `process.env` を直接参照していないか（`src/config.ts` 経由であるべき）
+- api-service の `src/config.ts` 以外で `process.env` を直接参照していないか（config → container 経由であるべき）
 - feature が他 feature を直接 import していないか（`features/A/application/` から `features/B/...` への直接 import は禁止。B の機能が必要なら A 側に `application/ports.ts` を定義し、`integrations/composition/` のアダプター経由で注入する。詳細: apps/api-service/AGENTS.md の「Feature-to-feature integration」節）
 
 ### 3-B: ROP エラー型チェーン
@@ -100,7 +104,13 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 - `usecase.ts` の先頭でエラー型が定義されているか
 - 各 step のエラー型が usecase のエラー型と整合しているか（暗黙の型変換・潰しがないか）
 - `presentation` 層（`router.ts`）で全 error ケースに対する HTTP ステータス分岐があるか（switch / if-else の網羅性）
-- `andThen` / `asyncAndThen` / `map` の使い分けが正しいか（非同期ステップに `andThen` を使っていないか）
+- `andThen` / `asyncAndThen` / `map` の使い分けが正しいか。`ResultAsync` の `andThen` は `Result` と `ResultAsync` の
+  どちらを返す関数も受けるので、`okAsync(input).andThen(step)`（正典の形）は正しい。見るのは次の 3 つ:
+  - 同期の `Result`（`ok(x)` や validator の戻り値）から `ResultAsync` を返す step へ繋ぐのに `andThen` を使っていないか
+    （`asyncAndThen` が要る。チェーンを `okAsync(input)` から始めれば `andThen` だけで済む）
+  - `map` の中で `Result` / `ResultAsync` を返していないか（入れ子になる。`andThen` を使う）
+  - reject しうる Promise を `map` / `asyncMap` に渡していないか（reject は Err にならずチェーンの外へ抜ける。
+    `ResultAsync.fromPromise` で包んで `andThen` で繋ぐ）
 
 ### 3-C: Value Object ライフサイクル
 

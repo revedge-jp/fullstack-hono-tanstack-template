@@ -62,7 +62,7 @@ function XxxPage() {
 }
 ```
 
-実例: `features/tasks/queries/get-tasks.ts`（未認証の 401 だけ空ページで返す扱いも含む）と
+実例: `features/tasks/queries/get-tasks.ts`（401/403 を `isSsrAuthIndeterminate` で判定して空ページで返す扱いも含む。下の「Auth pattern」）と
 `app/routes/_authenticated/tasks.tsx`。レスポンスは `res.json()` をそのまま返さず、`schemas.ts` の Zod で検証している。
 
 **クライアントサイド**: ユーザー操作で動的に変わるデータに `useQuery`
@@ -116,4 +116,4 @@ const res = await getApiClient().api.xxx.$get({}, {
 - `actions/{action}.test.ts` (co-located)
 - `queries/{query}.test.ts` (co-located)
 
-**client — skip:** UI component tests (server component rendering tests have high cost/low value)
+**client — skip:** UI component tests (rendering tests of `ui/` components have high cost/low value; data fetching is covered by query tests, rendering by E2E)

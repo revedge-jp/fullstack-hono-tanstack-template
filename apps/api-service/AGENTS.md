@@ -195,8 +195,9 @@ if (result.isErr()) { /* result.error */ }
 ### What tests to write (per feature addition)
 
 **api-service — always:**
-- `application/{op}/usecase.test.ts` (co-located)
-- Append to `__tests__/contract/{feature}.contract.test.ts`
+- `application/{op}/usecase.test.ts` (co-located) — cover each error the usecase can return
+  (Invalid / NotFound / Conflict / Unexpected …), not just the happy path
+- Append to `__tests__/contract/{feature}.contract.test.ts` — include the 401 case when the route requires auth
 - Append to `__tests__/unit/router.validation.test.ts` (new endpoint 400s)
 
 **api-service — only when applicable:**

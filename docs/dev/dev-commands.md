@@ -9,9 +9,14 @@ push 前の統合チェックを一括実行します。
 - 実行内容（Lint/Type/Test/Architecture を常時実行。Lint/Type/Test は turbo filter により差分限定）
   - Lint（oxlint + oxfmt --check）: `turbo run lint`
   - Typecheck（TypeScript）: `turbo run typecheck`
-  - Tests: DB に対して `bun run db:migrate`（drizzle-kit migrate）を行った上で `turbo run test` を実行
-  - Architecture: 依存/設計ガードの検査（常時実行）
+  - Tests: `TEST_DATABASE_URL` の DB に drizzle-kit migrate を当てた上で `turbo run test` を実行（api-service は
+    integration も走るので DB が必要）
+  - Architecture: FSD（steiger）・循環/孤立（madge）・dependency-cruiser・arch-guards・knip（`SKIP_KNIP=1` で省略。
+    pre-push は省略している）
+  - その他: ファイル名（kebab-case）・migration journal の順序・api-service の `process.env` 直参照・`scripts/` のテスト・
+    非推奨コードの検索（警告のみ）
 - 既定の変更影響フィルタ: `...[origin/main]`（turbo filter）
+- どのゲートが pre-push / CI のどちらで走るかは [品質ゲート ガイド](quality-gates.md) を参照
 
 使い方:
 
@@ -24,7 +29,7 @@ bun run check-all
 - CI=true または CI_MODE=1: 簡素出力（機械可読寄り）
 - NO_COLOR: カラー出力を無効化
 - TURBO_FILTER: 変更影響フィルタを上書き（例: `'...[HEAD^]'`）
-- TURBO_BASE_REF: 変更差分のベース参照（既定: `origin/main`）
+- SKIP_LINT / SKIP_TYPECHECK / SKIP_TEST / SKIP_ARCH 等: 各ステップを省略（`scripts/check/check-all.sh` の各ステップが見る `SKIP_*`）
 
 例:
 
@@ -32,8 +37,8 @@ bun run check-all
 # CI 風の簡素出力
 CI_MODE=1 bun run check-all
 
-# 特定の差分に限定
-TURBO_FILTER='...[origin/main]^' bun run check-all
+# 直前のコミットからの差分に限定
+TURBO_FILTER='...[HEAD^]' bun run check-all
 ```
 
 ### bun run lint:fix（各パッケージの oxlint/oxfmt 修正）
@@ -55,7 +60,7 @@ cd apps/api-service && bun run lint:fix
 
 注意:
 
-- `--unsafe` により一部の修正は破壊的になる可能性があります。実行後は差分を確認してください。
+- `oxlint --fix` は安全な自動修正だけを適用する（`--fix-suggestions` / `--fix-dangerously` は付けていない）。それでも実行後は差分を確認してください。
 
 ### bun run sync-main（scripts/sync-main.sh）
 

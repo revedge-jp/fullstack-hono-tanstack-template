@@ -39,7 +39,7 @@
 | `NODE_ENV` | 環境（development/test/production）。既定は production（fail-closed）。ローカル開発は `.env` で `NODE_ENV=development` を明示する | `production` |
 | `API_PORT` | API サーバーのポート（`PORT` も後方互換で受理） | `8080` |
 | `CORS_ORIGIN` | CORS 許可オリジン | 本番必須。開発/テスト時は未設定時 `http://localhost:3000` |
-| `LOG_PRETTY` | ログ整形出力（`true` で有効化） | （未設定） |
+| `LOG_PRETTY` | ログ整形出力のつもりで置いた変数。現状は `config.ts` が読むだけで、ロガーには渡しておらず出力は変わらない | （未設定） |
 | `LOG_LEVEL` | ログレベル（fatal/error/warn/info/debug/trace/silent） | 未設定時は環境別デフォルト（開発: debug、本番: info） |
 | `BETTER_AUTH_URL` | Better Auth のベース URL | （未設定） |
 | `BETTER_AUTH_TRUSTED_ORIGINS` | Better Auth の信頼オリジン（カンマ区切り） | （空） |
@@ -49,7 +49,9 @@
 | 変数名 | 説明 | 既定値 |
 |--------|------|--------|
 | `CLIENT_PORT` | client（Vite）のポート | `3000` |
-| `API_BASE_URL` | API サーバーの URL（SSR は ADR-001 のインプロセス呼び出しを使うため主に worktree 用） | `http://localhost:8080` |
+
+SSR からの API 呼び出しは同一 Worker 内のインプロセス呼び出し（ADR-001）なので、client に API の URL は要らない。`.env.example` のコメントにある `API_BASE_URL` は
+`scripts/worktree.sh` と `.claude/hooks/worktree-create.sh` が worktree 用 `.env` に書き込むだけで、どのコードも読まない残置変数。
 
 ### Docker / インフラ
 
@@ -91,7 +93,7 @@
 3. **`turbo.json`** の該当タスクの `env` 配列に追加する（build/dev/test 等で使用する場合）
 4. **CI**: `.github/workflows/ci.yml` の該当ジョブの `env` に追加する（テストやビルドで必要な場合）
 5. **本番環境**: `alchemy.run.ts` の Worker `bindings` に追加する（非機密は文字列、機密は `alchemy.secret(requireEnv("XXX"))`）。値は `.github/workflows/deploy.yml` が GitHub Environments の Secrets / Variables から渡す
-6. **ドキュメント**: 本ファイルの一覧と `README.md` の環境変数セクションを更新する
+6. **ドキュメント**: 本ファイルの一覧を更新する（README には一覧を置かない）
 
 ### client に環境変数を追加する場合
 
@@ -103,7 +105,7 @@ client には独自の設定読み込みが無い。client と api-service は�
 3. **turbo.json**: `VITE_` 変数は client の build のキャッシュキーに影響するため `build` タスクの `env` に追加する
 4. **CI**: E2E 等で必要なら `.github/workflows/ci.yml` の `e2e-tests` ジョブの `env` に追加する
 5. **本番環境**: staging / production は `alchemy.run.ts` の Worker `bindings`（非機密は文字列、機密は `alchemy.secret(...)`）。`apps/client/wrangler.jsonc` の `vars` はローカル `wrangler dev` 用
-6. **ドキュメント**: 本ファイルの一覧と `README.md` を更新する
+6. **ドキュメント**: 本ファイルの一覧を更新する（README には一覧を置かない）
 
 ### Docker / インフラのみの環境変数の場合
 
@@ -178,15 +180,17 @@ alchemy.run.ts の経路で渡り、`wrangler secret put` の手動実行は不�
 
 ### process.env 直参照の禁止
 
-- **features 配下**: `process.env` の直参照は禁止。`config.ts` 経由で `loadConfig()` の戻り値を受け取る。
+- アプリケーションコード（テスト・`alchemy.run.ts`・ツールの設定ファイルを除く）で `process.env` を読んでよいのは api-service の `src/config.ts` だけ。features は `loadConfig()` の戻り値を container 経由で受け取る。
 - **integrations 層**: 外部 SDK のラッパーは `process.env` を参照せず、呼び出し元からパラメータで受け取る。
+- **client**: `process.env` を読まない（上の「client に環境変数を追加する場合」）。
 
 詳細は `apps/api-service/AGENTS.md` と `.claude/rules/api-service.md` を参照してください。
 
 ### 検証
 
-- `bun run arch:guards` で features 内の `process.env` 直参照を検出できます。
-- api-service の `config.ts` は起動時に Zod で検証し、失敗時は `process.exit(1)` します。
+- api-service の `src/` 全体（`config.ts` とテストを除く）の直参照は `scripts/check/api-process-env.sh` が検出します（`bun run arch:check` / `bun run check-all` から呼ばれる）。
+- client の `features/` 配下の直参照は `bun run arch:guards` が検出します。
+- api-service の `config.ts` は起動時に Zod で検証し、失敗時は throw して起動を止めます。
 
 ---
 
