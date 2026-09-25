@@ -50,15 +50,20 @@ function extractStackFrames(stack: string, message: string): string | undefined 
     const headerEnd = stack.indexOf("\n");
     return headerEnd === -1 ? "" : stack.slice(headerEnd + 1);
   }
-  const messageStart = stack.indexOf(message);
-  if (messageStart === -1 || stack.slice(0, messageStart).includes("\n")) {
-    return undefined;
+  // メッセージがエラー名の一部と一致する(`new Error("Error")` 等)ことがあるので、直後が
+  // 改行か末尾になる出現位置まで探す。メッセージの開始はヘッダーの1行目に限る。
+  let messageStart = stack.indexOf(message);
+  while (messageStart !== -1 && !stack.slice(0, messageStart).includes("\n")) {
+    const rest = stack.slice(messageStart + message.length);
+    if (rest === "") {
+      return "";
+    }
+    if (rest.startsWith("\n")) {
+      return rest.slice(1);
+    }
+    messageStart = stack.indexOf(message, messageStart + 1);
   }
-  const rest = stack.slice(messageStart + message.length);
-  if (rest === "") {
-    return "";
-  }
-  return rest.startsWith("\n") ? rest.slice(1) : undefined;
+  return undefined;
 }
 
 // better-call の APIError は Error.stackTraceLimit = 0 で生成されるので stack にフレームが無い。
@@ -112,17 +117,29 @@ function serializeBetterAuthArg(arg: unknown): unknown {
   };
 }
 
+function toLogMessage(message: unknown): string {
+  if (typeof message === "string") {
+    return stripBindParams(message);
+  }
+  return message instanceof Error ? message.name : "";
+}
+
 export function toBetterAuthLoggerOption(logger: AuthLogger) {
   return {
     // Better Auth 既定の閾値(warn)をそのまま使う。debug/info は publish されない。
-    log: (level: BetterAuthLogLevel, message: string, ...args: unknown[]) => {
+    // 型上は message: string だが、Better Auth は `logger.error(e)` のように Error を第1引数に
+    // 渡すことがある(routes/session の listSessions)。@better-auth/core の createLogger は
+    // それを加工せず渡してくるので unknown で受ける。
+    log: (level: BetterAuthLogLevel, message: unknown, ...args: unknown[]) => {
       // message は SQL 文などを含みうるので pino の msg に置く(msg は $metadata.error に
       // 取り込まれないキー)。Better Auth は DB エラーの message だけを渡すこともあるので
       // (api/index の onError)、ここでもバインド値を切り落とす。args は Better Auth が付ける
-      // 補足情報で、構造化して残す。
+      // 補足情報で、構造化して残す。文字列以外の message は msg に置くと own プロパティ
+      // (DrizzleQueryError の params)ごと直列化されるので、args の先頭へ回す。
+      const allArgs = typeof message === "string" ? args : [message, ...args];
       logger[level](
-        args.length > 0 ? { betterAuthArgs: args.map(serializeBetterAuthArg) } : {},
-        stripBindParams(message),
+        allArgs.length > 0 ? { betterAuthArgs: allArgs.map(serializeBetterAuthArg) } : {},
+        toLogMessage(message),
       );
     },
   };

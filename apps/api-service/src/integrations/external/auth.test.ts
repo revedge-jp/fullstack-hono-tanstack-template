@@ -187,4 +187,39 @@ describe("toBetterAuthLoggerOption", () => {
       'PostgresError [23505]: duplicate key value violates unique constraint "user_email_key"',
     );
   });
+
+  test("message に Error が来ても throw せず、バインド値を msg にも betterAuthArgs にも残さない", () => {
+    const { logger, calls } = createCapturingLogger();
+    const drizzleLikeError = Object.assign(
+      new Error('Failed query: select * from "session" where "user_id" = $1\nparams: user-123'),
+      { query: 'select * from "session" where "user_id" = $1', params: ["user-123"] },
+    );
+
+    toBetterAuthLoggerOption(logger).log("error", drizzleLikeError, "extra");
+
+    expect(calls[0]?.msg).toBe("Error");
+    expect(JSON.stringify(calls[0])).not.toContain("user-123");
+    const [serialized, extra] = toLoggedJson(calls[0]?.obj).betterAuthArgs;
+    expect(serialized.message).toBe('Failed query: select * from "session" where "user_id" = $1');
+    expect(extra).toBe("extra");
+  });
+
+  test("message が文字列でも Error でもなければ msg は空で、値は betterAuthArgs に入る", () => {
+    const { logger, calls } = createCapturingLogger();
+
+    toBetterAuthLoggerOption(logger).log("warn", { reason: "unknown" });
+
+    expect(calls[0]).toMatchObject({ msg: "", obj: { betterAuthArgs: [{ reason: "unknown" }] } });
+  });
+
+  test("メッセージがエラー名の一部と一致しても stack のフレームを残す", () => {
+    const { logger, calls } = createCapturingLogger();
+
+    toBetterAuthLoggerOption(logger).log("warn", "hint", new Error("Error"), new TypeError("Type"));
+
+    const [error, typeError] = toLoggedJson(calls[0]?.obj).betterAuthArgs;
+    expect(error.stack).toContain("at ");
+    expect(error.stack).not.toContain("Error: Error");
+    expect(typeError.stack).toContain("at ");
+  });
 });
