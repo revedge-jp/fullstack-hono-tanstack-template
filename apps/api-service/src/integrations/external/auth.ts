@@ -183,6 +183,9 @@ export function createAuth(
         // 署名付き cookie にセッションを最大5分キャッシュし、getSession ごとの
         // auth_sessions への DB 往復（CF Workers では Hyperdrive 経由のネットワーク往復）を省く。
         // トレードオフ: サインアウト・セッション失効の反映が cookie 期限まで（最大5分）遅れる。
+        // 同じブラウザでも、サインアウトの直前に出ていたリクエストがその日の延長に当たり、サインアウトの
+        // 後に応答が届くと、延長した session_token と cookieCache を書き戻して最大5分サインイン状態に戻る
+        // （requireAuth が Set-Cookie を返すため。延長に当たらなければ session_token が無いので戻らない）。
         // 即時失効が必要な要件では enabled: false にするか maxAge を短くすること。
         enabled: true,
         maxAge: 5 * 60,

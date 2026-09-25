@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { createInProcessApiClient } from "@/shared/lib/api-client";
+import { createInProcessApiClient, getApiClient } from "@/shared/lib/api-client";
 
 import server, {
   isNonHtmlPageRequest,
   isProductionEnv,
   releaseAfterResponse,
+  renderWithInProcessApi,
   withForwardedSetCookies,
   withSecurityHeaders,
 } from "./server";
@@ -248,6 +249,33 @@ describe("in-process で呼んだ API の Set-Cookie", () => {
 
     expect(res.status).toBe(201);
     expect(res.headers.getSetCookie()).toEqual(["own=1", ...setCookieHeaders]);
+  });
+
+  test("renderWithInProcessApi: render 中に in-process で呼んだ API の Set-Cookie がページのレスポンスに付く", async () => {
+    const honoApp = {
+      request: () => {
+        const headers = new Headers({ "content-type": "application/json" });
+        for (const value of setCookieHeaders) {
+          headers.append("set-cookie", value);
+        }
+        return new Response(JSON.stringify({ ok: true }), { headers });
+      },
+    };
+    // TanStack Start の handler の代わりに、loader と同じく getApiClient() で API を呼ぶ render
+    const render = async () => {
+      await getApiClient().api.health.$get();
+      return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+    };
+
+    const res = await renderWithInProcessApi(
+      render,
+      honoApp,
+      new Request("https://app.example.com/tasks"),
+      "rid",
+    );
+
+    expect(res.headers.getSetCookie()).toEqual(setCookieHeaders);
+    expect(await res.text()).toBe("<html></html>");
   });
 
   test("足すものが無ければ元のレスポンスをそのまま返す", () => {

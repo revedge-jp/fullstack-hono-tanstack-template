@@ -115,6 +115,25 @@ export function withForwardedSetCookies(
   });
 }
 
+// SSR の loader/createServerFn が api-service をインプロセスで呼べるよう、Hono RPC クライアントを
+// AsyncLocalStorage で注入して render を実行する（背景と設計意図は shared/lib/api-client.ts）。
+// in-process で呼んだ API の Set-Cookie（セッション延長）を集めて外側のレスポンスに付ける。
+// 付けられるのは render がレスポンスを返すまでに呼ばれた分だけ（セッション検証は beforeLoad で
+// 先に済むので含まれる）。ストリーミング中に後から呼ばれた分は、ヘッダーを送った後なので付かない
+export async function renderWithInProcessApi(
+  render: (request: Request) => Response | Promise<Response>,
+  honoApp: Parameters<typeof createInProcessApiClient>[0],
+  request: Request,
+  requestId: string,
+): Promise<Response> {
+  const forwardedSetCookies: string[] = [];
+  const apiClient = createInProcessApiClient(honoApp, requestId, (setCookieHeaders) =>
+    forwardedSetCookies.push(...setCookieHeaders),
+  );
+  const response = await runWithApiClient(apiClient, () => Promise.resolve(render(request)));
+  return withForwardedSetCookies(response, forwardedSetCookies);
+}
+
 // レスポンスボディの送信完了(またはキャンセル)後に DB 接続を解放する。
 // 「Response オブジェクトを返した時点」で cleanup を走らせると、ストリーミング応答
 // (SSR)や送信途中のボディの裏で実行中のクエリの接続が閉じられ、同時リクエストが
@@ -206,23 +225,9 @@ export default {
         return releaseAfterResponse(response, cleanup, waitUntil);
       }
 
-      // SSR の loader/createServerFn が api-service をインプロセスで呼べるよう、
-      // Hono RPC クライアントを AsyncLocalStorage で注入する（背景と設計意図は
-      // shared/lib/api-client.ts を参照）。
-      // in-process で呼んだ API の Set-Cookie（セッション延長）を集めて外側のレスポンスに付ける。
-      // 付けられるのは handler がレスポンスを返すまでに呼ばれた分だけ（セッション検証は beforeLoad で
-      // 先に済むので含まれる）。ストリーミング中に後から呼ばれた分は、ヘッダーを送った後なので付かない
-      const forwardedSetCookies: string[] = [];
-      const apiClient = createInProcessApiClient(honoApp, requestId, (setCookieHeaders) =>
-        forwardedSetCookies.push(...setCookieHeaders),
-      );
-      const response = await runWithApiClient(apiClient, () => Promise.resolve(handler(request)));
+      const response = await renderWithInProcessApi(handler, honoApp, request, requestId);
       return releaseAfterResponse(
-        withSecurityHeaders(
-          withForwardedSetCookies(response, forwardedSetCookies),
-          isProd,
-          requestId,
-        ),
+        withSecurityHeaders(response, isProd, requestId),
         cleanup,
         waitUntil,
       );
