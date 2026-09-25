@@ -112,7 +112,8 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
   （`data-[state=open]:` のような任意バリアントは対象外）
 - 文字: 本文と UI は `text-sm`、補足は `text-xs`、ページ見出し（h1）は `text-2xl font-bold`。
   強調は `font-medium` まで。サイズと太さの組み合わせを画面ごとに発明しない
-- 並べるときの間隔は親の `flex` / `grid` + `gap-*` で作る（子の `mt-*` や `space-y-*` で作らない）
+- 【ガード】並べるときの間隔は親の `flex` / `grid` + `gap-*`、部品の内側は padding で作る。margin
+  （`mt-2` / `-mx-4`）と `space-y-*` / `space-x-*` は使えない（中央寄せの `mx-auto` 等 `auto` は可）
 - 正方形は `size-*`（`w-* h-*` を並べない）、条件付きクラスは `cn()`（`@/shared/lib/utils`）で合成する
 
 ### 部品を先に探す
@@ -131,7 +132,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 ### 状態を必ず作る
 
 - 読み込み中: `Skeleton`（スピナーだけで画面を空にしない）
-- 空: `EmptyState`（「無い」ではなく次の行動を示す）
+- 空: `EmptyState`（「無い」ではなく次の行動を示す。`features/tasks/ui/task-list.tsx` が実例）
 - エラー: `role="alert"` + `text-destructive`
 - 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingId` が実例）
 
@@ -144,7 +145,7 @@ LLM は学習データの多数派に収束するため、指示が無いと「�
 |---|---|
 | グラデーション背景・グラデーション文字（`bg-linear-*` / `bg-clip-text`） | 【ガード】 |
 | すりガラス（`backdrop-blur-*`） | 【ガード】（オーバーレイは `components/ui` の部品に任せる） |
-| 絵文字をアイコン代わりに使う | 【ガード】（アイコンは `components.json` の `iconLibrary` に合わせて `lucide-react` を入れて使う） |
+| 絵文字をアイコン代わりに使う | 【ガード】（アイコンは `lucide-react`。`components.json` の `iconLibrary` と揃えてある） |
 | 紫・青の差し色を既定パレットから持ち込む | 【ガード】（既定パレット禁止で検出） |
 | Card の中に Card を入れる | 【目視】 |
 | 同じ形のカードを 3 列に並べる・中央寄せの hero + 小さなバッジ | 【目視】 |
