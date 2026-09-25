@@ -333,6 +333,11 @@ curl -s -X POST -H 'content-type: application/json' \
   返り値は Hono アプリそのものなので `app.request(...)` で直接叩けるし、`hc<AppType>` に
   `fetch: app.request.bind(app)` で注入もできる。
 - Exported from `api-service/test-helpers`（`src/test-helpers/create-fake-app.ts`）
+- tasks / activity の in-memory リポジトリは `src/test-helpers/in-memory-repositories.ts`。**Drizzle 実装と
+  同じ振る舞いであること**を `__tests__/integration/repository-conformance.int.test.ts` が両方に同じテストを
+  流して検証する（fake↔real 適合テスト）。contract テストは in-memory 上で緑になるので、ずれると本番だけ
+  別の挙動になる。リポジトリのメソッドや振る舞いを変えたら、Drizzle 実装を正として in-memory を合わせ、
+  適合テストにケースを足す
 
 `overrides`（すべて任意、zero-config で動く）:
 - `nodeEnv`（既定 `"test"`）/ `corsOrigin` / `requestTimeoutMs` / `rateLimit` / `version` — config 相当。
@@ -379,6 +384,7 @@ if (result.isErr()) { /* result.error */ }
 - `validators.test.ts` — if `validators.ts` has non-trivial logic
 - `domain/models.test.ts` — if domain has behavior (value objects)
 - `__tests__/integration/{feature}.int.test.ts` — real-DB behavior (constraints, ownership scoping); wrap each test in `createTransactionalDb()` (`src/test-helpers/transactional-db.ts`) instead of hand-written cleanup
+- `__tests__/integration/repository-conformance.int.test.ts` — **リポジトリを足したら必ず**: in-memory 実装を `in-memory-repositories.ts` に置き、Drizzle 実装と並べて `implementations` に加える
 - `integrations/composition/{adapter}.test.ts` — **feature 間 adapter を追加したら必ず**（co-located）。
   入力の組み立てとポートのエラー型への正規化を検証する。adapter は feature 間連携の参照実装で、
   コピーされて量産される起点になるため。実例: `activity-recorder.test.ts`

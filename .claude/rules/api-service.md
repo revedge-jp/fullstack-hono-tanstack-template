@@ -66,6 +66,7 @@ AGENTS.md に載っていない細部の規約をまとめる。
 
 出典: revedge-jp/chiryonavi#1234（Slack に届かなくても「通知済み」を保存し、劣化の警告が二度と出なかった）
 ・#1237（未払いの院の紹介にクレジットが付く経路を作った）。
+
 ## integration テストは手書きの後始末を書かない（トランザクション fixture）
 
 `__tests__/integration/*.int.test.ts` は、手書きの `beforeAll` / `afterAll` での `.delete(...)` を
