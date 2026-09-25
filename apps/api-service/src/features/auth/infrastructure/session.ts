@@ -1,4 +1,5 @@
 import type { Auth } from "@app/integrations/external/auth";
+import { readCauseCode, stringifyErrorSafe } from "@repo/logging";
 import { err, ok, ResultAsync } from "neverthrow";
 
 import { reconstituteAuthUser } from "../domain/models";
@@ -12,7 +13,13 @@ type Logger = { error: (obj: unknown, msg?: string) => void };
 export function makeVerifySession(auth: Auth, logger: Logger) {
   return function verifySession(request: Request) {
     return ResultAsync.fromPromise(auth.api.getSession({ headers: request.headers }), (e) => {
-      logger.error(e, "verifySession unexpected error");
+      // Error をそのまま渡すと、DB 障害時の DrizzleQueryError の message / stack / own プロパティ
+      // `params` に埋め込まれたバインド値(セッショントークン等)がログに載る。redact はキー単位で
+      // 文字列の中身に届かないので、app.ts の onError と同じく切り落とした message と cause の code だけを出す。
+      logger.error(
+        { err: stringifyErrorSafe(e), causeCode: readCauseCode(e) },
+        "verifySession unexpected error",
+      );
       return "Unexpected" as const;
     }).andThen((session) => {
       if (!session?.user) {

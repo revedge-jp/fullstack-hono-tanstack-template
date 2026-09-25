@@ -7,7 +7,7 @@ import type { TasksService } from "@app/features/tasks/application/service";
 import { createTasksRouter } from "@app/features/tasks/presentation";
 import type { DevAuth } from "@app/integrations/external/dev-auth";
 import { createDevAuthRouter } from "@app/routes/dev-auth";
-import { stringifyErrorSafe, stripBindParamsFromStack } from "@repo/logging";
+import { readCauseCode, stringifyErrorSafe, stripBindParamsFromStack } from "@repo/logging";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
@@ -184,16 +184,6 @@ export function buildApp(config: BuildConfig, runtime: AppRuntime) {
     });
 
   return routes;
-}
-
-// DrizzleQueryError のメッセージは SQL 文だけで、DB 停止(ECONNREFUSED)・テーブル欠落(42P01)・
-// 制約違反(23505)等の区別は cause にしかない。cause.message は入力値を埋め込むことがある
-// (`invalid input syntax for type uuid: "…"`)ので、値を含まない code だけを残す。
-function readCauseCode(err: unknown): string | undefined {
-  if (!(err instanceof Error) || typeof err.cause !== "object" || err.cause === null) {
-    return undefined;
-  }
-  return "code" in err.cause && typeof err.cause.code === "string" ? err.cause.code : undefined;
 }
 
 function toHealthInfo(config: BuildConfig) {
