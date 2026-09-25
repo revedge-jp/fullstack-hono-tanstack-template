@@ -1,24 +1,8 @@
-import { createRequire } from "node:module";
-import path from "node:path";
-
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-
-// @better-auth/core/async_hooks の pure（dynamic import なし）バリアントを解決する。
-// better-auth の "workerd" 条件が dynamic import("node:async_hooks") 版を指しているため、
-// CF Workers では起動エラーになる。"browser"/"edge" バリアント（pure.index.mjs）は
-// Promise.resolve() + globalThis を使用するため CF Workers でも動作する。
-// better-auth v1.5.5 時点で "workerd" 条件が未修正のため引き続き必要。
-const _require = createRequire(import.meta.url);
-const betterAuthMain = _require.resolve("better-auth");
-const betterAuthSharedNodeModules = path.dirname(path.dirname(path.dirname(betterAuthMain)));
-const betterAuthAsyncHooksPure = path.join(
-  betterAuthSharedNodeModules,
-  "@better-auth/core/dist/async_hooks/pure.index.mjs",
-);
 
 export default defineConfig({
   plugins: [
@@ -27,10 +11,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // @better-auth/core/async_hooks を pure(browser/edge)バリアントへ alias しないこと。
+  // workerd には globalThis.AsyncLocalStorage が無く、pure 版は並行安全でない単一スロットの
+  // 代替実装に落ちる。同じ isolate で重なった getSession が互いのリクエスト状態を消し合い
+  // "Failed to get session"(500)になる。既定の "workerd" 条件(nodejs_compat の
+  // node:async_hooks)で解決させる。回帰は e2e の tasks.spec.ts が並行リクエストで検出する。
   resolve: {
     tsconfigPaths: true,
-    alias: {
-      "@better-auth/core/async_hooks": betterAuthAsyncHooksPure,
-    },
   },
 });
