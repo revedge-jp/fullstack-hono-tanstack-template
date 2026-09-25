@@ -362,4 +362,10 @@ if (process.env.SHOW_DATABASE_URL === "1" && !process.env.CI) {
   console.info(`[alchemy] DATABASE_URL=${dbRole.connectionUrl.unencrypted}`);
 }
 
-await app.finalize();
+// finalize は「state にあるが今回宣言されなかったリソース」を削除する。SKIP_WORKER=1 の段は Worker 以降を
+// 宣言しないため、ここで finalize すると稼働中の Worker（と CustomDomain / Ruleset / LogPushJob）が消え、
+// migrate の間サービスが止まる（migrate が失敗すると消えたまま残る）。宣言から外したリソースの削除は
+// 全リソースを宣言する Worker の段の finalize に任せる（作成済みリソースの state は finalize を待たずに保存される）。
+if (process.env.SKIP_WORKER !== "1") {
+  await app.finalize();
+}
