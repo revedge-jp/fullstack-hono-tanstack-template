@@ -187,26 +187,26 @@ expect_guard "スタイル規約: 絵文字の禁止" \
   'export const SelftestUi = () => <p>🚀 Launch</p>;' \
   "違反 [emoji]"
 
-# 文字列・JSX テキスト中の // の後ろは読み飛ばさない（コメント扱いにすると違反を見逃す）
-expect_guard "スタイル規約: 文字列中の // の後ろのクラス" \
+# コメントも検査対象（禁止クラス名を書いたコメントは変更履歴なので書かない）。
+# 行内・行全体のどちらのコメントも検出することを確認する。
+expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
-  'export const SelftestUi = () => <p title="a // b" className="text-zinc-500">x</p>;' \
+  'export const SelftestUi = () => <p className="text-muted-foreground">x</p>; // 旧 text-zinc-500' \
   "違反 [raw-palette]"
 
-expect_guard "スタイル規約: JSX テキスト中の // の後ろのクラス" \
+expect_guard "スタイル規約: 行全体のコメント中の禁止クラス" \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
-  'export const SelftestUi = () => <><span> // </span><p className="text-zinc-500">x</p></>;' \
-  "違反 [raw-palette]"
+  '// 以前は bg-linear-to-r だった
+export const SelftestUi = () => <p className="text-muted-foreground">x</p>;' \
+  "違反 [gradient]"
 
 # 逆向き（誤検出）の回帰テスト: 正当なコードで client-styles.mjs が通ることを確認する。
-# 行末コメント中の旧クラス（引用符・バッククォート付き）と、{ dark: ... } のオブジェクトキー。
 mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
-export const A = () => <p className="text-muted-foreground">x</p>; // 旧 `text-zinc-500` から置換
-export const B = () => <p className="text-muted-foreground">x</p>; // 以前は "bg-linear-to-r" だった
-export const C = () => <a href="https://example.com/a//b" className="p-4">x</a>;'
+export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
+export const D = () => <p>© 2026 → 次へ</p>;'
 if STYLE_OK_OUT=$(node scripts/check/client-styles.mjs 2>&1); then
-  echo "✅ スタイル規約: 正当なコード（行末コメント中の旧クラス・dark キー・URL）を誤検出しない"
+  echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号）を誤検出しない"
 else
   echo "❌ スタイル規約: 正当なコードを誤検出しました"
   printf '%s\n' "$STYLE_OK_OUT"

@@ -9,6 +9,11 @@
 // 既定パレットは packages/tailwind-config/shared-styles.css で生成自体を止めているが、未定義の
 // クラスはビルドエラーにならず黙って無色になるだけなので、ソース上の使用はここで検出する。
 //
+// コメントも検査する。禁止クラス名を含むコメントは「旧クラスはこうだった」という変更履歴で、
+// 履歴は git に残るため書かない（旧実装の説明が要るなら言葉で書く）。行単位の走査でコメントと
+// 文字列・JSX テキストを見分けるのは原理的に近似にしかならず、見逃しと誤検出を行き来するため、
+// 除外する仕組み自体を持たない。
+//
 // components/ui（shadcn の生成物）は対象外: オーバーレイの半透明の黒や data-[...] 系の任意値を
 // 正当に使い、shadcn CLI の更新で上書きされるため。
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -111,55 +116,6 @@ function collectFiles(dir) {
   });
 }
 
-// ガードの説明コメント自体や、移行時の「旧クラスはこうだった」というコメントで引っかからないよう、
-// コメント行と行内コメント（/* */ と行末の //）は見ない。
-const isCommentLine = (line) => /^\s*(?:\/\/|\/\*|\*)/.test(line);
-
-// 行末の // は、文字列リテラル（" ' `）の外にあるものだけをコメントとみなす。正規表現で
-// 「後ろに引用符が残るか」を見る方式は、title="a // b" とコメント中の `text-zinc-500` の
-// どちらかを必ず誤判定する。JSX テキスト中の // は、後ろに閉じタグが続くかで見分ける。
-// 行単位の近似なので、JSX テキスト中のアポストロフィ（<p>don't</p>）は文字列の開始と誤認し、
-// 同じ行の以降の // コメントを検査対象に含めてしまう。実コードでは稀なので許容する。
-function stripInlineComments(line) {
-  let quote = null;
-  let result = "";
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (quote) {
-      if (char === "\\") {
-        result += char + (line[index + 1] ?? "");
-        index += 1;
-        continue;
-      }
-      if (char === quote) {
-        quote = null;
-      }
-      result += char;
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") {
-      quote = char;
-      result += char;
-      continue;
-    }
-    if (char === "/" && line[index + 1] === "*") {
-      const close = line.indexOf("*/", index + 2);
-      if (close === -1) {
-        return result;
-      }
-      result += " ";
-      index = close + 1;
-      continue;
-    }
-    // 後ろに閉じタグが続く // は JSX テキスト（<span> // </span>）とみなし、コメントにしない。
-    if (char === "/" && line[index + 1] === "/" && !/<\/|\/>/.test(line.slice(index + 2))) {
-      return result;
-    }
-    result += char;
-  }
-  return result;
-}
-
 // 走査対象の移動・改名でガードが黙って無効にならないよう、対象が無ければ失敗させる。
 const missingRoots = ROOTS.filter((root) => !isDir(root));
 const files = ROOTS.flatMap(collectFiles);
@@ -175,11 +131,8 @@ const violations = [];
 for (const file of files) {
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, index) => {
-    if (isCommentLine(line)) {
-      return;
-    }
     for (const rule of RULES) {
-      for (const match of stripInlineComments(line).matchAll(rule.pattern)) {
+      for (const match of line.matchAll(rule.pattern)) {
         violations.push({ rule, location: `${relative(".", file)}:${index + 1}`, found: match[0] });
       }
     }
