@@ -118,7 +118,8 @@ gh label create preview --color 1D76DB --description "この PR に使い捨て�
 
 削除のたびに `scripts/deploy/verify-preview-destroyed.sh` が DB ブランチ・Worker・Hyperdrive が
 実際に消えたかを API で確かめ、残っていればジョブを失敗させる（`alchemy destroy` は削除に失敗しても
-成功扱いで終わるため）。
+成功扱いで終わるため）。PR の状態を読めない `pr-N` は消さずにジョブを失敗させる。N が PR ではない
+（手で `--stage pr-N` をデプロイした等）と分かっているなら、その DB ブランチを PlanetScale で手で削除する。
 
 **コスト**: DB ブランチ（PS-DEV）は存在している時間の按分課金（$5/月相当）。オートスリープは
 ないため「ラベルを付けている間だけ課金」と理解すること。レビューが数日で終わる PR なら数十円。
