@@ -3,7 +3,7 @@
 @import "tw-animate-css";
 
 @theme {
-  --font-sans: "LINESeedJP_OTF", sans-serif;
+  --font-sans: "LINE Seed JP", sans-serif;
 }
 
 :root {
@@ -14,7 +14,8 @@
   --card-foreground: oklch(0.141 0.005 285.823);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.648 0.2 131.684);
+  /* 白文字とのコントラスト比 4.8:1（AA の 4.5:1 以上）。明るくすると文字が読めなくなる */
+  --primary: oklch(0.532 0.157 131.589);
   --primary-foreground: oklch(0.986 0.031 120.757);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
@@ -33,7 +34,7 @@
   --chart-5: oklch(0.448 0.119 151.328);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.648 0.2 131.684);
+  --sidebar-primary: oklch(0.532 0.157 131.589);
   --sidebar-primary-foreground: oklch(0.986 0.031 120.757);
   --sidebar-accent: oklch(0.967 0.001 286.375);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
@@ -48,8 +49,9 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.648 0.2 131.684);
-  --primary-foreground: oklch(0.986 0.031 120.757);
+  /* 暗い背景では明るい primary に暗い文字（コントラスト比 7.5:1） */
+  --primary: oklch(0.768 0.233 130.85);
+  --primary-foreground: oklch(0.274 0.072 132.109);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.274 0.006 286.033);
@@ -68,7 +70,7 @@
   --sidebar: oklch(0.21 0.006 285.885);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.768 0.233 130.85);
-  --sidebar-primary-foreground: oklch(0.986 0.031 120.757);
+  --sidebar-primary-foreground: oklch(0.274 0.072 132.109);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
