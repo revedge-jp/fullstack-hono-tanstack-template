@@ -97,8 +97,25 @@ SSR 側のエラーは `apps/client/app/server.ts` が observability に出す�
 
 ## レート制限
 
-アプリ層にはレート制限を実装していない（Better Auth の既定レート制限が `/api/auth/*` に
-効くのみ）。公開エンドポイント（`/api/health` など）の濫用対策は **Cloudflare 側**で行う:
+アプリ層の簡易レート制限（`apps/api-service/src/middlewares/rate-limit.ts`）は次の 2 経路にだけ
+かかっている（`app.ts`）:
+
+- `/api/auth/*` — OAuth エンドポイントの総当たり・過剰アクセス対策
+- `/api/client-errors/*` — 認証の無いクライアントエラー通報。ログ洪水対策
+
+どちらも IP（`CF-Connecting-IP`）ごとの固定ウィンドウで、しきい値は共通の
+`RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`（既定 60 秒あたり 20 リクエスト）。超えると 429 と
+`Retry-After` を返す。カウントは経路ごとに別々に持つ。
+
+ただしカウントは **isolate のメモリにしか持たない**ため、次の限界がある:
+
+- Workers の isolate をまたいで共有されない。リクエストが複数の isolate に振り分けられると
+  各 isolate が独立に数えるので、実効レートは isolate 数倍に緩む
+- isolate の破棄・再デプロイでカウントが消える
+- 上の 2 経路以外（`/api/health` など）には何もかからない
+
+したがって、アプリ層の制限は「単一クライアントの暴走を抑える」程度のもので、公開エンドポイント
+全体の濫用対策は **Cloudflare 側**で行う:
 
 - カスタムドメイン運用なら Environment Variable `EDGE_RATE_LIMIT_RPM` を設定する
   （Alchemy が WAF に「`/api/*` を IP ごとに N req/分で block」のルールを作成する。
@@ -107,8 +124,8 @@ SSR 側のエラーは `apps/client/app/server.ts` が observability に出す�
 - zone を共有していて Alchemy 管理にできない場合は、ダッシュボード > Security > WAF >
   Rate limiting rules で同等のルールを手動作成する
 - Workers の課金は「リクエスト数 + CPU 時間」なので、CF 側で止めるのが最も安価
-- アプリ層で細かい制御（ユーザー単位など）が必要になったら、その時点で
-  Durable Objects / KV ベースのレートリミッタを検討する
+- アプリ層で isolate をまたいだ厳密な制御やユーザー単位の制御が必要になったら、その時点で
+  `rate-limit.ts` の保持先を Durable Objects / KV ベースに差し替えることを検討する
 
 ## 参照
 
