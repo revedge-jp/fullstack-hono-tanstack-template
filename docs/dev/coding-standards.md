@@ -462,6 +462,6 @@ bun run knip
 - [開発ガイド](development.md) - 開発環境の詳細
 - [機能追加の入口](adding-features.md) - feature を足すときに読む正典と参照実装の案内
 - [ドメインモデル設計](../architecture/domain-model.md) - DDD/ROPの詳細
-- [api-service README](../../apps/api-service/README.md) - サーバー側の詳細
+- [api-service README](../../apps/api-service/README.md) - 単体での起動・エンドポイント一覧
 - [client README](../../apps/client/README.md) - クライアント側の詳細
 

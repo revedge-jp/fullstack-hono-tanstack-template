@@ -51,7 +51,7 @@
 | `CLIENT_PORT` | client（Vite）のポート | `3000` |
 
 SSR からの API 呼び出しは同一 Worker 内のインプロセス呼び出し（ADR-001）なので、client に API の URL は要らない。`.env.example` のコメントにある `API_BASE_URL` は
-`scripts/worktree.sh` が worktree 用 `.env` に書き込むだけで、どのコードも読まない残置変数。
+`scripts/worktree.sh` と `.claude/hooks/worktree-create.sh` が worktree 用 `.env` に書き込むだけで、どのコードも読まない残置変数。
 
 ### Docker / インフラ
 
@@ -93,7 +93,7 @@ SSR からの API 呼び出しは同一 Worker 内のインプロセス呼び出
 3. **`turbo.json`** の該当タスクの `env` 配列に追加する（build/dev/test 等で使用する場合）
 4. **CI**: `.github/workflows/ci.yml` の該当ジョブの `env` に追加する（テストやビルドで必要な場合）
 5. **本番環境**: `alchemy.run.ts` の Worker `bindings` に追加する（非機密は文字列、機密は `alchemy.secret(requireEnv("XXX"))`）。値は `.github/workflows/deploy.yml` が GitHub Environments の Secrets / Variables から渡す
-6. **ドキュメント**: 本ファイルの一覧と `README.md` の環境変数セクションを更新する
+6. **ドキュメント**: 本ファイルの一覧を更新する（README には一覧を置かない）
 
 ### client に環境変数を追加する場合
 
@@ -105,7 +105,7 @@ client には独自の設定読み込みが無い。client と api-service は�
 3. **turbo.json**: `VITE_` 変数は client の build のキャッシュキーに影響するため `build` タスクの `env` に追加する
 4. **CI**: E2E 等で必要なら `.github/workflows/ci.yml` の `e2e-tests` ジョブの `env` に追加する
 5. **本番環境**: staging / production は `alchemy.run.ts` の Worker `bindings`（非機密は文字列、機密は `alchemy.secret(...)`）。`apps/client/wrangler.jsonc` の `vars` はローカル `wrangler dev` 用
-6. **ドキュメント**: 本ファイルの一覧と `README.md` を更新する
+6. **ドキュメント**: 本ファイルの一覧を更新する（README には一覧を置かない）
 
 ### Docker / インフラのみの環境変数の場合
 

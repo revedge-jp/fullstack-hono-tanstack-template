@@ -49,8 +49,8 @@ Drizzle ORM + PostgreSQL。スキーマ・マイグレーション・`@repo/db` 
 - 開発 DB は `localhost:5432`、テスト DB は `localhost:5433`。どちらもユーザー `postgres` /
   パスワード `postgres` / DB 名 `app_db`（`docker-compose.yml`）。テスト DB は volume を持たない使い捨て
 - `bun run db:down` は volume ごと消す（`down -v`）。main で実行すると、Claude Code の worktree が
-  共有コンテナ内に持つ `wt_*` DB も消える。worktree の中では `db:up` / `db:down` を実行しない
-  （[git worktree 運用ガイド](git-worktree.md)）
+  共有コンテナ内に持つ `wt_*` DB も消える。Claude Code の worktree（`.claude/worktrees/`）の中では
+  `db:up` / `db:down` を実行しない。手動 worktree の DB の扱いは [git worktree 運用ガイド](git-worktree.md)
 - pgAdmin の使い方は [pgAdmin ガイド](pgadmin.md)
 
 ## パッケージ
