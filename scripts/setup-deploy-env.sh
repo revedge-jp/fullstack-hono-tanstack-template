@@ -50,17 +50,17 @@ gh api -X PUT "repos/$REPO/environments/$STAGE" --silent
 # item: "名前|kind|説明" （kind: secret = 隠し入力 / var = 通常入力）
 # bash 3.2（macOS 標準）互換のため連想配列は使わない
 ITEMS="APP_NAME|var|Worker / Hyperdrive / DB の命名ベース。init-template.sh のアプリ名と同じ値。全 stage 共通
-PLANETSCALE_ORGANIZATION|var|PlanetScale の組織名。全 stage 共通
+PLANETSCALE_ORGANIZATION|var|PlanetScale の組織名。preview は staging と同じ組織（staging DB のブランチを使うため）。production は別の組織を推奨（docs/dev/alchemy-iac.md「state と資格情報の権限境界」）
 WORKERS_SUBDOMAIN|var|CF アカウントの workers.dev サブドメイン（bunx wrangler whoami で確認可）。カスタムドメイン運用でも preview 環境が使うため設定推奨
 CUSTOM_DOMAIN|var|Worker に割り当てるカスタムドメインのホスト名（例: app.example.com。zone が CF アカウントにあること）。DNS/TLS/公開 URL は Alchemy が自動設定。workers.dev 運用なら空 Enter でスキップ
 EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ごとの分間リクエスト数、例: 300）。CUSTOM_DOMAIN 必須。zone の http_ratelimit フェーズを専有するため zone を共有する場合は 1 stage のみで設定（管理外の既存ルールを検知した場合、deploy は上書きせず中断する）。不要なら空 Enter
 SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL（例: https://<app>-staging.<subdomain>.workers.dev）。空だと smoke は skip される
-CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。staging / production では同じ値を使い回してよい（preview は専用に発行）。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
+CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。同じ CF アカウントの staging / production では同じ値を使い回してよい（production を別アカウントに置くならそのアカウント用に、preview は専用に発行）。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
-PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（staging / production 用は org: create_databases + 全 DB read/write/delete 権限、無期限）。staging / production では共有可。preview は専用に発行し、権限を preview が使う DB に絞る。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
+PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（org: create_databases + DB read/write/delete 権限、無期限）。【Environment ごとに別に発行】し、production 用は production にだけ置く。staging / preview のトークンが production の DB に届かないよう、production は別の PlanetScale org に置くのが確実（docs/dev/alchemy-iac.md「state と資格情報の権限境界」）。発行時のトークン名は「<APP_NAME>-<stage>」推奨（例: my-app-production）
 PLANETSCALE_SERVICE_TOKEN|secret|同サービストークンの secret
-ALCHEMY_STATE_TOKEN|secret|Alchemy state store の認証トークン。CF アカウント内の全プロジェクト・全 stage で【同一の値】にすること
-ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。プロジェクトごとに固有の値を推奨（openssl rand -base64 32 で生成）
+ALCHEMY_STATE_TOKEN|secret|Alchemy state store の認証トークン。同じ CF アカウント内の全プロジェクト・全 stage で【同一の値】にし、別アカウントには別の値を使う（このトークンで同じアカウントの全 state を読み書きできる。docs/dev/alchemy-iac.md「state と資格情報の権限境界」）
+ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。プロジェクトごとに固有の値を推奨（openssl rand -base64 32 で生成）。既に deploy した stage の値は変えない（state 内の secrets を復号できずデプロイが止まる）
 BETTER_AUTH_SECRET|secret|Better Auth のセッション署名鍵（openssl rand -base64 32 で生成）。【stage ごとに別の値】にすること
 GOOGLE_CLIENT_ID|secret|Google OAuth クライアント ID。staging / production で別クライアント推奨。作成時のクライアント名は「<APP_NAME>-<stage>」推奨（例: my-app-staging）
 GOOGLE_CLIENT_SECRET|secret|同クライアントの secret
@@ -78,6 +78,9 @@ if [ "$STAGE" = "preview" ]; then
   echo "⚠️  preview は PR のコード（bun install / build / migrate）をこの Environment の資格情報で実行します。"
   echo "   CLOUDFLARE_API_TOKEN / PLANETSCALE_SERVICE_TOKEN は production と共有せず、preview 専用に発行してください"
   echo "   （.claude/rules/agent-permissions.md の Rule of Two。PR を書くエージェントに本番を消せる資格情報を渡さない）"
+  echo "   ALCHEMY_STATE_TOKEN と CF トークンは同じアカウントの全プロジェクト・全 stage に届くため、preview を使う"
+  echo "   CF アカウントにはどのプロジェクトの production も置かず、production に届くトークンを preview に渡さないでください"
+  echo "   （docs/dev/alchemy-iac.md「state と資格情報の権限境界」）"
 fi
 
 # アイテムリストは fd 3 から読む（stdin はユーザー入力用に空けておく）

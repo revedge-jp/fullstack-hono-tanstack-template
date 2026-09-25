@@ -47,7 +47,7 @@
 3. **`.env` に設定**（`.env.example` の Infra セクション参照）
    - `APP_NAME` — Worker / Hyperdrive / DB の命名ベース
    - `ALCHEMY_PASSWORD` — state 内 secrets の暗号化パスワード
-   - `ALCHEMY_STATE_TOKEN` — state store の認証トークン（**CI と同一の値**）
+   - `ALCHEMY_STATE_TOKEN` — state store の認証トークン（**同じ Cloudflare アカウントの CI と同一の値**）
    - `PLANETSCALE_ORGANIZATION` / `PLANETSCALE_SERVICE_TOKEN_ID` / `PLANETSCALE_SERVICE_TOKEN`
    - `CUSTOM_DOMAIN` / `APP_ORIGIN` / `WORKERS_SUBDOMAIN` — 公開 URL（`BETTER_AUTH_URL` /
      `CORS_ORIGIN`）の解決元。この優先順（詳細は後述の「オプションリソース」）
@@ -56,7 +56,7 @@
 
 ```bash
 bun run infra:deploy:staging      # client をビルドして staging をデプロイ（DB がなければ作成）
-bun run infra:deploy:production   # production をデプロイ
+bun run infra:deploy:production   # production をデプロイ（通常は CI。ローカルからなら production 用アカウントの値だけを入れた env で）
 bun run infra:destroy:staging     # staging のリソースを削除
 
 # ローカルでマイグレーションを流したい時: 接続 URL の取り出し口
@@ -89,10 +89,11 @@ staging / production との違い:
 - **state は `CloudflareStateStore`**（自アカウントの CF 上に立つ Durable Object）に置き、
   ローカルと CI で共有する。state service（Worker 名 `alchemy-state-service`）は
   **CF アカウントに1つを全プロジェクトで共用**し、内部では app 名 × stage で名前空間分離される。
-  したがって `ALCHEMY_STATE_TOKEN` は**アカウント共通のシークレット**（組織で一元管理して
-  全プロジェクトに同じ値を配る）、`ALCHEMY_PASSWORD` は **プロジェクト個別**（state 内 secrets の
-  暗号化鍵。プロジェクトごとに変えることで相互に復号できない分離を保つ）
-- stage は Alchemy の `--stage` フラグで分離され、state も stage ごとに独立
+  したがって `ALCHEMY_STATE_TOKEN` は**アカウント共通のシークレット**（同じアカウントの全プロジェクトに
+  同じ値を配る。別アカウントには別の値）、`ALCHEMY_PASSWORD` は **プロジェクト個別**（state 内 secrets の
+  暗号化鍵）。権限の境界は下の「state と資格情報の権限境界」
+- stage は Alchemy の `--stage` フラグで分離され、state も stage ごとに独立（ただし名前空間の分離で、
+  権限の分離ではない。次節）
 - **`infra:destroy` は DB を削除しない**: PlanetScale の `Database` / `Role` は `delete: false`
   （デフォルト）のため、destroy 時は state から外れるだけで実体は残る（誤削除防止）。
   本当に消す場合は PlanetScale ダッシュボードから削除する
@@ -108,6 +109,46 @@ staging / production との違い:
   `alchemy.run.ts` のこの値を引き上げ」の順で見直すこと**（DB 側の実際の接続上限より確実に
   低く保つ。逆順は接続枯渇障害を招く）。Hyperdrive の接続数は「同時実行中のクエリ数」ではなく
   「プールが保持している温存接続数」なので、利用者数にはほぼ比例しない
+
+## state と資格情報の権限境界（preview を使う前に読む）
+
+alchemy 0.93 の実装（`alchemy/workers/cloudflare-state-store.ts` と `alchemy/lib/state/cloudflare-state-store.js`）で
+確かめた事実:
+
+- state サービス（`alchemy-state-service` Worker。workers.dev に公開される）の認可は `ALCHEMY_STATE_TOKEN` との
+  一致だけで、アカウント内の全プロジェクト・全 stage の state は 1 つの Durable Object に入っている。どの app / stage を
+  読み書きするかはリクエスト本文の `chain` で呼び出し側が決める。**このトークンを持つ実行環境は、同じアカウントの
+  すべてのプロジェクト・stage の state を読み・書き換え・消せる**。トークンが同じなら別アカウントの state サービスにも届く
+- state 内の secrets は `ALCHEMY_PASSWORD` から scrypt で作った鍵の AES-256-GCM で暗号化される。このテンプレート
+  では production DB ロールのパスワード（Hyperdrive の接続情報）、`BETTER_AUTH_SECRET`（漏れるとセッションを
+  偽造できる）、`GOOGLE_CLIENT_SECRET`、（設定時）`LOGPUSH_DESTINATION`（R2 のアクセスキー）が入る
+- Workers と Hyperdrive を編集できる `CLOUDFLARE_API_TOKEN` があれば、state サービスや production の Worker を
+  差し替えられ、production の Hyperdrive を別の Worker に bind して DB に届く（パスワードを知らなくてよい）
+
+したがって、同じアカウントの中では stage もプロジェクトも権限で分かれていない。`ALCHEMY_PASSWORD` を stage ごとに
+分けても、書き換え・削除・Hyperdrive 経由の DB アクセスは防げない。
+
+preview（`preview.yml`）は PR のコード（`bun install` の依存スクリプト・build・PR で書き換えられる
+`alchemy.run.ts`・migrate）を preview Environment の資格情報で実行する。fork からの PR には secrets が渡らず、
+ラベルを付けた PR でしか動かないので外部の第三者は直接は突けないが、エージェントが書いた PR と乗っ取られた
+依存パッケージは届く（`.claude/rules/agent-permissions.md` の Rule of Two）。
+
+- **preview を使うプロジェクトが 1 つでもある Cloudflare アカウントには、どのプロジェクトの production も置かない**。
+  production 用のアカウントの `ALCHEMY_STATE_TOKEN` と `CLOUDFLARE_API_TOKEN` はそのアカウント専用の値にする
+  （同じ値を使うと、アカウントを分けても公開 URL・API 経由で届く）
+- PlanetScale も同じ考え方で、**production の DB は staging / preview のトークンが届かない場所に置く**。確実なのは
+  production を別の PlanetScale org に置き、その org のトークンを production の Environment にだけ置くこと。
+  理由: preview は同じアカウントの staging の state を書き換えられ、次の staging デプロイは staging のトークンで
+  その state を reconcile する（宣言に無いエントリは orphan として削除され、Database の `output.name` を差し替えると
+  その DB が改名される）。staging のトークンが「既知の制約」の付与（全 DB への read/write/delete）のままだと、
+  これで production の DB が消える・改名される。トークンを Environment ごとに別発行するだけでは防げない
+  （DB 単位に権限を絞って防げるかは未検証）
+- preview ラベルを付けた PR は、push のたびに再デプロイされる。人がコードを読んで信頼できると判断した PR に
+  だけ付け、読んでいない push が続くならラベルを外す
+- この節が扱うのは、preview（PR のコード）が同じアカウントの state・Worker に届く場合だけ。次の 2 つは
+  この節の対策では塞がらない: GitHub の Environment（PR がワークフローを足して `environment: production` を
+  参照する）と、未マージのコミットへの `vX.Y.Z` タグ push（`deploy.yml` が祖先を確かめずにそのコミットを
+  production の資格情報で動かす）
 
 ## オプションリソース（環境変数で opt-in）
 

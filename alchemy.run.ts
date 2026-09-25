@@ -42,7 +42,8 @@ if (appName.includes("{{")) {
 }
 
 // state は CF アカウント上の Durable Object に置く（ローカルと CI で共有 — 使い捨ての
-// CI ランナーでも state が失われない）。ALCHEMY_STATE_TOKEN は全実行環境で同一の値にすること。
+// CI ランナーでも state が失われない）。ALCHEMY_STATE_TOKEN は同じ CF アカウント内の全実行環境で同一の値に
+// すること（別アカウントには別の値。docs/dev/alchemy-iac.md「state と資格情報の権限境界」）。
 requireEnv("ALCHEMY_STATE_TOKEN");
 const app = await alchemy(appName, {
   stateStore: (scope) => new CloudflareStateStore(scope),

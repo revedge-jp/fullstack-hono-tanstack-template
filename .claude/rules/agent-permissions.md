@@ -22,6 +22,11 @@ Claude Code の承認プロンプト回避で、前提は「信頼できない�
   作るには 3（push / PR 作成）が必須で、2 と 3 が常に同居する。実装はローカルの Claude Code で行い、
   CI にエージェントを置くなら読み取り専用のレビュー（`contents: read`、sandbox read-only）に限る
   （現状は置いていない。レビューはローカルの `/code-review` と Claude Code Review）。`uses:` の SHA ピン留めと `id-token: write` の不在は `arch:guards` が機械的にチェックする。
+- PR プレビュー（`preview.yml`）は PR のコードを preview Environment の資格情報で実行する。
+  `ALCHEMY_STATE_TOKEN` と Workers / Hyperdrive を編集できる `CLOUDFLARE_API_TOKEN` は同じアカウントの
+  全プロジェクト・全 stage の state と Worker に届くので、preview を使うアカウントにはどのプロジェクトの
+  production も置かない（production 用アカウントのトークンは共有せず、preview には production に届くトークンを渡さない）
+  （`docs/dev/alchemy-iac.md` の「state と資格情報の権限境界」）
 - MCP で本番 DB に接続するときは**読み取り専用の接続**を使う（PlanetScale / BigQuery 等の
   `*_readonly` ツール）。書き込みが必要なら人が SQL を確認して実行する。
 - ローカルの Claude Code は `.env` に本番資格情報を置かない前提で動く。本番の値を扱う作業では、
