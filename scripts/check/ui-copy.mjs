@@ -80,8 +80,8 @@ const files = collectClientSources(ROOTS, "scripts/check/ui-copy.mjs");
 const texts = files.flatMap(extractTexts);
 
 // 文字列 1 つを 1 段落（1 行）にして、lintText 1 回にまとめる（辞書の読み込みを 1 回で済ませるため）。
-// 改行は同じ長さの空白に置き換え、報告された列から元の位置を戻せるようにしている。
-const document = texts.map((entry) => entry.text.replace(/[\r\n]/g, " ")).join("\n\n");
+// 改行（行区切り文字を含む）は同じ長さの空白に置き換え、報告された列から元の位置を戻せるようにしている。
+const document = texts.map((entry) => entry.text.replace(/[\r\n\u2028\u2029]/g, " ")).join("\n\n");
 const descriptor = await loadTextlintrc({ configFilePath: ".textlintrc.json" });
 const result = await createLinter({ descriptor }).lintText(document, "ui-copy.txt");
 
