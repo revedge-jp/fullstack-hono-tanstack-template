@@ -1,0 +1,506 @@
+#!/bin/bash
+# arch-guards.sh の各チェックを関数として定義するライブラリ（source するだけで実行はしない）。
+# 移植元: revedge-jp/chiryonavi#395（自己テスト 約97秒→約10秒）。
+#
+# なぜ分けたか: arch-guards.selftest.sh はルールごとに既知の違反 fixture を置き、「そのルールが
+# 検出するか」を確かめる（30ケース超）。以前は毎回 arch-guards.sh をまるごと再実行しており、
+# 後ろのルールを試すたびに前の全ルールのリポジトリ全体スキャンも払っていた。関数に分ければ、
+# 自己テストは対象のルール1つだけを呼べる。
+#
+# 各関数は違反で `return 1` する（exit だと source した呼び出し元ごと終わるため）。
+#
+# **呼び出すときは run_guard を通し、しかも条件の中で呼ばないこと。** 関数やサブシェルを条件の中
+# （`if ...` / `! ...` / `... || ...` / `... && ...`）で呼ぶと、bash はその中の set -e を無効にする
+# — 中で `set -e` を明示し直しても効かない（bash の仕様。実験で確認済み）。途中のコマンドが想定外に
+# 失敗しても関数は先へ進み、OK を出して素通りする（元の1本のスクリプトでは set -e で止まっていた）。
+# 正しい呼び方は2つだけ:
+#   - 素の文として `run_guard guard_xxx`（set -e の下なら失敗でそのまま止まる）
+#   - `out=$(run_guard guard_xxx 2>&1); rc=$?`（set -e を外した呼び出し側で終了コードを受け取る）
+
+# run_guard <関数名>: 検査を1つ実行し、その終了コードを返す（違反・想定外の失敗とも非 0）。
+# 呼び出し元の set -e の有無は呼ぶ前の状態に戻す（set -e を使わない自己テストを変えないため）。
+run_guard() {
+  local rc errexit=0
+  case "$-" in *e*) errexit=1 ;; esac
+  set +e
+  (
+    set -euo pipefail
+    "$1"
+  )
+  rc=$?
+  if [ "$errexit" = 1 ]; then
+    set -e
+  fi
+  return "$rc"
+}
+
+# arch-guards.sh が実行する順番（最初の違反で止まる）。新しい検査は guard_feature_structure の前に
+# 並べる — 構造チェックを最後に置く前提で、自己テストが本体の全検査の実行を確かめている。
+ARCH_GUARDS=(
+  guard_export_star
+  guard_window_location_href
+  guard_no_throw
+  guard_no_class_interface
+  guard_application_no_infrastructure
+  guard_application_no_integrations
+  guard_application_no_fetch
+  guard_application_no_http_client
+  guard_application_no_google_cloud
+  guard_no_legacy_integration_alias
+  guard_server_actions_placement
+  guard_kebab_case
+  guard_routes_flat_files
+  guard_features_no_process_env
+  guard_client_features_no_process_env
+  guard_ui_no_process_import
+  guard_no_direct_zod_validator
+  guard_no_legacy_result_api
+  guard_usecase_result_chain
+  guard_ports_placement
+  guard_authed_router_requires_auth
+  guard_actions_pinned_sha
+  guard_no_id_token_write
+  guard_client_styles
+  guard_feature_structure
+)
+
+guard_export_star() {
+  echo "[guard] export * 禁止（packages/** は許可）"
+  EXPORT_VIOL=""
+  while IFS= read -r -d '' f; do
+    if grep -nE 'export \*' "$f" >/dev/null 2>&1; then
+      case "$f" in
+        packages/*) : ;; # allowed
+        *) EXPORT_VIOL+="$f\n" ;;
+      esac
+    fi
+  done < <(find apps packages \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' \) -prune -o -type f \( -name '*.ts' -o -name '*.tsx' \) -print0)
+  if [ -n "$EXPORT_VIOL" ]; then
+    echo "違反: export * の使用が禁止されています（packages/** は許可）"
+    echo -e "$EXPORT_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+  echo "OK"
+}
+
+guard_window_location_href() {
+  echo "[guard] window.location.href への代入禁止（router.push() を使用）"
+  # 旧 Biome GritQL プラグイン (no-window-location-href.grit) からの移設
+  LOCATION_VIOL=$(find apps packages \
+    \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/.output/*' \) -prune -o \
+    -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+    xargs -0 grep -nE 'window\.location\.href\s*=[^=]' -- || true)
+  if [ -z "$LOCATION_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: window.location.href への代入は禁止されています。router.push() を使用してください"
+    echo "$LOCATION_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_no_throw() {
+  echo "[guard] api-service の throw 禁止（middlewares・起動時 config 検証・テストは除外）"
+  # 除外対象を先に -prune し、ファイルのみを -type f で絞り込む
+  # config.ts は起動時（リクエスト処理の外）の fail-fast 検証であり、ROP フローの対象外のため除外する
+  THROW_VIOL=$(find apps/api-service/src \
+    \( -path '*/__tests__/*' -o -name '*.test.ts' -o -name '*.spec.ts' -o -path '*/middlewares/*' -o -name 'config.ts' \) -prune -o \
+    -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+    xargs -0 grep -nE '\bthrow\b' -- || true)
+  if [ -z "$THROW_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: api-service では throw の使用が禁止されています（middlewares・config.ts・テストは除外）"
+    echo "$THROW_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_no_class_interface() {
+  echo "[guard] class/interface 禁止"
+  # `export class` / `class` に加え、`abstract class` / `export default class` /
+  # `export default abstract class` も検出する。
+  CLASS_VIOL=$(find apps packages \
+    \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
+    -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
+    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(abstract\s+)?class\b' || true)
+  INTF_VIOL=$(find apps packages \
+    \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
+    -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
+    xargs -0 grep -nE '^\s*(export\s+)?interface\b' | grep -vE '^[^:]*\.(d|gen)\.ts:' || true)
+  if [ -n "$CLASS_VIOL" ]; then
+    echo "違反: class の使用が禁止されています"
+    echo "$CLASS_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+  if [ -n "$INTF_VIOL" ]; then
+    echo "違反: interface の使用が禁止されています（.d.ts は除外）"
+    echo "$INTF_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+  echo "OK"
+}
+
+guard_application_no_infrastructure() {
+  echo "[guard] application 層から infrastructure 直参照禁止（import type を含む）"
+  INFRA_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/application/*' ! -name '*.test.ts' -print0 | \
+    xargs -0 grep -nE "from ['\"](\.\./)+infrastructure/" -- || true)
+  if [ -z "$INFRA_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: application 層から infrastructure を直接参照できません（import type も含む）"
+    echo "$INFRA_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_application_no_integrations() {
+  echo "[guard] application 層で integrations 直参照禁止 (@app/integrations) と旧 alias (@app/integration)"
+  INTEG_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/application/*' -print0 | \
+    xargs -0 grep -nE "from ['\"]@app/(integrations|integration)/" -- || true)
+  if [ -z "$INTEG_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: application 層で integrations を直接参照できません"
+    echo "$INTEG_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_application_no_fetch() {
+  echo "[guard] application 層で fetch 直叩き禁止（境界でのみ許容）"
+  FETCH_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/application/*' -print0 | \
+    xargs -0 grep -nE "\bfetch\s*\(" -- || true)
+  if [ -z "$FETCH_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: application 層で fetch を直接呼び出すことは禁止されています（境界でのみ許容）"
+    echo "$FETCH_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_application_no_http_client() {
+  echo "[guard] application 層で直接 HTTP クライアント使用禁止 (axios/node-fetch)"
+  HTTP_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/application/*' -print0 | \
+    xargs -0 grep -nE "from ['\"]axios['\"]|from ['\"]node-fetch['\"]" -- || true)
+  if [ -z "$HTTP_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: application 層で直接 HTTP クライアント（axios/node-fetch）の使用が禁止されています"
+    echo "$HTTP_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_application_no_google_cloud() {
+  echo "[guard] application 層で @google-cloud/* 直参照禁止（integration に閉じ込める）"
+  GCP_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/application/*' -print0 | \
+    xargs -0 grep -nE "from ['\"]@google-cloud/" -- || true)
+  if [ -z "$GCP_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: application 層で @google-cloud/* を直接参照できません（integration に閉じ込めてください）"
+    echo "$GCP_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_no_legacy_integration_alias() {
+  echo "[guard] 旧 alias (@app/integration) の残存禁止（全体）"
+  OLD_ALIAS=$(find apps/api-service/src -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+    xargs -0 grep -nE "from ['\"]@app/integration/" -- || true)
+  if [ -z "$OLD_ALIAS" ]; then
+    echo "OK"
+  else
+    echo "違反: 旧 alias (@app/integration) の使用が禁止されています"
+    echo "$OLD_ALIAS" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_server_actions_placement() {
+  echo "[guard] Server Actions 配置（features/**/actions/** または features/**/queries/** のみ許容）"
+  SA_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/actions/*' ! -path '*/queries/*' -print0 2>/dev/null |
+    xargs -0 grep -nE "'use server'|\"use server\"" || true)
+  if [ -z "$SA_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: Server Actions は features/**/actions/** または features/**/queries/** に配置してください"
+    echo "$SA_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_kebab_case() {
+  echo "[guard] kebab-case ファイル名"
+  # camelCase / PascalCase のファイル名（basename に大文字を含む .ts/.tsx）を検出する。
+  # 以前は find -regex に頼っていたが、`\.tsx\?$` の `\?` の解釈が BSD find(macOS)と
+  # GNU find(CI/Linux)で異なり、macOS では何もマッチしない dead guard だった。
+  # 移植性のため find は単純な列挙に留め、パターン判定と除外は grep -E で行う。
+  # 除外（.test. / .spec. / .d.ts / generated / index.ts）は「シングルクォート内では
+  # バックスラッシュ 1 個」で正しくエスケープする（以前は `\\.test\.` = バックスラッシュ+任意文字
+  # となり、ファイル名にバックスラッシュが無いため除外が効いていなかった）。
+  # basename の先頭コンポーネント（最初の `.` より前）に大文字を含むもの（camelCase/PascalCase）を
+  # 検出する。`foo.test.ts` のような複合拡張子でも「foo」ではなく先頭コンポーネントを見るので、
+  # camelCase なテストファイル（fooBar.test.ts）も一旦マッチし、その後 .test. 除外で落とす
+  # ＝除外規則が実際に到達・機能する。
+  BAD=$(find apps/client/features apps/client/shared apps/api-service/src \
+    -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null |
+    grep -E '/[A-Za-z0-9]*[A-Z][A-Za-z0-9]*\.' |
+    grep -Ev '\.test\.|\.spec\.|\.d\.ts|generated|/index\.ts$' || true)
+  if [ -z "$BAD" ]; then
+    echo "OK"
+  else
+    echo "違反: ファイル名は kebab-case にしてください（camelCase/PascalCase を検出）"
+    echo "$BAD" | while IFS= read -r line; do echo "  • $line"; done
+    return 1
+  fi
+}
+
+guard_routes_flat_files() {
+  echo "[guard] routes 配下の直置きファイル（index.ts 以外）"
+  if [ -d apps/api-service/src/routes ]; then
+    BAD_ROUTES=$(find apps/api-service/src/routes -maxdepth 1 -type f -name '*.ts' | grep -v 'index.ts' || true)
+    if [ -n "$BAD_ROUTES" ]; then
+      echo "$BAD_ROUTES"
+      echo "WARN: 直下ルートファイルが存在します（将来のグルーピング候補）"
+    else
+      echo "OK"
+    fi
+  else
+    echo "OK (routes ディレクトリなし)"
+  fi
+}
+
+guard_features_no_process_env() {
+  echo "[guard] features 配下での process.env 直接参照禁止（config 経由に統一）"
+  ENV_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+    xargs -0 grep -nE "process\.env\." -- || true)
+  if [ -z "$ENV_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: features 配下で process.env を直接参照できません（config 経由に統一してください）"
+    echo "$ENV_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_client_features_no_process_env() {
+  echo "[guard] client features 配下での process.env 直接参照禁止（loadConfig() 経由に統一）"
+  CLIENT_ENV_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
+    xargs -0 grep -nE "process\.env\." -- || true)
+  if [ -z "$CLIENT_ENV_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: client features 配下で process.env を直接参照できません（loadConfig() 経由に統一してください）"
+    echo "$CLIENT_ENV_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_ui_no_process_import() {
+  echo "[guard] UI コンポーネントから processXxx の直接 import 禁止（xxxAction 経由に統一）"
+  PROCESS_IMPORT_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/ui/*' -print0 2>/dev/null | \
+    xargs -0 grep -nE "import\s+.*\bprocess[A-Z][a-zA-Z]*" -- || true)
+  if [ -z "$PROCESS_IMPORT_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: UI コンポーネントから processXxx を直接 import できません（xxxAction 経由に統一してください）"
+    echo "$PROCESS_IMPORT_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_no_direct_zod_validator() {
+  echo "[guard] @hono/zod-validator の直接 import 禁止（shared/http/z-validator を通す）"
+  # zValidator の 400 失敗を request_validation_failed として requestId 付きで残す共有ラッパー
+  # (apps/api-service/src/shared/http/z-validator.ts)を全ルーターに強制する。
+  # 本家を直接 import すると、その箇所のバリデーション 400 だけ理由が本番ログから追えなくなる。
+  # 除外はラッパー自身のみ(そこだけが本家パッケージへの唯一の接点)。
+  # 型のみの import(`import type { Hook } from ...`)はランタイムの zValidator を
+  # 一切 import しないため対象外にする。
+  ZV_VIOL=$(find apps/api-service/src -type f \( -name '*.ts' -o -name '*.tsx' \) \
+    ! -path '*/shared/http/z-validator.ts' -print0 | \
+    xargs -0 grep -nE "from ['\"]@hono/zod-validator['\"]" -- | \
+    grep -vE ':[0-9]+:[[:space:]]*import type ' || true)
+  if [ -z "$ZV_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: @hono/zod-validator を直接 import せず、@app/shared/http/z-validator の zValidator を使ってください（400の診断ログが自動で付きます）"
+    echo "$ZV_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_no_legacy_result_api() {
+  echo "[guard] 旧 @repo/result API (result.type ===) の使用禁止"
+  LEGACY_RESULT_VIOL=$(find apps/api-service/src -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+    xargs -0 grep -nE '\.type\s*===\s*["'"'"'](ok|err)["'"'"']' -- || true)
+  if [ -z "$LEGACY_RESULT_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: それは旧 @repo/result API です。result.isOk() / result.isErr() を使ってください"
+    echo "$LEGACY_RESULT_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_usecase_result_chain() {
+  echo "[guard] usecase.ts は async/try-catch を禁止し okAsync/ResultAsync チェーンを使う"
+  USECASE_FILES=$(find apps/api-service/src/features -type f -name 'usecase.ts' 2>/dev/null || true)
+  if [ -n "$USECASE_FILES" ]; then
+    # async の検出形（実コードの形状に合わせる。コメント・文字列は誤検出し得るがガードとして許容）:
+    #   - `async function ...`（関数宣言/式）
+    #   - `async (...)`（括弧つきアロー: async () => / async (x) =>）
+    #   - `async foo(`（オブジェクト/クラスのメソッド短縮記法）
+    #   - `async x =>`（括弧なしアロー）
+    USECASE_ASYNC_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\basync\s+function\b|\basync\s*\(|\basync\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(\(|=>)' -- || true)
+    USECASE_TRY_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\btry\s*\{' -- || true)
+    USECASE_NO_CHAIN=$(echo "$USECASE_FILES" | xargs grep -LE '\b(okAsync|ResultAsync)\b' -- || true)
+    if [ -n "$USECASE_ASYNC_VIOL" ]; then
+      echo "違反: usecase.ts で async は禁止です（okAsync().andThen() チェーンを使ってください）"
+      echo "$USECASE_ASYNC_VIOL" | while IFS= read -r line; do echo "  • $line"; done
+      return 1
+    fi
+    if [ -n "$USECASE_TRY_VIOL" ]; then
+      echo "違反: usecase.ts で try/catch は禁止です（steps.ts に委譲し、Result チェーンで表現してください）"
+      echo "$USECASE_TRY_VIOL" | while IFS= read -r line; do echo "  • $line"; done
+      return 1
+    fi
+    if [ -n "$USECASE_NO_CHAIN" ]; then
+      echo "違反: usecase.ts は okAsync または ResultAsync を使った Result チェーンである必要があります"
+      echo "$USECASE_NO_CHAIN" | while IFS= read -r line; do echo "  • $line"; done
+      return 1
+    fi
+  fi
+  echo "OK"
+}
+
+guard_ports_placement() {
+  echo "[guard] ports.ts は feature の application/ 直下にのみ配置可（feature 間連携の抽象ポート定義）"
+  BAD_PORTS=$(find apps/api-service/src/features -name 'ports.ts' 2>/dev/null | grep -vE '^apps/api-service/src/features/[^/]+/application/ports\.ts$' || true)
+  if [ -z "$BAD_PORTS" ]; then
+    echo "OK"
+  else
+    echo "違反: ports.ts は features/<feature>/application/ports.ts にのみ配置してください"
+    echo "$BAD_PORTS" | while IFS= read -r line; do echo "  • $line"; done
+    return 1
+  fi
+}
+
+guard_authed_router_requires_auth() {
+  echo "[guard] createAuthedApp を使う router は requireAuth を必ず適用する"
+  # createAuthedApp は c.get("user") を non-null に型付けするが、認証自体は
+  # .use(requireAuth(...)) を登録した場合にのみ有効。付け忘れてもコンパイルは通り、
+  # 未認証エンドポイント化（または実行時 undefined）になるため機械的に検出する。
+  # 判定: 1 ファイル内の createAuthedApp() の出現数と .use(requireAuth(...)) の出現数を数え、
+  # 前者 > 後者なら「requireAuth を付け忘れた createAuthedApp ルーターがある」と見なす。
+  # 以前は「ファイル内のどこかに .use(requireAuth( があれば OK」だったため、1 ファイルに
+  # 複数ルーターがあり片方だけ requireAuth を付け忘れたケースを見逃していた。
+  # 限界: 同一ルーターに requireAuth を 2 回書くと別ルーターの欠落と相殺され得る（稀）。
+  #       ルーターと requireAuth の厳密な対応付けは grep では表現しづらいため、
+  #       実用上重要な「付け忘れ（欠落）」の検出に振ったヒューリスティック。
+  AUTHED_FILES=$(grep -rlE '\bcreateAuthedApp\(' apps/api-service/src --include='*.ts' 2>/dev/null | \
+    grep -vE '(\.test\.ts$|/factory\.ts$|/__tests__/)' || true)
+  AUTHED_VIOL=""
+  if [ -n "$AUTHED_FILES" ]; then
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      # `|| true`: マッチ 0 件で grep が exit 1 を返し、pipefail + set -e でスクリプトが
+      # ここで落ちてしまう（=違反メッセージを出さず終了）のを防ぐ。0 件は正当な入力。
+      authed_count=$(grep -oE '\bcreateAuthedApp\(' "$f" | wc -l | tr -d ' ' || true)
+      guard_count=$(grep -oE '\.use\(requireAuth\(' "$f" | wc -l | tr -d ' ' || true)
+      if [ "$authed_count" -gt "$guard_count" ]; then
+        AUTHED_VIOL+="$f (createAuthedApp×$authed_count / requireAuth×$guard_count)\n"
+      fi
+    done <<< "$AUTHED_FILES"
+  fi
+  if [ -z "$AUTHED_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: createAuthedApp() を使うファイルには .use(requireAuth(...)) の登録が必要です"
+    echo -e "$AUTHED_VIOL" | while IFS= read -r line; do
+      [ -n "$line" ] && echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_actions_pinned_sha() {
+  echo "[guard] GitHub Actions の uses: は commit SHA でピン留め（ローカル ./ と docker@sha256 は許可）"
+  # タグ参照(@v4 等)は改竄されうる(2026年の trivy-action 事件)。actionlint は構文しか見ず、
+  # Renovate の pinGitHubActionDigests も自分の PR でタグを書き換えるだけで新規の未ピン留めは
+  # 止めないため、ここで機械的に検査する。コメント行は対象外。
+  UNPINNED=$(grep -rnE '^\s*-?\s*uses:' .github --include='*.yml' --include='*.yaml' 2>/dev/null | \
+    grep -vE ':\s*#' | \
+    grep -vE 'uses:\s*(\./|[^ ]+@[0-9a-f]{40}(\s|$)|docker://[^ ]+@sha256:[0-9a-f]{64}(\s|$))' || true)
+  if [ -z "$UNPINNED" ]; then
+    echo "OK"
+  else
+    echo "違反: GitHub Actions の uses: は 40 桁の commit SHA でピン留めしてください（タグ・ブランチ参照は不可）"
+    echo "$UNPINNED" | sed 's/^/  • /'
+    return 1
+  fi
+}
+
+guard_no_id_token_write() {
+  echo "[guard] ワークフローに id-token: write を付与しない（OIDC トークン窃取の経路）"
+  # エージェントを動かすワークフローに OIDC を渡すと、プロンプトインジェクションでデプロイ先の
+  # クラウド資格情報まで奪われる(CVE-2026-24887 系)。デプロイに必要なら専用ワークフローで
+  # エージェントと分離し、この guard の除外を理由付きで明示する。
+  IDTOKEN=$(grep -rnE '^\s*id-token:\s*write' .github/workflows --include='*.yml' --include='*.yaml' 2>/dev/null || true)
+  if [ -z "$IDTOKEN" ]; then
+    echo "OK"
+  else
+    echo "違反: ワークフローに id-token: write が付与されています（エージェントと OIDC を同居させない）"
+    echo "$IDTOKEN" | sed 's/^/  • /'
+    return 1
+  fi
+}
+
+guard_client_styles() {
+  echo "[guard] client のスタイル規約（既定パレット・任意値・dark: の手書き・AI slop）"
+  # semantic トークンの迂回と AI slop の定型パターンは typecheck・lint・test を通過するため、
+  # ここで検出する。規則と除外（components/ui）の理由は client-styles.mjs 冒頭に書いてある。
+  node scripts/check/client-styles.mjs
+}
+
+guard_feature_structure() {
+  echo "[guard] feature 構造の完全性（必須の層・co-located テスト・配線）"
+  node scripts/check/feature-structure.mjs
+}

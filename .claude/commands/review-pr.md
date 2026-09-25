@@ -63,7 +63,7 @@ github-actions bot のコメントはチェック結果として扱い、指摘�
 ## 📝 ルール追加の提案
 
 ### [提案1]
-- **追加先**: 機械検査できるなら `scripts/check/arch-guards.sh` 等、レビュー時に確認すれば足りるなら `codex-review.md` の Step 3-X、それ以外は `.claude/rules/`（always-loaded の `general.md` は最後の選択肢）
+- **追加先**: 機械検査できるなら `scripts/check/arch-guards-lib.sh` に検査関数を足して `ARCH_GUARDS` に並べ、自己テストにケースを足す（手順は `docs/dev/development.md` の arch-guards）等、レビュー時に確認すれば足りるなら `codex-review.md` の Step 3-X、それ以外は `.claude/rules/`（always-loaded の `general.md` は最後の選択肢）
 - **追加内容**:
   （具体的なルール文・コード例）
 - **根拠**: 今回の指摘で判明した問題と、ルールがあれば防げた理由

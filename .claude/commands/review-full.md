@@ -180,8 +180,8 @@ AskUserQuestion で確認する。成功したらサイクル +1、修正コミ�
 
 ### Step 6: 観点追加の検討（ループ終了後に一度だけ）
 
-`review-pr.md` 手順5の判定基準と手順に従う。追加先は「機械検査できる → `scripts/check/arch-guards.sh`
-等」「レビュー時に確認すれば足りる → `codex-review.md` の Step 3」「実装中の参照が必要かつ機械検査
+`review-pr.md` 手順5の判定基準と手順に従う。追加先は「機械検査できる → `scripts/check/arch-guards-lib.sh`
+に検査関数を足す（手順は `docs/dev/development.md`）等」「レビュー時に確認すれば足りる → `codex-review.md` の Step 3」「実装中の参照が必要かつ機械検査
 できない → `.claude/rules/`」の順で判断する（`general.md` は always-loaded で肥大化しやすいので
 最後の選択肢）。
 
