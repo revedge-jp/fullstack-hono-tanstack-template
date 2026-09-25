@@ -1,4 +1,5 @@
 export type { CreateLoggerOptions } from "./create-logger.js";
 export { createLogger } from "./create-logger.js";
+export { readCauseCode } from "./read-cause-code.js";
 export { stringifyErrorSafe } from "./stringify-error-safe.js";
 export { stripBindParams, stripBindParamsFromStack } from "./strip-bind-params.js";
