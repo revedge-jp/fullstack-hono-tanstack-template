@@ -45,6 +45,14 @@
       "automerge": false
     },
     {
+      "description": "AI 文章チェックの辞書（ui-copy.mjs / lint:prose の判定そのもの）。語が消える更新はガードを緩めても CI が通るので、自動マージせず差分を見てマージする",
+      "matchPackageNames": [
+        "textlint-rule-preset-ai-words-ja",
+        "@textlint-ja/textlint-rule-preset-ai-writing"
+      ],
+      "automerge": false
+    },
+    {
       "description": "major は常にレビュー必須（自動マージしない）",
       "matchUpdateTypes": ["major"],
       "automerge": false,
