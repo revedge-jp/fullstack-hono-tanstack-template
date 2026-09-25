@@ -1,5 +1,6 @@
 import type { AppConfig } from "@app/config";
 import { authAccounts, authSessions, authUsers, authVerifications, type Database } from "@repo/db";
+import { stringifyErrorSafe } from "@repo/logging";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
@@ -12,13 +13,134 @@ type BetterAuthLogLevel = "debug" | "info" | "warn" | "error";
 
 export type AuthLogger = Record<BetterAuthLogLevel, (obj: unknown, msg?: string) => void>;
 
+// DrizzleQueryError はメッセージ末尾に `\nparams: <バインド値>` を埋め込む。pino の redact は
+// キー単位でしか効かず文字列の中身には届かないため、ここで切り落とす(SQL 文は残す)。
+const BIND_PARAMS_MARKER = "\nparams:";
+
+function stripBindParams(message: string): string {
+  const markerIndex = message.indexOf(BIND_PARAMS_MARKER);
+  return markerIndex === -1 ? message : message.slice(0, markerIndex);
+}
+
+// PostgreSQL のデータ例外(SQLSTATE 22xxx。22P02 invalid input syntax 等)はメッセージに
+// 入力値そのものを含めるので、メッセージを出さずコードだけ残す。
+function isDataExceptionCode(code: string | number | undefined): boolean {
+  return typeof code === "string" && /^22[0-9A-Z]{3}$/.test(code);
+}
+
+function readPrimitiveField(value: object, key: string): string | number | undefined {
+  if (!(key in value)) {
+    return undefined;
+  }
+  const field: unknown = Reflect.get(value, key);
+  return typeof field === "string" || typeof field === "number" ? field : undefined;
+}
+
+// Better Auth の APIError は `body.code`(FAILED_TO_CREATE_SESSION 等)に原因の種別を持つ。
+function readBodyCode(error: Error): string | number | undefined {
+  const body: unknown = "body" in error ? error.body : undefined;
+  return typeof body === "object" && body !== null ? readPrimitiveField(body, "code") : undefined;
+}
+
+// stack の先頭(複数行メッセージなら複数行)はメッセージの複製でバインド値を含みうる。行の形では
+// なく位置で切り落とし、メッセージより後ろの呼び出しフレームだけを返す。stack 中にメッセージが
+// 見つからない(生成後に message が書き換えられた等)ときは、安全側に倒して undefined を返す。
+function extractStackFrames(stack: string, message: string): string | undefined {
+  if (message === "") {
+    const headerEnd = stack.indexOf("\n");
+    return headerEnd === -1 ? "" : stack.slice(headerEnd + 1);
+  }
+  // メッセージがエラー名の一部と一致する(`new Error("Error")` 等)ことがあるので、直後が
+  // 改行か末尾になる出現位置まで探す。メッセージの開始はヘッダーの1行目に限る。
+  let messageStart = stack.indexOf(message);
+  while (messageStart !== -1 && !stack.slice(0, messageStart).includes("\n")) {
+    const rest = stack.slice(messageStart + message.length);
+    if (rest === "") {
+      return "";
+    }
+    if (rest.startsWith("\n")) {
+      return rest.slice(1);
+    }
+    messageStart = stack.indexOf(message, messageStart + 1);
+  }
+  return undefined;
+}
+
+// better-call の APIError は Error.stackTraceLimit = 0 で生成されるので stack にフレームが無い。
+// 本来のフレームは prototype の getter `errorStack` にあり、その先頭行はメッセージを含まない
+// エラー名だけになっている。
+function collectStackFrames(error: Error): string | undefined {
+  const frames =
+    error.stack === undefined ? undefined : extractStackFrames(error.stack, error.message);
+  if (frames !== undefined && frames !== "") {
+    return frames;
+  }
+  if ("errorStack" in error && typeof error.errorStack === "string") {
+    return extractStackFrames(error.errorStack, "");
+  }
+  return frames;
+}
+
+// cause が Error 以外のオブジェクトなら JSON 全体が文字列になり、redact は掛からない
+// (DrizzleQueryError の cause は postgres.js の Error なのでこの経路は通らない)。
+function describeCause(cause: unknown): string {
+  if (!(cause instanceof Error)) {
+    return stringifyErrorSafe(cause);
+  }
+  const code = readPrimitiveField(cause, "code");
+  const label = code === undefined ? cause.name : `${cause.name} [${code}]`;
+  return isDataExceptionCode(code) ? label : `${label}: ${stripBindParams(cause.message)}`;
+}
+
+// pino の既定シリアライザが Error を直列化するのはトップレベルの `err` だけで、それ以外の
+// 位置の Error は JSON.stringify で `{}` になる(message も stack も消える)。一方 `err` /
+// `error` は 5xx 専用の予約キーなので、Better Auth の warn ログをそこへ載せることはできない。
+// そのため betterAuthArgs の中で Error を平たいオブジェクトに置き換える。own プロパティは
+// 展開せず、値を含まない識別子(APIError の status / statusCode / body.code、postgres.js の
+// SQLSTATE `code`)だけを許可リストで残す。DrizzleQueryError の `params` や PostgresError の
+// `detail`(`Key (email)=(...)`)はバインド値を含むため出さない。
+function serializeBetterAuthArg(arg: unknown): unknown {
+  if (!(arg instanceof Error)) {
+    return arg;
+  }
+  const code = readPrimitiveField(arg, "code");
+  const stack = collectStackFrames(arg);
+  return {
+    name: arg.name,
+    ...(isDataExceptionCode(code) ? {} : { message: stripBindParams(arg.message) }),
+    status: readPrimitiveField(arg, "status"),
+    statusCode: readPrimitiveField(arg, "statusCode"),
+    code,
+    bodyCode: readBodyCode(arg),
+    ...(stack === undefined ? {} : { stack }),
+    ...(arg.cause === undefined ? {} : { cause: describeCause(arg.cause) }),
+  };
+}
+
+function toLogMessage(message: unknown): string {
+  if (typeof message === "string") {
+    return stripBindParams(message);
+  }
+  return message instanceof Error ? message.name : "";
+}
+
 export function toBetterAuthLoggerOption(logger: AuthLogger) {
   return {
     // Better Auth 既定の閾値(warn)をそのまま使う。debug/info は publish されない。
-    log: (level: BetterAuthLogLevel, message: string, ...args: unknown[]) => {
+    // 型上は message: string だが、Better Auth は `logger.error(e)` のように Error を第1引数に
+    // 渡すことがある(routes/session の listSessions)。@better-auth/core の createLogger は
+    // それを加工せず渡してくるので unknown で受ける。
+    log: (level: BetterAuthLogLevel, message: unknown, ...args: unknown[]) => {
       // message は SQL 文などを含みうるので pino の msg に置く(msg は $metadata.error に
-      // 取り込まれないキー)。args は Better Auth が付ける補足情報で、構造化して残す。
-      logger[level](args.length > 0 ? { betterAuthArgs: args } : {}, message);
+      // 取り込まれないキー)。Better Auth は DB エラーの message だけを渡すこともあるので
+      // (api/index の onError)、ここでもバインド値を切り落とす。args は Better Auth が付ける
+      // 補足情報で、構造化して残す。文字列以外の message は msg に置くと own プロパティ
+      // (DrizzleQueryError の params)ごと直列化されるので、args の先頭へ回す。
+      const allArgs = typeof message === "string" ? args : [message, ...args];
+      logger[level](
+        allArgs.length > 0 ? { betterAuthArgs: allArgs.map(serializeBetterAuthArg) } : {},
+        toLogMessage(message),
+      );
     },
   };
 }
