@@ -83,6 +83,8 @@ describe("task cursor codec", () => {
     expect(decodeTaskCursor(btoa(JSON.stringify({ t: "2026-07-04", id: "" }))).isErr()).toBe(true);
     expect(decodeTaskCursor(btoa(JSON.stringify(null))).isErr()).toBe(true);
     expect(decodeTaskCursor(btoa(JSON.stringify("str"))).isErr()).toBe(true);
+    // t が文字列でない（数値の epoch 等）も受けない
+    expect(decodeTaskCursor(btoa(JSON.stringify({ t: 0, id: "task-1" }))).isErr()).toBe(true);
   });
 
   test("異常: 日付が不正な場合は InvalidCursor", () => {
