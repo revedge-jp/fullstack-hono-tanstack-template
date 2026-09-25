@@ -66,7 +66,8 @@ describe("createApp middleware stack — via createFakeApp", () => {
   // 本番(Workers)は createApp → buildApp をリクエストごとに呼ぶ(client の app/server.ts)。
   // カウントが buildApp の中にあると毎回 0 から数え直し、上限に届かない。
   test("rateLimit: アプリをリクエストごとに作り直しても上限が効く（isolate 共有のストア）", async () => {
-    const headers = { "CF-Connecting-IP": "203.0.113.77" };
+    // モジュールスコープのストアはプロセス内で残るので、再実行(--rerun-each 等)でも前回のカウントを拾わないよう一意にする
+    const headers = { "CF-Connecting-IP": `isolate-test-${crypto.randomUUID()}` };
     const build = () =>
       createFakeApp({ rateLimit: { windowMs: 60_000, max: 1 }, rateLimitStores: "isolate" });
     const first = await build().request("/api/client-errors", { method: "POST", headers });
@@ -89,6 +90,18 @@ describe("createApp middleware stack — via createFakeApp", () => {
       expect.objectContaining({ status: 504, path: "/api/auth/session", err: "HTTPException 504" }),
       "http exception",
     ]);
+  });
+
+  test("4xx の HTTPException は error ログに出さない（err キーは 5xx 専用）", async () => {
+    const spy = createLoggerSpy();
+    const app = createFakeApp({ logger: spy.logger });
+    const res = await app.request("/api/client-errors", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{",
+    });
+    expect(res.status).toBe(400);
+    expect(spy.error).toHaveLength(0);
   });
 
   describe("onError: 500 の形状と環境別マスキング", () => {
