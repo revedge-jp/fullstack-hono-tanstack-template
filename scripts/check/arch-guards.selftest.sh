@@ -19,8 +19,18 @@ cd "$ROOT"
 FAIL=0
 FIXTURES=()
 cleanup() {
-  local f
+  local f dir
   for f in "${FIXTURES[@]:-}"; do [ -n "$f" ] && rm -f "$f"; done
+  # mkfix の mkdir -p が作った __selftest* ディレクトリも消す(参照実装の tasks 配下に空ディレクトリが
+  # 残ると、構造を真似るエージェントの目に入る)。rmdir は空のときしか消さないので、fixture 以外は残る
+  for f in "${FIXTURES[@]:-}"; do
+    [ -n "$f" ] || continue
+    dir="$(dirname "$f")"
+    while [[ "$dir" == *__selftest* ]]; do
+      rmdir "$dir" 2>/dev/null || break
+      dir="$(dirname "$dir")"
+    done
+  done
   rm -rf "apps/api-service/src/features/tasks/application/__selftest_action" 2>/dev/null || true
 }
 trap cleanup EXIT
