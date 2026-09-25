@@ -66,6 +66,45 @@ AGENTS.md に載っていない細部の規約をまとめる。
 
 出典: revedge-jp/chiryonavi#1234（Slack に届かなくても「通知済み」を保存し、劣化の警告が二度と出なかった）
 ・#1237（未払いの院の紹介にクレジットが付く経路を作った）。
+## integration テストは手書きの後始末を書かない（トランザクション fixture）
+
+`__tests__/integration/*.int.test.ts` は、手書きの `beforeAll` / `afterAll` での `.delete(...)` を
+書かず、`test-helpers/transactional-db.ts` の `createTransactionalDb()` を使う。各テストを
+BEGIN → ROLLBACK で包むので、テスト中の insert / update / delete は終了時にすべて取り消される。
+後始末の書き忘れ・削除順の誤りで「前のテストの残骸で別のテストが落ちる」型の flaky を構造的に防ぐ
+（移植元 revedge-jp/chiryonavi#1152。46 ファイル・約 36,000 行に手書きの後始末が散らばっていた）。
+
+```ts
+const { getDb: getTx, end } = createTransactionalDb(process.env.DATABASE_URL ?? "");
+// getDb() はテスト本体以外では undefined。非 null アサーションは *.test.ts でのみ許可（ADR-003）
+function getDb(): Database {
+  return getTx()!;
+}
+
+afterAll(async () => {
+  await end(); // 接続のクローズは自動登録されない。afterAll の最後で呼ぶ
+});
+
+test("...", async () => {
+  const db = getDb(); // per-test トランザクション
+  const repository = createTasksRepository({ db });
+  const ownerId = await seedOwner(db); // シードもこの tx で作る（ROLLBACK で消える）
+});
+```
+
+- 参照実装: `tasks.int.test.ts` / `activity.int.test.ts`
+- **リポジトリが自前で `db.transaction()` を張っても安全**: drizzle の postgres-js アダプタは、tx に
+  対する `.transaction(cb)` を SAVEPOINT へマップするので、`getDb()` をそのまま渡してよい
+- **制約違反を確かめた後に同じテストでクエリを続けるなら、エラーを起こす処理を
+  `getDb().transaction(fn)` で包む**。PostgreSQL はエラーでトランザクション全体を中断状態にし、
+  以降のクエリが `25P02 current transaction is aborted` で無関係に落ちる
+- **`defaultNow()` 列は1テスト内で同じ値になる**（`now()` はトランザクション開始時刻）。時刻順に
+  依存するテストは時刻の列を明示してシードする。任せると全行が同時刻になり、時刻での絞り込みが一度も
+  通らないまま緑になる（keyset ページネーションで実際に踏んだ。参照: `tasks.int.test.ts`）
+- ファイル全体で共有する読み取り専用のシードだけは `rawDb`（トランザクション外）でファイル直下の
+  `beforeAll` に作り、`afterAll` で消してから `end()` を呼ぶ。**テスト本体と `beforeEach` では
+  `rawDb` も `getDb().$client` も使わない**。接続が1本（`max: 1`）でトランザクションが握っているため、
+  接続待ちのまま原因の読めないタイムアウトになる
 
 ## `src/shared/` へロジックを移すと品質ゲートから静かに外れる
 
