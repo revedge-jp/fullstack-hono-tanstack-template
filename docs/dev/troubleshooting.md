@@ -40,6 +40,11 @@ bun run db:down && bun run db:up:all
 cat .env | grep DATABASE_URL
 ```
 
+> **注意**: `db:down` は `compose down -v` で、main の共有コンテナ内に Claude Code の worktree が持つ
+> `wt_<name>` DB（dev/test 両方）もすべて消える。開いている worktree があるなら、その worktree のルートで
+> `bash scripts/agent-worktree-setup.sh` を再実行して DB を作り直すこと（`docs/dev/git-worktree.md`）。
+> また worktree の中では `db:up` / `db:down` を実行しない（DB は main の共有コンテナ）。
+
 #### 症状: `database "app_db" does not exist`
 
 ```bash

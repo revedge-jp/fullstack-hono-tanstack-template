@@ -7,6 +7,16 @@ set -euo pipefail
 
 CURRENT_BRANCH=$(git branch --show-current)
 
+# Claude Code のフックが作った worktree（.env に WORKTREE_SHARED_DB=1）では実行しない。
+# フックが origin/main 基点の分岐・DB・.env を済ませているので二重実行になり、このスクリプトの
+# git reset --hard / git clean -fd は worktree の作業を消しうる。
+if [[ "$PWD" == */.claude/worktrees/* ]] && grep -qE '^WORKTREE_SHARED_DB=1$' .env 2>/dev/null; then
+  echo "❌ エラー: フック管理の worktree では start-from-main は使いません"
+  echo "   main に追従するには: git fetch origin main && git merge origin/main"
+  echo "   DB / .env を作り直すには: bash scripts/agent-worktree-setup.sh"
+  exit 1
+fi
+
 if [[ -z "${CURRENT_BRANCH}" ]]; then
   echo "❌ エラー: 現在のブランチ名を取得できません"
   exit 1
