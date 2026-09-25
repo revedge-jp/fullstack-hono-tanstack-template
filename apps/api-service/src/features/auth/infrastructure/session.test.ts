@@ -70,7 +70,7 @@ describe("makeVerifySession — getSession が reject したとき", () => {
           err: "Failed to get session",
           causeCode: undefined,
           name: "APIError",
-          status: "INTERNAL_SERVER_ERROR",
+          apiStatus: "INTERNAL_SERVER_ERROR",
           statusCode: 500,
           bodyCode: "FAILED_TO_GET_SESSION",
         },

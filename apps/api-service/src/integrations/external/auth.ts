@@ -159,9 +159,11 @@ export function readAuthApiError(error: unknown) {
   if (!(error instanceof Error) || !isAPIError(error)) {
     return undefined;
   }
+  // status は他のログ(request-logger / to-http)では数値の HTTP ステータスなので、APIError の
+  // 文字列の status("UNAUTHORIZED" 等)は別名にして型を混在させない。
   return {
     name: error.name,
-    status: readPrimitiveField(error, "status"),
+    apiStatus: readPrimitiveField(error, "status"),
     statusCode: readPrimitiveField(error, "statusCode"),
     bodyCode: readBodyCode(error),
   };
