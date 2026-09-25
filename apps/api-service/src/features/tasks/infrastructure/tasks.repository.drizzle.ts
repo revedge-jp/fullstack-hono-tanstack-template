@@ -1,7 +1,7 @@
 import { isPgError } from "@app/shared/db-error";
 import { type Database, tasks } from "@repo/db";
 import { and, desc, eq, lt, or } from "drizzle-orm";
-import { err, ok, ResultAsync } from "neverthrow";
+import { err, errAsync, ok, okAsync, ResultAsync } from "neverthrow";
 
 import type { TasksRepository } from "../domain/tasks.repository";
 import { mapDbTaskToDomain } from "./mappers";
@@ -48,17 +48,33 @@ export function createTasksRepository(deps: { db: Database }): TasksRepository {
         () => "Unexpected" as const,
       ).map((row) => (row ? mapDbTaskToDomain(row) : null)),
 
-    update: (task) =>
+    update: (task, expected) =>
       ResultAsync.fromPromise(
         db
           .update(tasks)
           .set({ status: task.status, updatedAt: new Date() })
-          .where(and(eq(tasks.id, task.id), eq(tasks.ownerId, task.ownerId)))
+          .where(
+            and(
+              eq(tasks.id, task.id),
+              eq(tasks.ownerId, task.ownerId),
+              eq(tasks.status, expected.status),
+            ),
+          )
           .returning(),
         () => "Unexpected" as const,
       ).andThen((rows) => {
         const row = rows[0];
-        return row ? ok(mapDbTaskToDomain(row)) : err("NotFound" as const);
+        if (row) {
+          return okAsync(mapDbTaskToDomain(row));
+        }
+        // 0 行の理由（無い・他人のもの / status が変わっていた）を分けるため、失敗時だけ読み直す
+        return ResultAsync.fromPromise(
+          db.query.tasks.findFirst({
+            columns: { id: true },
+            where: and(eq(tasks.id, task.id), eq(tasks.ownerId, task.ownerId)),
+          }),
+          () => "Unexpected" as const,
+        ).andThen((existing) => errAsync(existing ? ("Conflict" as const) : ("NotFound" as const)));
       }),
 
     delete: (id, ownerId) =>

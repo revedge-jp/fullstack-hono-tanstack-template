@@ -237,21 +237,44 @@ describe.each(implementations)("TasksRepository の適合: $name", ({ make }) =>
     const other = await seedOwner();
     const task = await createTask(tasks, owner);
 
-    const updated = (await tasks.update({ ...task, status: "done" }))._unsafeUnwrap();
+    const updated = (
+      await tasks.update({ ...task, status: "done" }, { status: "todo" })
+    )._unsafeUnwrap();
     expect(updated.status).toBe("done");
     expect(updated.ownerId).toBe(owner);
     expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(task.updatedAt.getTime());
     expect((await tasks.getById(task.id, owner))._unsafeUnwrap()?.status).toBe("done");
 
     // 所有者を偽った update は他人のタスクを上書きしない
-    const hijack = await tasks.update({ ...task, ownerId: other, status: "in_progress" });
+    const hijack = await tasks.update(
+      { ...task, ownerId: other, status: "in_progress" },
+      { status: "done" },
+    );
     expect(hijack._unsafeUnwrapErr()).toBe("NotFound");
     const after = (await tasks.getById(task.id, owner))._unsafeUnwrap();
     expect(after?.status).toBe("done");
     expect(after?.ownerId).toBe(owner);
 
-    const missing = await tasks.update({ ...task, id: crypto.randomUUID() as TaskId });
+    const missing = await tasks.update(
+      { ...task, id: crypto.randomUUID() as TaskId },
+      { status: "todo" },
+    );
     expect(missing._unsafeUnwrapErr()).toBe("NotFound");
+  });
+
+  // 楽観ロック: 読んだ後に他のリクエストが status を変えていたら、古い読み取りで上書きしない
+  // （done のタスクが in_progress に巻き戻る競合を防ぐ）
+  test("update は expected の status と食い違えば Conflict で、行を変えない", async () => {
+    const { tasks, seedOwner } = make();
+    const owner = await seedOwner();
+    const task = await createTask(tasks, owner);
+    (await tasks.update({ ...task, status: "in_progress" }, { status: "todo" }))._unsafeUnwrap();
+    (await tasks.update({ ...task, status: "done" }, { status: "in_progress" }))._unsafeUnwrap();
+
+    // todo を読んだ古いリクエストが in_progress へ進めようとする
+    const stale = await tasks.update({ ...task, status: "in_progress" }, { status: "todo" });
+    expect(stale._unsafeUnwrapErr()).toBe("Conflict");
+    expect((await tasks.getById(task.id, owner))._unsafeUnwrap()?.status).toBe("done");
   });
 
   test("delete は所有者だけが消せる。他人・存在しない・消した後は NotFound", async () => {
@@ -307,7 +330,10 @@ describe.each(implementations)("TasksRepository の適合: $name", ({ make }) =>
     const original = seeded[0]!;
 
     const updated = (
-      await tasks.update({ ...original, status: "in_progress", title: title("renamed") })
+      await tasks.update(
+        { ...original, status: "in_progress", title: title("renamed") },
+        { status: "todo" },
+      )
     )._unsafeUnwrap();
     expect(updated.updatedAt.getTime()).toBeGreaterThan(original.updatedAt.getTime());
     expect(updated.title).toBe(original.title);

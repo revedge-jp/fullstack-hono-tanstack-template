@@ -51,6 +51,39 @@ describe("tasks.advanceTask usecase", () => {
     }
   });
 
+  test("正常: 読んだ時点の status を expected としてリポジトリに渡す（楽観ロック）", async () => {
+    let receivedExpected: unknown;
+    const tasksRepository = buildRepo({
+      getById: () => okAsync(buildTask("in_progress")),
+      update: (task, expected) => {
+        receivedExpected = expected;
+        return okAsync(task);
+      },
+    });
+    const usecase = makeAdvanceTask({ tasksRepository });
+
+    const r = await usecase({ id: "task-1", ownerId: "user-1" });
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) {
+      expect(r.value.status).toBe("done");
+    }
+    expect(receivedExpected).toEqual({ status: "in_progress" });
+  });
+
+  test("異常: 読んだ後に他の更新が入っていたら Conflict を返す", async () => {
+    const tasksRepository = buildRepo({
+      getById: () => okAsync(buildTask("todo")),
+      update: () => errAsync("Conflict" as const),
+    });
+    const usecase = makeAdvanceTask({ tasksRepository });
+
+    const r = await usecase({ id: "task-1", ownerId: "user-1" });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error).toBe("Conflict");
+    }
+  });
+
   test("異常: done のタスクは AlreadyDone を返す", async () => {
     const tasksRepository = buildRepo({ getById: () => okAsync(buildTask("done")) });
     const usecase = makeAdvanceTask({ tasksRepository });

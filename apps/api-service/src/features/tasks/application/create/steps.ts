@@ -25,7 +25,7 @@ export function makeCreateTaskStep(deps: {
         deps.activityRecorder
           .recordTaskCreated({ id: task.id, title: task.title, ownerId: task.ownerId })
           .orElse((e) => {
-            deps.logger.warn({ err: e, taskId: task.id }, "activity の記録に失敗しました");
+            deps.logger.warn({ reason: e, taskId: task.id }, "activity の記録に失敗しました");
             return okAsync(undefined);
           })
           .map(() => task),
