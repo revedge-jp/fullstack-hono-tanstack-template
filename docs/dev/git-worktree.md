@@ -60,17 +60,10 @@ bash scripts/agent-worktree-setup.sh
 ## 手動 worktree（`bun run worktree`）は使わない
 
 `scripts/worktree.sh` は DB のポート・コンテナ名を main の `.env` から引き継がず固定値で書き込むため、
-`init-template.sh` 後のプロジェクトや同じマシンの別プロジェクトと DB が衝突する（削除予定）。人が手で
-worktree を作る場合も置き場所を `.claude/worktrees/<name>` にし、そのルートで
-`bash scripts/agent-worktree-setup.sh`（WorktreeCreate フックと同じセットアップ。冪等）を実行する:
-
-```bash
-git worktree add .claude/worktrees/<name> -b <branch> origin/main
-cd .claude/worktrees/<name> && bash scripts/agent-worktree-setup.sh
-```
+`init-template.sh` 後のプロジェクトや同じマシンの別プロジェクトと DB が衝突する（削除予定）。人が並行作業する
+ときも Claude Code の worktree（上）で作る。作成時のセットアップも、破棄時のポート・DB の片付けもフックが担う。
 
 ## worktree 共通の注意
-
 
 ### ビルド成果物
 
@@ -103,14 +96,8 @@ git log origin/main
 
 ### Q: worktree が削除できない
 
-```bash
-# 強制削除
-git worktree remove --force ../fullstack-hono-tanstack-template-feat-xxx
-
-# それでも失敗する場合
-rm -rf ../fullstack-hono-tanstack-template-feat-xxx
-git worktree prune
-```
+Claude Code の worktree は `ExitWorktree`（remove）で消す。WorktreeRemove フックがポートの登録と `wt_<name>` DB も
+片付ける。`git worktree remove` で直接消すとそれらが残る。
 
 ### Q: 「already checked out」エラー
 
