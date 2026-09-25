@@ -1,30 +1,35 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { createActivityRepository } from "@app/features/activity/infrastructure/activity.repository.drizzle";
-import { authUsers, createDb } from "@repo/db";
-import { inArray } from "drizzle-orm";
+import { createTransactionalDb } from "@app/test-helpers/transactional-db";
+import { authUsers, type Database } from "@repo/db";
 
-const { db, end } = createDb(process.env.DATABASE_URL ?? "");
-const activityRepository = createActivityRepository({ db });
+// 各テストは BEGIN → ROLLBACK で包まれる（test-helpers/transactional-db.ts）。
+const { getDb: getTx, end } = createTransactionalDb(process.env.DATABASE_URL ?? "");
 
-const OWNER_A = `int-test-activity-a-${crypto.randomUUID()}`;
-const OWNER_B = `int-test-activity-b-${crypto.randomUUID()}`;
+function getDb(): Database {
+  return getTx()!;
+}
 
-beforeAll(async () => {
+async function seedOwners(db: Database): Promise<{ ownerA: string; ownerB: string }> {
+  const ownerA = `int-test-activity-a-${crypto.randomUUID()}`;
+  const ownerB = `int-test-activity-b-${crypto.randomUUID()}`;
   await db.insert(authUsers).values([
-    { id: OWNER_A, name: "Activity User A", email: `${OWNER_A}@example.com` },
-    { id: OWNER_B, name: "Activity User B", email: `${OWNER_B}@example.com` },
+    { id: ownerA, name: "Activity User A", email: `${ownerA}@example.com` },
+    { id: ownerB, name: "Activity User B", email: `${ownerB}@example.com` },
   ]);
-});
+  return { ownerA, ownerB };
+}
 
 afterAll(async () => {
-  // activities は owner_id の FK cascade で消える
-  await db.delete(authUsers).where(inArray(authUsers.id, [OWNER_A, OWNER_B]));
   await end();
 });
 
 describe("ActivityRepository (実DB)", () => {
   test("record → list の往復で ownerId が保存される", async () => {
+    const db = getDb();
+    const activityRepository = createActivityRepository({ db });
+    const { ownerA: OWNER_A } = await seedOwners(db);
     const recorded = await activityRepository.record({
       ownerId: OWNER_A,
       kind: "task_created",
@@ -44,6 +49,9 @@ describe("ActivityRepository (実DB)", () => {
   });
 
   test("他ユーザーの activity は list に含まれない（オーナー分離）", async () => {
+    const db = getDb();
+    const activityRepository = createActivityRepository({ db });
+    const { ownerA: OWNER_A, ownerB: OWNER_B } = await seedOwners(db);
     const messageA = `Task "only-a" created ${crypto.randomUUID()}`;
     const recordedA = await activityRepository.record({
       ownerId: OWNER_A,
