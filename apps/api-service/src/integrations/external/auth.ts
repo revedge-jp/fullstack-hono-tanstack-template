@@ -1,6 +1,6 @@
 import type { AppConfig } from "@app/config";
 import { authAccounts, authSessions, authUsers, authVerifications, type Database } from "@repo/db";
-import { stringifyErrorSafe } from "@repo/logging";
+import { stringifyErrorSafe, stripBindParams } from "@repo/logging";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
@@ -16,15 +16,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 type BetterAuthLogLevel = "debug" | "info" | "warn" | "error";
 
 export type AuthLogger = Record<BetterAuthLogLevel, (obj: unknown, msg?: string) => void>;
-
-// DrizzleQueryError はメッセージ末尾に `\nparams: <バインド値>` を埋め込む。pino の redact は
-// キー単位でしか効かず文字列の中身には届かないため、ここで切り落とす(SQL 文は残す)。
-const BIND_PARAMS_MARKER = "\nparams:";
-
-function stripBindParams(message: string): string {
-  const markerIndex = message.indexOf(BIND_PARAMS_MARKER);
-  return markerIndex === -1 ? message : message.slice(0, markerIndex);
-}
 
 // PostgreSQL のデータ例外(SQLSTATE 22xxx。22P02 invalid input syntax 等)はメッセージに
 // 入力値そのものを含めるので、メッセージを出さずコードだけ残す。
