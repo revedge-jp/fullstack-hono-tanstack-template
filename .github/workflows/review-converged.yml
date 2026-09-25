@@ -57,7 +57,7 @@ jobs:
           # ものであるときだけ外す。
           # 注意: エージェントが bot トークンで PR を作る運用（claude-code-action 等）を導入するなら、
           # その bot はこのゲートが本来止めたい対象なので、除外を renovate[bot] だけに絞ること。
-          if [[ "$AUTHOR" == *'[bot]' ]] && [ -z "$(git log --format='%an' HEAD^1..HEAD^2 | grep -v '\[bot\]$')" ]; then
+          if [[ "$AUTHOR" == *'[bot]' ]] && ! git log --format='%an' HEAD^1..HEAD^2 | grep -qv '\[bot\]$'; then
             echo "bot のコミットだけの PR は対象外"; exit 0
           fi
           # 判定には base 側（HEAD^1）の判定スクリプトと一覧を使う。PR 側のものを使うと、同じ PR で
