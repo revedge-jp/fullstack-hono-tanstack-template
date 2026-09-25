@@ -209,7 +209,7 @@ skill と shadcn の agent skill）。**半年を目安に見直し**、機械�
 textlint で調べる。語彙は p1ass/textlint-rule-preset-ai-words-ja、誇張と冗長な言い回しは
 textlint-ja/textlint-rule-preset-ai-writing、プロダクト独自の語は `scripts/check/ai-words.json`、全角ダッシュは
 `scripts/check/ui-copy.mjs` の正規表現が見る。コメントは画面に出ないので対象外。Claude Code では TS / TSX を
-編集した直後にも `.claude/hooks/on-prose-edit.sh` が同じチェックをかけて指摘を返す。
+編集した直後にも `.claude/hooks/on-ts-edit.sh` が整形の後に同じチェックをかけて指摘を返す。
 
 - 指摘されたら文言を直す。その語が画面の用語として必要なときだけ、`.textlintrc.json` の `allows` に足す
   （検証器の変更なので、PR 本文の「検証器の変更理由」に理由を書く）
