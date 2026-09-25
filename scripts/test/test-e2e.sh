@@ -15,7 +15,24 @@ for arg in "$@"; do
   esac
 done
 
-export TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgresql://postgres:postgres@localhost:5433/app_db}"
+# テスト DB の場所は .env の TEST_DATABASE_URL を一次情報にする。
+# - 共有コンテナ方式の worktree（.claude/hooks/worktree-create.sh が作る。.env に WORKTREE_SHARED_DB=1）
+#   では、main の postgres-test コンテナ内の wt_<name> DB を指す。この worktree で
+#   `docker compose up postgres-test` を実行すると compose プロジェクトが別になり、main の
+#   コンテナとポートを奪い合って失敗するため、main の compose プロジェクトとして起動する。
+# - それ以外（main、旧スロット方式の worktree、CI）は従来どおり自分の compose で postgres-test を
+#   起動し、TEST_DATABASE_URL 未設定なら TEST_DATABASE_PORT（既定 5433）から組み立てる。
+env_value() {
+  local key="$1" value
+  value="$(grep -E "^${key}=" "$ROOT_DIR/.env" 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+  value="${value%$'\r'}"
+  value="${value//\"/}"
+  echo "${value// /}"
+}
+SHARED_DB="$(env_value WORKTREE_SHARED_DB)"
+TEST_DATABASE_URL_FROM_ENV="$(env_value TEST_DATABASE_URL)"
+TEST_DATABASE_PORT_FROM_ENV="$(env_value TEST_DATABASE_PORT)"
+export TEST_DATABASE_URL="${TEST_DATABASE_URL:-${TEST_DATABASE_URL_FROM_ENV:-postgresql://postgres:postgres@localhost:${TEST_DATABASE_PORT_FROM_ENV:-5433}/app_db}}"
 
 WRANGLER_JSONC="$ROOT_DIR/apps/client/wrangler.jsonc"
 DEV_VARS="$ROOT_DIR/apps/client/.dev.vars"
@@ -37,7 +54,12 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> Starting test database..."
-docker compose -f "$ROOT_DIR/docker-compose.yml" up -d postgres-test --wait
+if [ "$SHARED_DB" = "1" ]; then
+  MAIN_ROOT="$(cd "$ROOT_DIR" && cd "$(git rev-parse --git-common-dir)/.." && pwd)"
+  docker compose --project-directory "$MAIN_ROOT" up -d --no-recreate postgres-test --wait
+else
+  docker compose -f "$ROOT_DIR/docker-compose.yml" up -d postgres-test --wait
+fi
 
 echo "==> Running drizzle migrations..."
 cd "$ROOT_DIR/packages/database"

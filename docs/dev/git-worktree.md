@@ -2,7 +2,67 @@
 
 このドキュメントでは、git worktree を使った並行開発のワークフローについて説明します。
 
-## 概要
+worktree の作り方は2つある。**エージェント（Claude Code）が使うのは前者**で、後者は人間が
+長く使う作業ディレクトリを手で作る場合のもの。
+
+| 方式 | 置き場所 | セットアップ | DB |
+|---|---|---|---|
+| Claude Code の worktree（`EnterWorktree`） | `.claude/worktrees/<name>` | WorktreeCreate フックが自動 | main の共有コンテナ内の `wt_<name>` |
+| 手動 worktree（`bun run worktree`） | `../<project>-<branch>` | `scripts/worktree.sh` | worktree ごとに起動 |
+
+## Claude Code の worktree（`.claude/worktrees/<name>`）
+
+`.claude/settings.json` に登録した2つのフックが作成と破棄を担う。
+
+- **WorktreeCreate**（`.claude/hooks/worktree-create.sh`）: `origin/main` から `claude/<name>` を
+  分岐 → CLIENT/API ポートの割り当て → main の共有 Postgres（postgres / postgres-test）内に
+  `wt_<name>` DB を作成 → main の `.env` をコピーして worktree 固有の値に書き換え → `bun install` →
+  マイグレーション（dev/test）。DB まで用意できたときだけ `.env` に `WORKTREE_DB_READY=1` を書く
+- **WorktreeRemove**（`.claude/hooks/worktree-remove.sh`）: `git worktree remove` → `wt_<name>` DB の
+  DROP → ポート割り当ての解放。ブランチは消さない（未 push の作業を守るため）
+
+### フックの性質（編集するときに読む）
+
+- **WorktreeCreate は置換フック**。設定されていると Claude Code は自前の `git worktree add` を実行せず、
+  フックが worktree を作って**絶対パスだけを stdout に出す**ことを期待する。進捗ログや `bun install`
+  の出力を stdout に出すと worktree 作成が壊れるので、スクリプトは実 stdout を fd 3 に退避している
+- 置換フックなので、途中で異常終了すると「DB の無い worktree」ではなく「worktree が作られない」になる。
+  Docker 停止中・main に `.env` が無い・共有コンテナの名前衝突では DB だけ飛ばして成功させる
+- フックは **main チェックアウトのコピー**（`$CLAUDE_PROJECT_DIR`）が実行される。設定の読み込みも
+  セッション開始時なので、フックを変更したら main を更新して新しいセッションで確認する
+- 変数の直後に全角文字を続けるときは `${VAR}` と書く（macOS の bash 3.2 は UTF-8 ロケールで全角文字の
+  先頭バイトを変数名の一部と解釈し、unbound variable で落ちる）
+
+### DB を分割する理由と注意
+
+worktree ごとにコンテナを立てる旧方式（スロット方式）は、使い捨ての worktree が増えるたびにコンテナと
+volume が積み上がる。共有コンテナ内に DB を1つ切る方式なら増えない。
+
+- worktree から `db:up` / `db:down` を実行しない（compose プロジェクトが別になりポートを奪い合う）。
+  `.env` のコンテナ名・volume 名は一意なダミーに書き換えてあるので、誤って実行しても main の
+  volume は巻き込まない
+- **main で `db:down` すると全 worktree の `wt_*` DB が消える**。worktree のルートで
+  `bash scripts/agent-worktree-setup.sh` を実行すれば作り直せる
+- main の `.env` のコンテナ名・volume 名が、このテンプレートから作った他プロジェクトと同じ既定値
+  （`app_postgres` / `app-postgres-data` 等）だと衝突する。フックは既存のコンテナ・volume が別の compose
+  プロジェクトの持ち物なら共有 Postgres に触れずに DB を飛ばす（他プロジェクトの稼働中 DB の volume を
+  2つ目の Postgres がマウントするとデータが壊れる）。main の `.env` で固有の値に変えてから復旧する
+- `agent-a*` / `wf_*` / `job-*` / `bg-*` の機械生成名（サブエージェント・ワークフロー）は DB を作らない。
+  必要なら `CLAUDE_WORKTREE_FULL_SETUP=1`
+
+### 復旧
+
+フックが発火しなかった・DB を飛ばした worktree は、worktree のルートで次を実行する（冪等）:
+
+```bash
+bash scripts/agent-worktree-setup.sh
+```
+
+旧方式（`.env` の `POSTGRES_CONTAINER_NAME` が `_wt<数字>` で終わる）の worktree はそのまま使える。
+`ExitWorktree remove` はこの方式を片付けずに止まり、手順（worktree のルートで `docker compose down -v`
+→ `git worktree remove`）を表示する。
+
+## 手動 worktree（`bun run worktree`）
 
 git worktree を使用すると、同じリポジトリの複数のブランチを**別々のディレクトリで同時に作業**できます。
 
@@ -137,7 +197,9 @@ POSTGRES_TEST_VOLUME_NAME="postgres-test-data_slot1"
 
 ### 1. AI エージェント並列開発
 
-複数のエディタウィンドウ（または Claude Code セッション）で同時に機能開発を行う場合:
+Claude Code のセッションを並列に走らせるなら、各セッションで `EnterWorktree` を使う（上の
+「Claude Code の worktree」。DB とポートはフックが割り当てる）。以下は、人間が複数のエディタ
+ウィンドウで長く使う作業ディレクトリを手で作る場合:
 
 ```bash
 # 開発スロットを作成

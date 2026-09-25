@@ -9,13 +9,18 @@
 # 使い方: source "<scripts ディレクトリ>/lib/db-setup.sh"; setup_database
 # （packages/database が無い場所では何もしない）
 
+is_hook_worktree() {
+  [[ "$PWD" == */.claude/worktrees/* ]] && grep -qE '^WORKTREE_SHARED_DB=1$' .env 2>/dev/null
+}
+
 # .env が無いと `dotenv -e .env` は素通りし、drizzle-kit が「DATABASE_URL is not set」で落ちる
 # だけになって原因（.env 不在）に辿り着けない。先に検出して復旧手順を出す。
 preflight_env() {
   [[ -f .env ]] && return 0
   echo "❌ .env がありません"
   if [[ "$PWD" == */.claude/worktrees/* ]]; then
-    echo "   💡 worktree のセットアップを実行してください: bash scripts/agent-worktree-setup.sh"
+    echo "   💡 この worktree は WorktreeCreate フックが .env を生成するはずです。冪等に再実行してください:"
+    echo "      bash scripts/agent-worktree-setup.sh"
   else
     echo "   💡 cp .env.example .env"
   fi
@@ -25,6 +30,13 @@ preflight_env() {
 # 失敗時の切り分け。drizzle-kit は接続失敗の理由を出力しない（スピナーのまま exit 1）ので、
 # .env の DATABASE_URL の host:port へ TCP 疎通して「DB 未起動」を切り分ける。
 print_migrate_hint() {
+  # フック管理の worktree で DB 未作成（Docker 停止中に作られた等）なら、必要なのは db:up ではなく
+  # フックの再実行。WORKTREE_DB_READY は worktree-create.sh が DB 作成成功時だけ書く。
+  if is_hook_worktree && ! grep -qE '^WORKTREE_DB_READY=1$' .env; then
+    echo "   💡 この worktree の DB はまだ作られていません。フックを冪等に再実行してください:"
+    echo "      bash scripts/agent-worktree-setup.sh"
+    return 0
+  fi
   local url host port
   url="$(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2- | tr -d '"' || true)"
   url="${url%%\?*}"  # クエリ文字列（?sslmode=... 等）に @ が入っても host を誤らないよう先に落とす
@@ -33,6 +45,9 @@ print_migrate_hint() {
   port="$(printf '%s' "$url" | sed -nE 's#^[a-z]+://(.*@)?[^:/]+:([0-9]+).*#\2#p')"
   if [[ -n "$host" && -n "$port" ]] && ! (exec 3<>"/dev/tcp/$host/$port") 2>/dev/null; then
     echo "   💡 $host:$port に接続できません。データベースが起動していない可能性があります: bun run db:up"
+    if is_hook_worktree; then
+      echo "      （フック管理の worktree なら main 側で bun run db:up）"
+    fi
   fi
 }
 

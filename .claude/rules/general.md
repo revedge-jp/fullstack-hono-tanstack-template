@@ -23,34 +23,40 @@
 - ユーザーが引数なしで `/code-review` を打った場合、**worktree で作業中なら対象がずれている
   可能性を先に伝える**。黙って結果を報告すると、無関係な指摘を本命のものとして扱ってしまう
 
-### 新しい worktree では、実装前に `agent-worktree-setup.sh` を必ず手動実行する
+### worktree のセットアップはフックが行う — ただし発火を検証してから実装に入る
 
-`.claude/worktrees/<name>` を新規作成した直後（`EnterWorktree` 経由・`git worktree add` 経由
-のどちらでも）、DB 用の `.env` は自動生成されない（`EnterWorktree` 自体が自動でセットアップ
-してくれるわけではない）。
+`EnterWorktree` で `.claude/worktrees/<name>` を作ると、WorktreeCreate フック
+（`.claude/hooks/worktree-create.sh`）が `origin/main` からの分岐・ポート割り当て・main の共有
+Postgres 内の専用 DB（`wt_<name>`、dev/test）・`.env`・`bun install`・マイグレーションまで済ませる。
+`ExitWorktree` の `remove` では WorktreeRemove フックが DB とポート割り当てを片付ける（ブランチは残す）。
 
-`.env` が無い状態のまま実装・コミットまで進んでも `bun run typecheck` / `lint` / `test:unit`
-は通ってしまうため気づけない。`dotenv -e .env` は対象ファイルが無くてもエラーにならず、
-環境変数を1つも読み込まないまま黙って後続コマンドへ進む。結果、`DATABASE_URL` /
-`TEST_DATABASE_URL` が空のまま `drizzle-kit migrate` が走り、**`git push` の pre-push フック
-（`check-all.sh` の Tests ステップ）がここで初めて失敗する** — エラーメッセージからは
-「`.env` が無いこと」が直接には読み取れないため、原因調査で時間を使いやすい。
+**フックが発火しない・DB を用意できないことがある**（Docker 停止中、使い捨て名の判定、共有コンテナの
+名前が他プロジェクトと衝突、`git worktree add` 直打ち）。`.env` が無い状態のまま実装・コミットまで
+進んでも `bun run typecheck` / `lint` / `test:unit` は通ってしまい、`dotenv -e .env` も対象ファイルが
+無くてもエラーにならないため、**`git push` の pre-push フック（`check-all.sh` の Tests ステップ）で
+初めて、原因の読み取れない形で失敗する**。
 
-`scripts/agent-worktree-setup.sh` が、他の worktree と衝突しないポート・DB コンテナを
-自動割り当てして `.env` を作成し、`bun install` から `db:migrate` まで済ませる。
-`.claude/worktrees/<name>` 直下に入ったら、実装に着手する前にまずこれを実行する:
+実装前に `/start-dev` の 3b の検証手順を通す（`.env` に `WORKTREE_SHARED_DB=1` と
+`WORKTREE_DB_READY=1` があるか）。無ければ worktree のルートで冪等に復旧する:
 
 ```bash
 bash scripts/agent-worktree-setup.sh
 ```
 
+- worktree から `db:up` / `db:down` を実行しない（DB は main の共有コンテナ。compose プロジェクトが
+  別になりポートを奪い合う）。逆に **main で `db:down` すると全 worktree の `wt_*` DB が消える**
+- main の `.env` の `POSTGRES_CONTAINER_NAME` / `POSTGRES_TEST_CONTAINER_NAME` / `POSTGRES_VOLUME_NAME`
+  は、このテンプレートから作った他プロジェクトと同じ既定値（`app_*`）のままだと衝突する。フックは
+  衝突を検出すると共有 Postgres に触れず DB を飛ばす（他プロジェクトの稼働中 DB の volume を
+  2つ目の Postgres がマウントするのを防ぐため）
+
 ### `.worktreeinclude` で `.env` を worktree に複製しない
 
 Claude Code の `.worktreeinclude` は gitignore 済みファイルを新 worktree へコピーする仕組みだが、
-このリポジトリの `.env` は worktree ごとに**別のポート・別の DB コンテナ**を割り当てる前提
-（`agent-worktree-setup.sh` がスロットを決めて生成する）。メインの `.env` をコピーすると 2 つの
-worktree が同じ DB とポートを取り合い、テストが互いを壊す。`.worktreeinclude` は置かず、
-セットアップスクリプトを実行する運用を維持する。
+このリポジトリの `.env` は worktree ごとに**別のポート・別の DB**（共有コンテナ内の `wt_<name>`）を
+指す前提で、フックが main の `.env` をコピーしてから worktree 固有の値に書き換えるので不要。置くと、
+フックが発火しなかったときに main の `.env` がそのまま使われ、`.env` の有無による未セットアップの
+検出も効かなくなったうえで、main と同じ DB・ポートを取り合ってテストが互いを壊す。
 
 ### `git diff main` はローカル main の鮮度に依存する（worktree の有無を問わない）
 
