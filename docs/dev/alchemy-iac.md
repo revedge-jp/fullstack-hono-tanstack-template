@@ -28,6 +28,10 @@
 ③ bunx alchemy deploy --stage <target>   # Worker デプロイ（全リソース reconcile）
 ```
 
+① は Worker 以降を宣言しないので、`alchemy.run.ts` は ① では `app.finalize()` を呼ばない。finalize は
+「state にあるが今回宣言されなかったリソース」を削除するため、呼ぶと稼働中の Worker・カスタムドメイン・
+WAF ルールが ② の間消える。宣言から外したリソースの削除は ③ の finalize が行う。
+
 必要な GitHub Environment Secrets / Variables は
 [デプロイガイド](../deploy/cloudflare-workers.md#2-github-environments-の設定)を参照。
 
