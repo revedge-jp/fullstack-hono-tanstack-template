@@ -34,6 +34,8 @@ type WarnLogger = { warn: (obj: unknown, msg?: string) => void };
  * 区別がつかない。error / err キーは使わない（Errors は toHttp の 500 で 1 件数えるので二重にしない）。
  * Error 本体は渡さない: DrizzleQueryError は message・stack・params にバインド値を持つので、
  * stringifyErrorSafe で切り落とした文字列と SQLSTATE（causeCode）だけにする（.claude/rules/logging.md）。
+ * container のロガーを受け取るので requestId は付かない（付くのは requestLogger ミドルウェアが作る子ロガー
+ * だけ）。toHttp の 500 ログとは operation と時刻で突き合わせる。
  */
 export function toUnexpectedDbError(logger: WarnLogger, operation: string) {
   return (e: unknown): "Unexpected" => {

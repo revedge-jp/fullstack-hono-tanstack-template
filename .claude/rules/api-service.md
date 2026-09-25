@@ -88,7 +88,8 @@ afterAll(async () => {
 
 test("...", async () => {
   const db = getDb(); // per-test トランザクション
-  const repository = createTasksRepository({ db });
+  // logger は DB 障害の原因を残すのに使う（toUnexpectedDbError）。テストでは createLoggerSpy で足りる
+  const repository = createTasksRepository({ db, logger: createLoggerSpy().logger });
   const ownerId = await seedOwner(db); // シードもこの tx で作る（ROLLBACK で消える）
 });
 ```
