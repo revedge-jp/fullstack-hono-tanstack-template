@@ -229,6 +229,11 @@ describe("isProductionEnv（SSR のエラー本文・CSP・HSTS の切り替え�
     expect(isProductionEnv({ NODE_ENV: "production" })).toBe(true);
   });
 
+  test("想定外の値（staging・空文字）も本番扱い", () => {
+    expect(isProductionEnv({ NODE_ENV: "staging" })).toBe(true);
+    expect(isProductionEnv({ NODE_ENV: "" })).toBe(true);
+  });
+
   test("development / test と明示したときだけ開発扱い", () => {
     expect(isProductionEnv({ NODE_ENV: "development" })).toBe(false);
     expect(isProductionEnv({ NODE_ENV: "test" })).toBe(false);

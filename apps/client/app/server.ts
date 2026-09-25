@@ -40,9 +40,11 @@ type CFBindings = Record<string, string | { connectionString: string } | undefin
 
 // 未設定は本番扱い（api-service の config.ts と同じ fail-closed）。開発扱いに倒すと、NODE_ENV を
 // 渡し忘れたデプロイで 500 の本文にスタックが出て、CSP が緩み、HSTS が付かない。
-// ローカルは .env（.dev.vars）の NODE_ENV=development で明示する。
+// ローカルは .env（.dev.vars）の NODE_ENV=development で明示する。development / test 以外
+// （"staging" や空文字などの想定外の値）も本番側に倒す。
 export function isProductionEnv(env: { NODE_ENV?: string } | undefined): boolean {
-  return (env?.NODE_ENV ?? "production") === "production";
+  const nodeEnv = env?.NODE_ENV;
+  return nodeEnv !== "development" && nodeEnv !== "test";
 }
 
 // SSR（非 /api/*）レスポンス用のセキュリティヘッダー。/api/* は Hono 側の secureHeaders() が担う。
