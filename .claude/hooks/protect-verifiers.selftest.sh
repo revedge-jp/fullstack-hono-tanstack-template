@@ -41,6 +41,8 @@ expect "Grep で .env を名指しすると deny" Grep "$ROOT/.env" deny "$ROOT"
 expect "Grep の通常パスは素通り" Grep "$ROOT/apps" "" "$ROOT" path
 out=$(printf '{"tool_name":"Grep","tool_input":{"path":"%s","glob":".env*"}}' "$ROOT" | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")
 if printf '%s' "$out" | grep -q '"deny"'; then echo "✅ hook: Grep の glob で .env を指定すると deny"; else echo "❌ hook: Grep の glob .env* が素通り"; FAIL=1; fi
+out=$(printf '{"tool_name":"Grep","tool_input":{"glob":".env.example"}}' | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")
+if [ -z "$out" ]; then echo "✅ hook: Grep の glob .env.example は素通り"; else echo "❌ hook: Grep の glob .env.example を止めた"; FAIL=1; fi
 out=$(printf '{"tool_name":"Grep","tool_input":{"glob":"*.ts"}}' | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")
 if [ -z "$out" ]; then echo "✅ hook: Grep の通常の glob は素通り"; else echo "❌ hook: Grep の glob *.ts を止めた"; FAIL=1; fi
 expect "NotebookEdit も検証器なら ask" NotebookEdit "$ROOT/scripts/check/x.ipynb" ask "$ROOT" notebook_path

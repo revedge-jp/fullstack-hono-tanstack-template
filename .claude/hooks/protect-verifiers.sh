@@ -22,8 +22,9 @@ INPUT=$(cat)
 TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 GLOB=$(printf '%s' "$INPUT" | jq -r '.tool_input.glob // ""' 2>/dev/null || echo "")
 case "$GLOB" in
+  .env.example|*/.env.example) ;;
   *.env*|*.dev.vars*)
-    jq -cn --arg r "glob「$GLOB」は秘密情報(.env / .dev.vars)を検索対象にするため使いません。設定項目は .env.example を参照してください" \
+    jq -cn --arg r "glob「${GLOB}」は秘密情報(.env / .dev.vars)を検索対象にするため使いません。設定項目は .env.example を参照してください" \
       '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
     exit 0 ;;
 esac

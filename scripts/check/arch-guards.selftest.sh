@@ -58,7 +58,7 @@ expect_guard() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture�
   if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "$5"; then
     echo "✅ $1"
   else
-    echo "❌ $1: $2 が期待した違反 '$5' を検出できませんでした（ガードが壊れている可能性。exit=$rc）"
+    echo "❌ $1: $2 が期待した違反 '$5' を検出できませんでした（ガードが壊れている可能性。exit=${rc}）"
     FAIL=1
   fi
   rm -f "$3"
@@ -549,7 +549,7 @@ if [ "$e2e_rc" -ne 0 ] && [ "$e2e_headers" -eq "$defined_count" ] &&
   printf '%s' "$e2e_out" | grep -qF "usecase.test.ts がありません"; then
   echo "✅ arch-guards.sh が全 ${defined_count} 検査を実行し、違反で失敗する"
 else
-  echo "❌ arch-guards.sh: exit=$e2e_rc、実行した検査 ${e2e_headers}/${defined_count}（全検査を実行して違反で失敗するはず）"
+  echo "❌ arch-guards.sh: exit=${e2e_rc}、実行した検査 ${e2e_headers}/${defined_count}（全検査を実行して違反で失敗するはず）"
   FAIL=1
 fi
 rm -rf "$SELFTEST_ACTION_DIR"
@@ -573,7 +573,7 @@ if ! printf '%s' "$stop_out" | grep -qF "export * の使用が禁止"; then
 elif [ "$stop_rc" -ne 0 ] && [ "$stop_headers" -eq "$stop_index" ]; then
   echo "✅ arch-guards.sh が途中の違反（${STOP_GUARD}、${stop_index} 番目）で止まる"
 else
-  echo "❌ arch-guards.sh: ${stop_index} 番目の $STOP_GUARD の違反で exit=$stop_rc、実行した検査 ${stop_headers}（そこで止まるはず。本体の set -e が外れていないか）"
+  echo "❌ arch-guards.sh: ${stop_index} 番目の $STOP_GUARD の違反で exit=${stop_rc}、実行した検査 ${stop_headers}（そこで止まるはず。本体の set -e が外れていないか）"
   FAIL=1
 fi
 rm -f "$D/application/__selftest_export_star.ts"
@@ -610,7 +610,7 @@ export const selftestDcShared = advanceTask;'
   DC_CLIENT_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/client 2>/dev/null || true)
   for rule in client-cross-features-tasks client-shared-to-features; do
     if printf '%s' "$DC_CLIENT_OUT" | grep -q "$rule"; then
-      echo "✅ dep-cruiser: $rule（@/ alias 経由）"
+      echo "✅ dep-cruiser: ${rule}（@/ alias 経由）"
     else
       echo "❌ dep-cruiser: $rule が @/ alias 経由の違反を検出しませんでした（tsconfig.depcruise.json の paths を確認）"
       FAIL=1
