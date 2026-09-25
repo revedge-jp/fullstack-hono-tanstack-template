@@ -12,7 +12,7 @@
 // 全角ダッシュだけはここの正規表現で見る。kuromoji は前後の文字次第でダッシュを名詞 1 つにも記号 2 つにも
 // 分けるため、辞書の形態素では拾えない。前後の空白の有無は問わない。
 import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { relative, resolve } from "node:path";
 
 import { createLinter, loadTextlintrc } from "textlint";
 import ts from "typescript";
@@ -89,7 +89,12 @@ function isNumberRange(text, match) {
   return DIGIT.test(before) && DIGIT.test(after);
 }
 
-const files = collectClientSources(ROOTS, "scripts/check/ui-copy.mjs");
+// 引数にファイルを渡すと、そのうち走査対象に入るものだけを見る（編集直後に呼ぶ .claude/hooks/on-prose-edit.sh 用）。
+// 対象外のファイルだけなら何も見ずに成功する。
+const requested = new Set(process.argv.slice(2).map((arg) => relative(".", resolve(arg))));
+const sources = collectClientSources(ROOTS, "scripts/check/ui-copy.mjs");
+const files =
+  requested.size === 0 ? sources : sources.filter((file) => requested.has(relative(".", file)));
 const texts = files.flatMap(extractTexts);
 
 // 文字列 1 つを 1 段落（1 行）にして、lintText 1 回にまとめる（辞書の読み込みを 1 回で済ませるため）。
