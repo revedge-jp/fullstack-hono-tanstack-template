@@ -41,10 +41,15 @@ expect "Grep で .env を名指しすると deny" Grep "$ROOT/.env" deny "$ROOT"
 expect "Grep の通常パスは素通り" Grep "$ROOT/apps" "" "$ROOT" path
 out=$(printf '{"tool_name":"Grep","tool_input":{"path":"%s","glob":".env*"}}' "$ROOT" | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")
 if printf '%s' "$out" | grep -q '"deny"'; then echo "✅ hook: Grep の glob で .env を指定すると deny"; else echo "❌ hook: Grep の glob .env* が素通り"; FAIL=1; fi
-out=$(printf '{"tool_name":"Grep","tool_input":{"glob":".env.example"}}' | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")
-if [ -z "$out" ]; then echo "✅ hook: Grep の glob .env.example は素通り"; else echo "❌ hook: Grep の glob .env.example を止めた"; FAIL=1; fi
-for g in ".env */.env.example" ".env,x/.env.example" ".dev.vars x/.env.example" "{.env,a/.env.example}"; do
+for g in ".env.example" "apps/.env.example" "**/.env.example"; do
   out=$(printf '{"tool_name":"Grep","tool_input":{"glob":"%s"}}' "$g" | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")
+  if [ -z "$out" ]; then echo "✅ hook: Grep の glob「${g}」は素通り"; else echo "❌ hook: Grep の glob「${g}」を止めた"; FAIL=1; fi
+done
+for g in ".env */.env.example" ".env,x/.env.example" ".dev.vars x/.env.example" "{.env,a/.env.example}" \
+  "$(printf '.env\r*/.env.example')" '.env,x\\{/.env.example' "$(printf '.env\xe3\x80\x80*/.env.example')" \
+  "$(printf '.env\n.env.example')"; do
+  # 制御文字を含む glob もあるので JSON は jq で組み立てる（実際のペイロードと同じくエスケープされる）
+  out=$(jq -cn --arg g "$g" '{tool_name:"Grep",tool_input:{glob:$g}}' | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")
   if printf '%s' "$out" | grep -q '"deny"'; then echo "✅ hook: Grep の glob「${g}」は deny"; else echo "❌ hook: Grep の glob「${g}」が素通り"; FAIL=1; fi
 done
 out=$(printf '{"tool_name":"Grep","tool_input":{"glob":"*.ts"}}' | CLAUDE_PROJECT_DIR="$ROOT" bash "$HOOK")

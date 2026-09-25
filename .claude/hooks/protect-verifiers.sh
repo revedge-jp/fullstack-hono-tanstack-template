@@ -21,24 +21,22 @@ set -uo pipefail
 INPUT=$(cat)
 TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 GLOB=$(printf '%s' "$INPUT" | jq -r '.tool_input.glob // ""' 2>/dev/null || echo "")
-# Grep ツールは glob を空白で区切り、{} を含まない部分はさらにカンマで区切って、それぞれを rg の --glob に
-# 渡す。全体を 1 つの文字列として判定すると `.env */.env.example` のような並べ方で .env を通してしまうので、
-# 同じ規則で分けて要素ごとに見る(set -f: 分割した要素をパス名として展開させない)
+# Grep ツールは glob を空白(JS の \s)で区切り、{} を含まない部分はカンマでも区切って rg の --glob に渡す。
+# その分け方を bash で真似るのは近似にしかならず(\r・全角スペース・片側だけの { で食い違う)、並べ方で .env を
+# 通してしまうので、分けずに判定する: .env / .dev.vars を含む glob はすべて deny し、例外は glob 全体が
+# 区切り文字を含まない 1 つの「…/.env.example」だけ(除外指定 !.env と並べた形も止まるが、安全側に倒す)
 GLOB_DENY=0
-set -f
-for part in $GLOB; do
-  case "$part" in
-    *'{'*) pieces="$part" ;;
-    *) pieces="${part//,/ }" ;;
+case "$GLOB" in
+  *.env*|*.dev.vars*) GLOB_DENY=1 ;;
+esac
+if [ "$GLOB_DENY" = "1" ]; then
+  # 文字列全体で判定する(grep は行ごとに一致するので、改行を挟んだ glob を通してしまう)。
+  # 許す文字(英数字 _ . * / -)以外が 1 つでも残れば、区切りか細工とみなして deny のまま
+  GLOB_REST=$(printf '%s' "$GLOB" | LC_ALL=C tr -d 'A-Za-z0-9_.*/-')
+  case "$GLOB" in
+    .env.example|*/.env.example) [ -z "$GLOB_REST" ] && GLOB_DENY=0 ;;
   esac
-  for piece in $pieces; do
-    case "$piece" in
-      .env.example|*/.env.example) ;;
-      *.env*|*.dev.vars*) GLOB_DENY=1 ;;
-    esac
-  done
-done
-set +f
+fi
 if [ "$GLOB_DENY" = "1" ]; then
   jq -cn --arg r "glob「${GLOB}」は秘密情報(.env / .dev.vars)を検索対象にするため使いません。設定項目は .env.example を参照してください" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
