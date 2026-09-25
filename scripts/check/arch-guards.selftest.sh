@@ -586,6 +586,57 @@ for expected in "nope.sh" "no-such-script" "「存在しない見出し」" \
   fi
 done
 
+echo "=== PostToolUse フック(文言チェック)自己テスト ==="
+# expect_edit_hook <ラベル> <フック> <fixture パス> <fixture 内容> <期待する終了コード> [stderr に含むべき文字列]
+# CLAUDE_PROJECT_DIR はリポジトリの外を指させる。worktree では編集したファイルが CLAUDE_PROJECT_DIR の
+# 外にあるので、フックがファイル自身の場所からルートを求めていることをここで確かめる。
+expect_edit_hook() {
+  mkfix "$3" "$4"
+  local out rc
+  out=$(printf '{"tool_input":{"file_path":"%s"}}' "$ROOT/$3" |
+    CLAUDE_PROJECT_DIR="$(mktemp -d)" bash ".claude/hooks/$2" 2>&1)
+  rc=$?
+  if [ "$rc" -eq "$5" ] && { [ -z "${6:-}" ] || printf '%s' "$out" | grep -qF "$6"; }; then
+    echo "✅ $1"
+  else
+    echo "❌ $1: $2 の結果が想定と違います（exit=$rc、期待 $5）"
+    printf '%s\n' "$out"
+    FAIL=1
+  fi
+  rm -f "$3"
+}
+expect_edit_hook "文言フック: 文書の指摘を返す" on-prose-edit.sh "docs/__selftest_prose.md" \
+  $'# selftest\n\nこの設定が効きます。\n' 2 '"効く" は'
+expect_edit_hook "文言フック: 指摘の無い文書は通す" on-prose-edit.sh "docs/__selftest_prose.md" \
+  $'# selftest\n\n設定を保存します。\n' 0
+expect_edit_hook "文言フック: 対象外のファイルは見ない" on-prose-edit.sh "__selftest_prose.md" \
+  $'# selftest\n\nこの設定が効きます。\n' 0
+expect_edit_hook "TS 編集フック: 整形の後に画面文言の指摘を返す" on-ts-edit.sh \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <p>この設定が効きます</p>;' 2 '違反 [ai-words-ja/no-ai-words]'
+# シンボリックリンク経由のパスでも見逃さない（git rev-parse は実体のパスを返すので、そのまま比べると一致しない）
+SELFTEST_LINK_DIR=$(mktemp -d)
+ln -s "$ROOT" "$SELFTEST_LINK_DIR/repo"
+expect_link_hook() { # $1 フック, $2 fixture パス, $3 fixture 内容
+  mkfix "$2" "$3"
+  local out rc
+  out=$(printf '{"tool_input":{"file_path":"%s"}}' "$SELFTEST_LINK_DIR/repo/$2" |
+    CLAUDE_PROJECT_DIR="$(mktemp -d)" bash ".claude/hooks/$1" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 2 ]; then
+    echo "✅ $1: シンボリックリンク経由のパスでも指摘を返す"
+  else
+    echo "❌ $1: シンボリックリンク経由のパスで指摘を返しませんでした（exit=$rc）"
+    printf '%s\n' "$out"
+    FAIL=1
+  fi
+  rm -f "$2"
+}
+expect_link_hook on-prose-edit.sh "docs/__selftest_prose.md" $'# selftest\n\nこの設定が効きます。\n'
+expect_link_hook on-ts-edit.sh "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <p>この設定が効きます</p>;'
+rm -rf "$SELFTEST_LINK_DIR"
+
 echo "=== PreToolUse フック(検証器保護)自己テスト ==="
 if ! bash .claude/hooks/protect-verifiers.selftest.sh; then
   FAIL=1

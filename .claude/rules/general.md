@@ -60,6 +60,7 @@ PR がある場合は PR 番号を渡す方がより確実。
 
 - 既存ファイルのインデント（タブ/スペース、幅）は必ず維持する。変換・混在をしない。
 - 文書（AGENTS.md・`.claude/rules`・`.claude/commands`・`docs/`）は `bun run lint:prose` が pre-push と CI でチェックする。
+  Claude Code では編集の直後に `.claude/hooks/on-prose-edit.sh` が同じチェックをかけて指摘を返すので、その場で直す。
   比喩に使った動詞や硬い名詞を指摘されたら、何がどうなるかを書く言葉に直す（例は `.claude/rules/client.md` の「UI 文言の書き方」）。
   外部の文言をそのまま引用する箇所だけ `<!-- textlint-disable -->` 〜 `<!-- textlint-enable -->` で囲んでよい。
 - コメントは非自明な理由・前提・注意点のみ。行動説明コメントや自明なコメントは書かない。
