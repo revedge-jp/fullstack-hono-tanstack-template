@@ -12,7 +12,9 @@ name: Preview
 #
 # 注意: fork からの PR には secrets が渡らないため preview は動かない（GitHub の仕様。
 # 同一リポジトリのブランチからの PR 専用）。preview ラベルは信頼できる PR にだけ付けること
-# （ビルドは PR のコードを secrets が見える環境で実行するため）。
+# （ビルドは PR のコードを secrets が見える環境で実行するため）。ALCHEMY_STATE_TOKEN はアカウント内の
+# 全 state を読み書きできるので、production と同じ CF アカウントでは PR のコードが production の state に
+# 届く。preview を使うなら production は別アカウントに置く（docs/dev/alchemy-iac.md「state と資格情報の権限境界」）。
 on:
   pull_request:
     types: [labeled, unlabeled, synchronize, closed]

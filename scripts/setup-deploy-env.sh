@@ -59,8 +59,8 @@ CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit +
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
 PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（staging / production 用は org: create_databases + 全 DB read/write/delete 権限、無期限）。staging / production では共有可。preview は専用に発行し、権限を preview が使う DB に絞る。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 PLANETSCALE_SERVICE_TOKEN|secret|同サービストークンの secret
-ALCHEMY_STATE_TOKEN|secret|Alchemy state store の認証トークン。CF アカウント内の全プロジェクト・全 stage で【同一の値】にすること
-ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。プロジェクトごとに固有の値を推奨（openssl rand -base64 32 で生成）
+ALCHEMY_STATE_TOKEN|secret|Alchemy state store の認証トークン。CF アカウント内の全プロジェクト・全 stage で【同一の値】にすること（このトークンでアカウント内の全 state を読み書きできる。docs/dev/alchemy-iac.md「state と資格情報の権限境界」）
+ALCHEMY_PASSWORD|secret|Alchemy state 内 secrets の暗号化パスワード。【stage ごとに別の値】にする（少なくとも production は共有しない。openssl rand -base64 32 で生成）。既に deploy した stage の値は変えない（state 内の secrets を復号できずデプロイが止まる）
 BETTER_AUTH_SECRET|secret|Better Auth のセッション署名鍵（openssl rand -base64 32 で生成）。【stage ごとに別の値】にすること
 GOOGLE_CLIENT_ID|secret|Google OAuth クライアント ID。staging / production で別クライアント推奨。作成時のクライアント名は「<APP_NAME>-<stage>」推奨（例: my-app-staging）
 GOOGLE_CLIENT_SECRET|secret|同クライアントの secret
@@ -78,6 +78,9 @@ if [ "$STAGE" = "preview" ]; then
   echo "⚠️  preview は PR のコード（bun install / build / migrate）をこの Environment の資格情報で実行します。"
   echo "   CLOUDFLARE_API_TOKEN / PLANETSCALE_SERVICE_TOKEN は production と共有せず、preview 専用に発行してください"
   echo "   （.claude/rules/agent-permissions.md の Rule of Two。PR を書くエージェントに本番を消せる資格情報を渡さない）"
+  echo "   ALCHEMY_STATE_TOKEN はアカウント内の全 state を読み書きできるため、production と同じ CF アカウントでは"
+  echo "   production の state に届きます。preview を使うなら production は別の CF アカウントに置いてください"
+  echo "   （docs/dev/alchemy-iac.md「state と資格情報の権限境界」）"
 fi
 
 # アイテムリストは fd 3 から読む（stdin はユーザー入力用に空けておく）

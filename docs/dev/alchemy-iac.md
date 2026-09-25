@@ -46,7 +46,9 @@
    - ダッシュボード → Organization settings → Service tokens で発行（DB 作成権限付き）
 3. **`.env` に設定**（`.env.example` の Infra セクション参照）
    - `APP_NAME` — Worker / Hyperdrive / DB の命名ベース
-   - `ALCHEMY_PASSWORD` — state 内 secrets の暗号化パスワード
+   - `ALCHEMY_PASSWORD` — state 内 secrets の暗号化パスワード（stage ごとに別の値。`.env` には1つしか書けないので、
+     ローカルの `.env` には staging の値だけを置き、production のデプロイは CI（`deploy.yml`）に任せる。
+     ローカルの `.env` に production の資格情報を置かない — `.claude/rules/agent-permissions.md`）
    - `ALCHEMY_STATE_TOKEN` — state store の認証トークン（**CI と同一の値**）
    - `PLANETSCALE_ORGANIZATION` / `PLANETSCALE_SERVICE_TOKEN_ID` / `PLANETSCALE_SERVICE_TOKEN`
    - `CUSTOM_DOMAIN` / `APP_ORIGIN` / `WORKERS_SUBDOMAIN` — 公開 URL（`BETTER_AUTH_URL` /
@@ -56,7 +58,7 @@
 
 ```bash
 bun run infra:deploy:staging      # client をビルドして staging をデプロイ（DB がなければ作成）
-bun run infra:deploy:production   # production をデプロイ
+bun run infra:deploy:production   # production をデプロイ（通常は CI。ローカルからなら production の資格情報をその場で環境変数に渡す）
 bun run infra:destroy:staging     # staging のリソースを削除
 
 # ローカルでマイグレーションを流したい時: 接続 URL の取り出し口
@@ -90,9 +92,10 @@ staging / production との違い:
   ローカルと CI で共有する。state service（Worker 名 `alchemy-state-service`）は
   **CF アカウントに1つを全プロジェクトで共用**し、内部では app 名 × stage で名前空間分離される。
   したがって `ALCHEMY_STATE_TOKEN` は**アカウント共通のシークレット**（組織で一元管理して
-  全プロジェクトに同じ値を配る）、`ALCHEMY_PASSWORD` は **プロジェクト個別**（state 内 secrets の
-  暗号化鍵。プロジェクトごとに変えることで相互に復号できない分離を保つ）
-- stage は Alchemy の `--stage` フラグで分離され、state も stage ごとに独立
+  全プロジェクトに同じ値を配る）、`ALCHEMY_PASSWORD` は **stage ごとに固有**（state 内 secrets の
+  暗号化鍵。値が違えば相互に復号できない）。権限の境界は下の「state と資格情報の権限境界」
+- stage は Alchemy の `--stage` フラグで分離され、state も stage ごとに独立（ただし名前空間の分離で、
+  権限の分離ではない。次節）
 - **`infra:destroy` は DB を削除しない**: PlanetScale の `Database` / `Role` は `delete: false`
   （デフォルト）のため、destroy 時は state から外れるだけで実体は残る（誤削除防止）。
   本当に消す場合は PlanetScale ダッシュボードから削除する
@@ -108,6 +111,37 @@ staging / production との違い:
   `alchemy.run.ts` のこの値を引き上げ」の順で見直すこと**（DB 側の実際の接続上限より確実に
   低く保つ。逆順は接続枯渇障害を招く）。Hyperdrive の接続数は「同時実行中のクエリ数」ではなく
   「プールが保持している温存接続数」なので、利用者数にはほぼ比例しない
+
+## state と資格情報の権限境界（preview を使う前に読む）
+
+alchemy 0.93 の実装（`alchemy/workers/cloudflare-state-store.ts` と `alchemy/lib/state/cloudflare-state-store.js`）で
+確かめた事実:
+
+- state サービスの認可は `ALCHEMY_STATE_TOKEN` との一致だけで、全プロジェクト・全 stage の state は 1 つの
+  Durable Object に入っている。どの app / stage を読み書きするかはリクエスト本文の `chain` で呼び出し側が
+  決める。**このトークンを持つ実行環境は、アカウント内のすべての state を読み・書き換え・消せる**
+- state サービス自体は `alchemy-state-service` という Worker なので、同じアカウントで Workers を編集できる
+  `CLOUDFLARE_API_TOKEN` があれば差し替えられる（production の Worker そのものも差し替えられる）
+- state 内の secrets は `ALCHEMY_PASSWORD` から scrypt で作った鍵の AES-256-GCM で暗号化される。
+  このテンプレートでは **production DB のロールのパスワード**（Hyperdrive の接続情報）、`BETTER_AUTH_SECRET`
+  （漏れるとセッションを偽造できる）、`GOOGLE_CLIENT_SECRET` が入る。パスワードが同じなら復号できる。
+  既に deploy した stage の値を変えると、認証タグの検証で復号が失敗してデプロイが止まる
+
+preview（`preview.yml`）は PR のコード（`bun install` の依存スクリプト・build・PR で書き換えられる
+`alchemy.run.ts`・migrate）を preview Environment の資格情報で実行する。その資格情報に上の 2 つが入る以上、
+PR のコードはアカウント内の state に届く（`.claude/rules/agent-permissions.md` の Rule of Two）。
+fork からの PR には secrets が渡らず、preview はラベルを付けた PR でしか動かないので、外部の第三者が直接は突けない。
+届くのはエージェントが書いた PR と、乗っ取られた依存パッケージ。
+
+対策（強い順）:
+
+1. **production を別の Cloudflare アカウントに置く**。state サービス・`ALCHEMY_STATE_TOKEN`・
+   `CLOUDFLARE_API_TOKEN` がすべて分かれ、preview / staging から production に届く資格情報が無くなる。
+   PR プレビューを使うならこれを前提にする
+2. 同じアカウントに置くなら、`ALCHEMY_PASSWORD` を stage ごとに別の値にする（少なくとも production は
+   他と共有しない）。production の secrets は復号されなくなるが、state の書き換え・削除（次の production
+   デプロイでの再作成・削除）と Worker の差し替えは防げない
+3. preview ラベルは、人がコードを読んで信頼できると判断した PR にだけ付ける
 
 ## オプションリソース（環境変数で opt-in）
 
