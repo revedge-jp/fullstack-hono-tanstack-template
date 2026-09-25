@@ -11,7 +11,7 @@
 //
 // 全角ダッシュだけはここの正規表現で見る。kuromoji は前後の文字次第でダッシュを名詞 1 つにも記号 2 つにも
 // 分けるため、辞書の形態素では拾えない。前後の空白の有無は問わない。
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
 import { createLinter, loadTextlintrc } from "textlint";
@@ -89,9 +89,11 @@ function isNumberRange(text, match) {
   return DIGIT.test(before) && DIGIT.test(after);
 }
 
-// 引数にファイルを渡すと、そのうち走査対象に入るものだけを見る（編集直後に呼ぶ .claude/hooks/on-prose-edit.sh 用）。
-// 対象外のファイルだけなら何も見ずに成功する。
-const requested = new Set(process.argv.slice(2).map((arg) => relative(".", resolve(arg))));
+// 引数にファイルを渡すと、そのうち走査対象に入るものだけを見る（編集直後に呼ぶ .claude/hooks/on-ts-edit.sh 用）。
+// 対象外のファイルだけなら何も見ずに成功する。シンボリックリンク経由のパス（macOS の /tmp 等）でも
+// 一致するよう、実体のパスに解決してから比べる（process.cwd() は解決済みのパスを返す）。
+const toRealPath = (arg) => (existsSync(arg) ? realpathSync(arg) : resolve(arg));
+const requested = new Set(process.argv.slice(2).map((arg) => relative(".", toRealPath(arg))));
 const sources = collectClientSources(ROOTS, "scripts/check/ui-copy.mjs");
 const files =
   requested.size === 0 ? sources : sources.filter((file) => requested.has(relative(".", file)));

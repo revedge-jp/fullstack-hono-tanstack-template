@@ -3,11 +3,14 @@
 
 INPUT=$(cat)
 
+# シンボリックリンク経由のパス（macOS の /tmp 等）でも git rev-parse --show-toplevel と比べられるよう、
+# 実体のパスに解決する
 FILE_PATH=$(echo "$INPUT" | python3 -c "
-import sys, json
+import sys, json, os
 try:
     d = json.load(sys.stdin)
-    print(d.get('tool_input', {}).get('file_path', ''))
+    path = d.get('tool_input', {}).get('file_path', '')
+    print(os.path.realpath(path) if path else '')
 except Exception:
     print('')
 " 2>/dev/null || echo "")
