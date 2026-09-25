@@ -97,7 +97,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 function PendingComponent() {
   return (
     <div className="p-4">
-      <p>読み込み中...</p>
+      <p className="text-sm text-muted-foreground">読み込み中...</p>
     </div>
   );
 }
