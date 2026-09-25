@@ -27,9 +27,11 @@ const ROOTS = [
 ];
 const JAPANESE = /[\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Han}]/u;
 // 文をつないでいるダッシュだけを拾う: 前が文字・閉じ括弧・句読点、後ろが文字・開き括弧。
-// 「未設定（—）」や「──── または ────」は前後がこれに当たらないので対象外。
+// 「未設定（—）」や「──── または ────」は前後がこれに当たらないので対象外。前後とも数字の範囲表記
+// （「1—3 件」）は isNumberRange で除く。
 const DASH =
   /(?<=[\p{L}\p{N}\p{Pe}\p{Pf}。、！？!?.,])\s*[—―─⸺⸻]+\s*(?=[\p{L}\p{N}\p{Ps}\p{Pi}])/gu;
+const DIGIT = /\p{N}/u;
 const DASH_RULE_ID = "fullwidth-dash";
 const DASH_MESSAGE =
   "全角ダッシュで文をつながないでください。句点で文を分けるか、読点・括弧を使ってください";
@@ -81,6 +83,12 @@ function locate(entry, column) {
   return `${relative(".", entry.file)}:${line}`;
 }
 
+function isNumberRange(text, match) {
+  const before = text[match.index - 1] ?? "";
+  const after = text[match.index + match[0].length] ?? "";
+  return DIGIT.test(before) && DIGIT.test(after);
+}
+
 const files = collectClientSources(ROOTS, "scripts/check/ui-copy.mjs");
 const texts = files.flatMap(extractTexts);
 
@@ -100,6 +108,9 @@ const violations = result.messages.map((message) => {
 });
 for (const entry of texts) {
   for (const match of entry.text.matchAll(DASH)) {
+    if (isNumberRange(entry.text, match)) {
+      continue;
+    }
     violations.push({
       ruleId: DASH_RULE_ID,
       location: locate(entry, match.index),
