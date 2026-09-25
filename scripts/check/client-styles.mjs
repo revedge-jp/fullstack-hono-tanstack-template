@@ -24,13 +24,16 @@ const COLOR_UTILITIES =
   "bg|text|border|border-[xytrblse]|ring|ring-offset|outline|divide|shadow|inset-shadow|drop-shadow|decoration|accent|caret|placeholder|fill|stroke|from|via|to";
 // クラス文字列の区切り（空白・引用符・バッククォート・中括弧）かバリアント（hover: 等）の直後だけを見る。
 // 前置きの境界を要求しないと、`data-to-white` のような無関係な識別子まで拾う。
-const CLASS_START = String.raw`(?<=^|[\s"'\x60{(:])`;
+// 前置きの `!`（v3 形式の important）はクラスの一部として読み飛ばす。
+const CLASS_START = String.raw`(?<=^|[\s"'\x60{(:])!?`;
+// クラスの終わり。末尾の `!`（v4 形式の important）を許す。
+const CLASS_END = String.raw`!?(?=$|[\s"'\x60}):])`;
 
 const RULES = [
   {
     id: "raw-palette",
     pattern: new RegExp(
-      `${CLASS_START}-?(?:${COLOR_UTILITIES})-(?:${PALETTE_NAMES})(?:-\\d{2,3})?(?:\\/\\d+)?(?=$|[\\s"'\\x60}):])`,
+      `${CLASS_START}-?(?:${COLOR_UTILITIES})-(?:${PALETTE_NAMES})(?:-\\d{2,3})?(?:\\/(?:\\d+|\\[[^\\]\\s]+\\]))?${CLASS_END}`,
       "g",
     ),
     message:
@@ -38,14 +41,27 @@ const RULES = [
   },
   {
     id: "arbitrary-value",
+    // w-[347px] と、v4 の CSS 変数省略記法 bg-(--brand) の両方。
     // data-[state=open]: のような任意バリアント（直後が `:`）は対象外。
-    pattern: new RegExp(`${CLASS_START}-?[a-z][a-z0-9-]*-\\[[^\\]\\s]+\\](?![:\\w-])`, "g"),
+    pattern: new RegExp(
+      `${CLASS_START}-?[a-z][a-z0-9-]*-(?:\\[[^\\]\\s]+\\]|\\(--[^)\\s]+\\))(?![:\\w-])`,
+      "g",
+    ),
     message:
       "任意値（w-[347px] / bg-[#7c3aed] 等）は使えません。スケール（p-4 / gap-2 / text-sm）かトークンを使い、どうしても必要なら components/ に部品として切り出してください",
   },
   {
+    id: "arbitrary-property",
+    // [color:#7c3aed] / [background:linear-gradient(...)] は他の全規則を迂回できる。
+    // [&>svg]:size-4 のような任意バリアント（直後が `:`）は対象外。
+    pattern: new RegExp(`${CLASS_START}\\[[a-z-]+:[^\\]\\s]+\\](?![:\\w-])`, "g"),
+    message:
+      "任意プロパティ（[color:#7c3aed] / [background:linear-gradient(...)] 等）は使えません。トークンとスケールのクラスを使ってください",
+  },
+  {
     id: "manual-dark-variant",
-    pattern: new RegExp(`${CLASS_START}dark:`, "g"),
+    // `{ dark: "Dark" }` のようなオブジェクトキーを拾わないよう、直後にクラスが続く形だけを見る。
+    pattern: new RegExp(`${CLASS_START}dark:(?=[a-z!\\[*-])`, "g"),
     message:
       "dark: を手書きしないでください。semantic トークンは .dark で値が切り替わるため、トークンを使えばダークモードは自動で対応します",
   },
@@ -94,18 +110,32 @@ function collectFiles(dir) {
   });
 }
 
-// ガードの説明コメント自体が禁止文字列を含んで引っかかるのを避けるため、コメント行は見ない。
+// ガードの説明コメント自体や、移行時の「旧クラスはこうだった」というコメントで引っかからないよう、
+// コメント行と行内コメントは見ない。行末コメントは直前が空白のものだけを落とす（https:// を守るため）。
 const isCommentLine = (line) => /^\s*(?:\/\/|\/\*|\*)/.test(line);
+const stripInlineComments = (line) =>
+  line.replace(/\/\*.*?\*\//g, " ").replace(/(?:^|\s)\/\/.*$/, "");
+
+// 走査対象の移動・改名でガードが黙って無効にならないよう、対象が無ければ失敗させる。
+const missingRoots = ROOTS.filter((root) => !isDir(root));
+const files = ROOTS.flatMap(collectFiles);
+if (missingRoots.length > 0 || files.length === 0) {
+  console.log(`走査対象が見つかりません: ${missingRoots.join(", ") || "（ファイル 0 件）"}`);
+  console.log(
+    "client のディレクトリ構成を変えたら scripts/check/client-styles.mjs の ROOTS を更新してください",
+  );
+  process.exit(1);
+}
 
 const violations = [];
-for (const file of ROOTS.flatMap(collectFiles)) {
+for (const file of files) {
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, index) => {
     if (isCommentLine(line)) {
       return;
     }
     for (const rule of RULES) {
-      for (const match of line.matchAll(rule.pattern)) {
+      for (const match of stripInlineComments(line).matchAll(rule.pattern)) {
         violations.push({ rule, location: `${relative(".", file)}:${index + 1}`, found: match[0] });
       }
     }

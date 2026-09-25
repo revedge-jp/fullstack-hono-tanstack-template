@@ -142,6 +142,16 @@ expect_guard "スタイル規約: 既定パレット色の禁止" \
   'export const SelftestUi = () => <p className="text-sm text-zinc-500">x</p>;' \
   "違反 [raw-palette]"
 
+expect_guard "スタイル規約: important 付き既定パレット色の禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-zinc-500!">x</p>;' \
+  "違反 [raw-palette]"
+
+expect_guard "スタイル規約: 任意プロパティの禁止" \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="[color:#7c3aed]">x</p>;' \
+  "違反 [arbitrary-property]"
+
 expect_guard "スタイル規約: 任意値の禁止" \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
   'export const SelftestUi = () => <div className="w-[347px]">x</div>;' \

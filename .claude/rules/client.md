@@ -105,7 +105,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 
 ### スケールから選ぶ
 
-- 【ガード】任意値（`w-[347px]` / `bg-[#7c3aed]` / `text-[13px]`）は使えない。Tailwind のスケール
+- 【ガード】任意値（`w-[347px]` / `bg-[#7c3aed]` / `bg-(--brand)`）と任意プロパティ（`[color:#7c3aed]`）は使えない。Tailwind のスケール
   （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `components/` に部品として閉じ込める
   （`data-[state=open]:` のような任意バリアントは対象外）
 - 文字: 本文と UI は `text-sm`、補足は `text-xs`、ページ見出し（h1）は `text-2xl font-bold`。
@@ -117,9 +117,10 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 
 新しい UI を書く前に、既存の部品で組めないかを確認する。
 
-- `components/ui/`: shadcn の部品（`Button` / `Card` / `Input` / `Skeleton` / `ThemeToggle`）。
-  shadcn CLI の生成物なので手で書き換えない。足りない部品は shadcn CLI で追加する
-  （`components.json` の `style: base-vega` / Base UI 前提。Radix 前提の例をそのまま貼らない）
+- `components/ui/`: shadcn の部品（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
+  手で書き換えない。足りない部品は shadcn CLI で追加する（`components.json` の `style: base-vega` /
+  Base UI 前提。Radix 前提の例をそのまま貼らない）。同じ場所にある `ThemeToggle` は手書きの部品で
+  書き換えてよいが、スタイルガードの対象外なので規約は目視で守る
 - `components/patterns/`: 画面パターン（`EmptyState` / エラー表示 / NotFound）
 - `components/layout/`: ページ枠（`CenteredPage`）と常駐バナー
 - 部品に渡す `className` は**配置（余白・幅・並び）だけ**に使い、色や文字を上書きしない。見た目の違いは
