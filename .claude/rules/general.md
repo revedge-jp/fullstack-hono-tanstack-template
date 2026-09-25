@@ -15,7 +15,7 @@
 
 **worktree で作業したものをレビューに掛けるときは、対象を明示する。**
 
-- PR があるなら **PR 番号を引数に渡す**（`/code-review high 559`）。レビューは CONFIRMED がゼロに
+- PR があるなら **PR 番号を引数に渡す**（`/review-full 559`・`/code-review high 559`）。レビューは CONFIRMED がゼロに
   なる周まで回し、収束の記録を PR 本文に残す（手順と auto-merge は `.claude/commands/ship.md`）。これが最も確実 — レビュー側が
   GitHub から差分を取るので、ローカルのブランチ状態に依存しない
 - PR を作る前にレビューしたいなら、**先に PR を作る**（Draft でよい）。「PR前に見たい」と

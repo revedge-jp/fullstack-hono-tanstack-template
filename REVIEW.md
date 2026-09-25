@@ -1,6 +1,6 @@
 # REVIEW.md
 
-コードレビュー（Claude Code Review・`/code-review`）の判定基準。手順そのものは
+コードレビュー（Claude Code Review・`/code-review`・`/review-full`）の判定基準。手順そのものは
 `.claude/commands/codex-review.md`（名前は由来で、Claude Code のスラッシュコマンド）にあり、
 ここは「何を指摘し、何を指摘しないか」だけを書く。
 
