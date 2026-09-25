@@ -38,7 +38,8 @@ jobs:
       packagesAll: ${{ github.event_name == 'merge_group' || steps.filter.outputs.packagesAll == 'true' }}
       deps: ${{ github.event_name == 'merge_group' || steps.filter.outputs.deps == 'true' }}
       workflows: ${{ github.event_name == 'merge_group' || steps.filter.outputs.workflows == 'true' }}
-      tooling: ${{ github.event_name == 'merge_group' || steps.filter.outputs.tooling == 'true' || steps.catchall.outputs.code == 'true' }}
+      tooling: ${{ github.event_name == 'merge_group' || steps.filter.outputs.tooling == 'true' }}
+      catchall: ${{ github.event_name == 'merge_group' || steps.catchall.outputs.code == 'true' }}
       instructions: ${{ github.event_name == 'merge_group' || steps.filter.outputs.instructions == 'true' }}
     steps:
       # persist-credentials を無効化しない: paths-filter は pull_request では GitHub API を使うが、
@@ -205,7 +206,7 @@ jobs:
     # Renovate の devDeps 自動マージがビルド/テストを素通りする。
     # tooling（ガード・lint/依存検査の設定・scripts と受け皿）も同じ。外すとガードを壊した・消した PR が
     # arch-check と自己テストを1度も通らずにマージできる
-    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.tooling == 'true'
+    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.tooling == 'true' || needs.changes.outputs.catchall == 'true'
     steps:
       # fetch-depth: 0（フル履歴）+ persist-credentials: true は mutation testing の
       # diff スコープ算出（git diff origin/main...HEAD、ADR-007）に必要。
