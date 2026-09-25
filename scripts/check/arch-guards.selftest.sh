@@ -19,8 +19,18 @@ cd "$ROOT"
 FAIL=0
 FIXTURES=()
 cleanup() {
-  local f
+  local f dir
   for f in "${FIXTURES[@]:-}"; do [ -n "$f" ] && rm -f "$f"; done
+  # mkfix の mkdir -p が作った __selftest* ディレクトリも消す(参照実装の tasks 配下に空ディレクトリが
+  # 残ると、構造を真似るエージェントの目に入る)。rmdir は空のときしか消さないので、fixture 以外は残る
+  for f in "${FIXTURES[@]:-}"; do
+    [ -n "$f" ] || continue
+    dir="$(dirname "$f")"
+    while [[ "$dir" == *__selftest* ]]; do
+      rmdir "$dir" 2>/dev/null || break
+      dir="$(dirname "$dir")"
+    done
+  done
   rm -rf "apps/api-service/src/features/tasks/application/__selftest_action" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -360,10 +370,12 @@ fi
 
 echo "=== 指示ファイル参照チェック自己テスト ==="
 mkfix ".claude/rules/__selftest_refs.md" \
-  '参照: `scripts/check/nope.sh` と `bun run no-such-script` と AGENTS.md の「存在しない見出し」'
+  '参照: `scripts/check/nope.sh` と `bun run no-such-script` と AGENTS.md の「存在しない見出し」
+アプリ別: `apps/api-service/AGENTS.md` の「Feature structure」「パス付きの存在しない見出し」と apps/no-such-app/AGENTS.md の「X」'
 INSTR_OUT=$(node scripts/check/instruction-files.mjs 2>&1 || true)
 rm -f ".claude/rules/__selftest_refs.md"
-for expected in "nope.sh" "no-such-script" "存在しない見出し"; do
+for expected in "nope.sh" "no-such-script" "「存在しない見出し」" \
+  "apps/api-service/AGENTS.md に見出し「パス付きの存在しない見出し」" "apps/no-such-app/AGENTS.md\` が実在しない"; do
   if printf '%s' "$INSTR_OUT" | grep -qF "$expected"; then
     echo "✅ instruction-files: $expected を検出"
   else

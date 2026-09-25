@@ -25,39 +25,21 @@
 
 ### worktree のセットアップはフックが行う — ただし発火を検証してから実装に入る
 
-`EnterWorktree` で `.claude/worktrees/<name>` を作ると、WorktreeCreate フック
-（`.claude/hooks/worktree-create.sh`）が `origin/main` からの分岐・ポート割り当て・main の共有
-Postgres 内の専用 DB（`wt_<name>`、dev/test）・`.env`・`bun install`・マイグレーションまで済ませる。
-`ExitWorktree` の `remove` では WorktreeRemove フックが DB とポート割り当てを片付ける（ブランチは残す）。
+`EnterWorktree` で作ると WorktreeCreate フックが専用 DB（main の共有 Postgres 内の `wt_<name>`）・`.env`・
+`bun install`・マイグレーションまで済ませるが、**発火しない・DB を用意できないことがある**。その状態でも
+typecheck / lint / test:unit は通り、`git push` の pre-push で初めて原因の読めない形で落ちる。
 
-**フックが発火しない・DB を用意できないことがある**（Docker 停止中、使い捨て名の判定、共有コンテナの
-名前が他プロジェクトと衝突、`git worktree add` 直打ち）。`.env` が無い状態のまま実装・コミットまで
-進んでも `bun run typecheck` / `lint` / `test:unit` は通ってしまい、`dotenv -e .env` も対象ファイルが
-無くてもエラーにならないため、**`git push` の pre-push フック（`check-all.sh` の Tests ステップ）で
-初めて、原因の読み取れない形で失敗する**。
+- 実装前に `.env` に `WORKTREE_SHARED_DB=1` と `WORKTREE_DB_READY=1` があるか確かめる（`/start-dev` の 3b）。
+  無ければ worktree のルートで `bash scripts/agent-worktree-setup.sh`（冪等）
+- worktree から `db:up` / `db:down` を実行しない。逆に **main で `db:down` すると全 worktree の `wt_*` DB が消える**
+- セットアップが volume / コンテナを「別プロジェクト（X）のもの」として DB を飛ばしたら、直すのは worktree
+  ではなく **main 側**で、原因は 2 通りある。X が main の以前のディレクトリ名なら（改名・移動した）ディレクトリ名を
+  戻す（名前を変えると空の volume で起動する）。そうでなければ main の `.env` の DB コンテナ名・volume 名が
+  他プロジェクトと衝突しているので固有にする（`docs/dev/environment-variables.md` の「Docker / インフラ」）。
+  どちらも main のチェックアウトに手を入れる作業なのでユーザーに依頼する（`.env` はフックでエージェントから編集できない）
+- `.worktreeinclude` で `.env` を worktree に複製しない
 
-実装前に `/start-dev` の 3b の検証手順を通す（`.env` に `WORKTREE_SHARED_DB=1` と
-`WORKTREE_DB_READY=1` があるか）。無ければ worktree のルートで冪等に復旧する:
-
-```bash
-bash scripts/agent-worktree-setup.sh
-```
-
-- worktree から `db:up` / `db:down` を実行しない（DB は main の共有コンテナ。compose プロジェクトが
-  別になりポートを奪い合う）。逆に **main で `db:down` すると全 worktree の `wt_*` DB が消える**
-- main の `.env` の DB コンテナ名・volume 名が、このテンプレートから作った他プロジェクトと同じ既定値
-  （`app_*`）のままだと衝突する。フックは衝突を検出すると共有 Postgres に触れず DB を飛ばし、
-  `db:up` / `db:down` も止まる（`scripts/lib/compose-ownership.sh`。他プロジェクトの稼働中 DB の
-  volume を2つ目の Postgres がマウントする・`down -v` で消すのを防ぐため）。名前は
-  `docs/dev/environment-variables.md` の「Docker / インフラ」に従って固有にする
-
-### `.worktreeinclude` で `.env` を worktree に複製しない
-
-Claude Code の `.worktreeinclude` は gitignore 済みファイルを新 worktree へコピーする仕組みだが、
-このリポジトリの `.env` は worktree ごとに**別のポート・別の DB**（共有コンテナ内の `wt_<name>`）を
-指す前提で、フックが main の `.env` をコピーしてから worktree 固有の値に書き換えるので不要。置くと、
-フックが発火しなかったときに main の `.env` がそのまま使われ、`.env` の有無による未セットアップの
-検出も効かなくなったうえで、main と同じ DB・ポートを取り合ってテストが互いを壊す。
+フックの動作・衝突検出・`.worktreeinclude` を置かない理由は `.claude/rules/worktree.md`。
 
 ### `git diff main` はローカル main の鮮度に依存する（worktree の有無を問わない）
 
@@ -118,43 +100,9 @@ PR がある場合は PR 番号を渡す方がより確実。
 
 ## ログ出力（api-service / client 共通）
 
-`apps/client` と `apps/api-service` は**同一の Cloudflare Worker**にビルドされ、ログは同じ
-Observability データセットに入る。そのためこの規約は両方に等しく効く。
-
-- **生の `console.*` は使わない**。
-  - api-service: `c.get("logger")` / DI された `logger`
-  - client のサーバー経路: `shared/lib/server-logger.ts` の `serverLogger`
-  - **UI コンポーネントも対象**。SSR 時はサーバーで描画されるため、描画時の `console` は
-    そのまま Workers ログに出る（「ブラウザで動くから対象外」は成り立たない）
-- **third-party のロガーも同じ経路に寄せる**。console 出力するライブラリを入れるときは、
-  差し替えフックが無いか最初に確認すること。既存の対応:
-  - Better Auth: `logger` オプションに pino を委譲（`integrations/external/auth.ts` の
-    `toBetterAuthLoggerOption`）。未設定だと DB 障害時に SQL 文とバインド値が
-    `$metadata.error` に丸ごと載る
-  - postgres.js: `onnotice` に pino を委譲（`packages/database/src/index.ts`）。
-    未設定だと DB の NOTICE が素の `console.log` に出る
-- **`error` / `err` キーは「5xx・未捕捉例外」専用**。Cloudflare はこの2つのキーの値を
-  `$metadata.error` に取り込み、ダッシュボードの既定フィルタ `exists($metadata.error)` が
-  それを「Errors」として数える。warn 以下（業務上の拒否、fail-open の失敗）でこのキーを使うと
-  本物の異常が埋もれる。4xx の理由は `errorCode`、その他は `reason` / `detail` 等でよい。
-- 安全網として `@repo/logging` が warn 以下のログの `error` / `err` を `failure` へ退避する。
-  **`failure` はその退避先の予約キー**なので別の意味に使わない。Error オブジェクトは `err` に
-  載せてよい（pino の既定シリアライザがスタックを直列化するのはこのキーだけで、退避後も形は保たれる）。
-
-### なぜ生の console を禁止するか（実測メモ）
-
-使い捨て Worker を本番アカウントへ一時デプロイし、3レベル×14形状で実測した結果、
-Cloudflare の `$metadata.error` の立ち方は**2つの別系統**になる。
-
-- **pino 経由**（数値 `level` を含むオブジェクト）: `error` / `err` キーがあるときだけ立つ。
-  `console.log/warn/error` のどれで出したかは無関係。副作用として `$metadata.level` は常に null。
-- **生の console**（数値 `level` なし）: `console.error` は**何を渡しても**立つ（生文字列・複数引数・
-  JSON文字列・Error インスタンス・`msg` だけのオブジェクト、すべてメッセージ全文が入る）。
-  `console.warn` は `error`/`err` があっても立たない。`console.log` は `error`/`err` のときだけ立つ。
-  さらに、**文字列**の `level: "error"` を含めると `console.log/warn` でも error 扱いになる。
-
-生の console を残すとこの2系統が混在し、規約を二重に書く羽目になる。出力経路を1本にすれば
-規約は上記の1行（`error`/`err` は 5xx 専用）で済む。
+生の `console.*` は使わない（UI コンポーネントも SSR でサーバー描画されるので対象）。`error` / `err` キーは
+5xx・未捕捉例外専用。ログを出すコードを書く前に `.claude/rules/logging.md` を読む（出力経路・third-party
+ロガーの寄せ方・予約キー `failure`・実測の根拠）。
 
 ## Git 安全運用
 
@@ -178,39 +126,10 @@ Cloudflare の `$metadata.error` の立ち方は**2つの別系統**になる。
 
 ## Gemini モデルを利用する場合
 
-ユーザーの指示なく、以下以外のモデルを使うのは禁止。
-
-- `gemini-3.5-flash` — 既定。東京（`asia-northeast1`）で使える。利用者の個人情報を扱う機能はこれ
-- `gemini-3-flash-preview` — `global` リージョンのみ（東京では使えない）
-- `gemini-3-pro-preview` — 東京では使えない（revedge-jp/chiryonavi の実測では `global` でも 404）
-
-3.6〜3.8 の Flash は後継が出ると 45 日で引退する短期提供モデルで、東京にも無いため候補にしない
-（ちりょなび issue #635 / #1186 の調査。`gemini-2.5-flash` は 2026-10-20 引退）。
-
-SDK は `@ai-sdk/google-vertex/edge`（Edge / Workers 対応版）を使う。本番は Cloudflare Workers で、
-ファイルシステム・gcloud CLI・メタデータサーバーが無いため **ADC（Application Default Credentials）は
-機能しない**。認証はサービスアカウントの `client_email` / `private_key` を `config.ts` 経由で DI し、
-明示的に渡す（`createGoogleVertex({ googleCredentials: ... })`）。Node 版の `createVertex`（ADC 前提）と
-API キー（Express Mode）は使わない。鍵は機密なので `alchemy.secret(...)` で渡す（`env-vars.md`）。
+モデルを選ぶ・Vertex AI を組み込む前に `.claude/rules/gemini.md` を読む。ユーザーの指示なく、そこに列挙した
+モデル以外を使うのは禁止（既定は `gemini-3.5-flash`）。Workers では ADC が効かないので認証方法も決まっている。
 
 ## エージェントに渡す権限の「Rule of Two」
 
-エージェント（Claude Code・CI 上の claude-code-action・MCP サーバー経由の接続）に、次の 3 つを
-**同時に**持たせない。信頼できない入力だけでもエージェントは乗っ取られうる（CVE-2026-24887 は
-Claude Code の承認プロンプト回避で、前提は「信頼できない内容がコンテキストに入ること」のみ）が、
-2026年上期に実証された被害の大きい攻撃（PromptPwnd / GitInject 等の資格情報窃取・不正 push）は
-3 つが揃った構成で成立している。1 つ欠けるだけで被害の上限が大きく下がる。
-
-1. **本番の資格情報**（本番 DB 接続、Workers Secrets、デプロイ用トークン、OIDC トークン）
-2. **信頼できない外部入力**（第三者が書ける issue / PR 本文、Web ページ、外部 API 応答、ユーザー投稿）
-3. **外部への送信・書き込み**（git push、PR 作成、外部 HTTP、メッセージ送信）
-
-- CI 上でエージェントに実装させるワークフロー（issue コメント起動の claude-code-action 等）は
-  **置かない**。公開リポジトリでは第三者が issue やコメントを書けるため 2 を排除できず、実装 PR を
-  作るには 3（push / PR 作成）が必須で、2 と 3 が常に同居する。実装はローカルの Claude Code で行い、
-  CI にエージェントを置くなら読み取り専用のレビュー（`contents: read`、sandbox read-only）に限る
-  （現状は置いていない。レビューはローカルの `/code-review` と Claude Code Review）。`uses:` の SHA ピン留めと `id-token: write` の不在は `arch:guards` が機械的に検査する。
-- MCP で本番 DB に接続するときは**読み取り専用の接続**を使う（PlanetScale / BigQuery 等の
-  `*_readonly` ツール）。書き込みが必要なら人が SQL を確認して実行する。
-- ローカルの Claude Code は `.env` に本番資格情報を置かない前提で動く。本番の値を扱う作業では、
-  その間は Web 取得や外部投稿を伴うツールを使わない。
+エージェントに**本番の資格情報・信頼できない外部入力・外部への送信/書き込み**の 3 つを同時に持たせない。
+CI にエージェントを置く・MCP サーバーを足す・本番の値を扱う作業の前に `.claude/rules/agent-permissions.md` を読む。
