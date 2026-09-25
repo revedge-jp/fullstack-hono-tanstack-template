@@ -33,6 +33,11 @@
       "automerge": true
     },
     {
+      "description": "デプロイ経路のツールは devDependencies でも自動マージしない。alchemy / drizzle-kit は 0.x で minor でも挙動が変わり（alchemy.run.ts は 0.93 固有の既定値に依存）、wrangler / vite-plugin は本番のバンドルを作る。壊れた更新は main マージ後の staging デプロイで初めて表に出る",
+      "matchPackageNames": ["alchemy", "drizzle-kit", "wrangler", "@cloudflare/vite-plugin"],
+      "automerge": false
+    },
+    {
       "description": "GitHub Actions は SHA ピンを維持しつつ digest/patch/minor を自動マージ（実行ロジックではなく CI ツール）",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["digest", "pin", "patch", "minor"],

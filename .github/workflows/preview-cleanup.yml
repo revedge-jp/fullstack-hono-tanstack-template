@@ -1,8 +1,11 @@
 name: Preview Cleanup
 
 # 放置された preview 環境の自動掃除。DB ブランチ（PS-DEV）はオートスリープせず
-# 存在時間分の課金が続くため、最終更新から7日を超えた preview は破棄する。
-# ラベルも外すので、続きが必要なら再度 preview ラベルを付ければ作り直される（DB は空に戻る）。
+# 存在時間分の課金が続くため、次の 2 つを破棄する。
+#   - preview ラベル付きの open PR で、最終更新から7日を超えたもの（ラベルも外すので、続きが必要なら
+#     再度 preview ラベルを付ければ作り直される。DB は空に戻る）
+#   - staging DB に残っている pr-<番号> ブランチのうち、PR がクローズ済みかラベルが外れているもの
+#     （preview.yml の destroy が失敗して残ったもの。ラベルはもう外れているので、ラベルからは見つからない）
 on:
   schedule:
     - cron: "0 21 * * *" # 毎日 06:00 JST
@@ -14,9 +17,8 @@ on:
         required: false
 
 jobs:
-  # cleanup は preview.yml と同じ `environment: preview` で動かす。staging で動かすと、毎晩 main HEAD の
-  # 成功 Deployment が staging に記録され、deploy.yml のロールバック先（staging の最新の成功 Deployment）を
-  # 汚す。preview の破棄に staging の資格情報を使う理由も無い。
+  # cleanup は preview.yml と同じ `environment: preview` で動かす。preview の破棄に staging の資格情報を
+  # 使う理由は無く、渡せば preview の実行環境から staging に届く資格情報が増える。
   # `environment: preview` を参照する cleanup ジョブは、Environment が存在しないと
   # ステップ実行前にサイレントに失敗する（preview.yml の preflight と同じ理由）。
   # テンプレート原本や未セットアップの派生リポジトリで夜間 cron を赤くしないためのガード。
@@ -50,6 +52,7 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.exists == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     environment: preview
     permissions:
       contents: read
@@ -81,32 +84,67 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Find stale previews
+      - name: Find previews to destroy
         id: stale
         if: steps.readiness.outputs.ready == 'true'
         run: |
           cutoff=$(date -u -d "-${STALE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
-          stale=$(gh pr list --label preview --state open \
+          stale=$(gh pr list --label preview --state open --limit 500 \
             --json number,updatedAt \
             --jq ".[] | select(.updatedAt < \"$cutoff\") | .number" | tr '\n' ' ')
+          # DB ブランチが残っているのに、PR がクローズ済みかラベルが外れているもの（destroy の失敗で残った分）
+          # 一覧の取得失敗でジョブを止めるため、for の中ではなく代入で受ける（for の単語展開では -e が効かない）
+          branches=$(bash scripts/deploy/preview-db-branch.sh list)
+          orphans=""
+          for branch in $branches; do
+            n="${branch#pr-}"
+            if ! info=$(gh pr view "$n" --json state,labels \
+              --jq '"\(.state) \([.labels[].name] | index("preview") != null)"' 2>/dev/null); then
+              echo "::warning::DB ブランチ ${branch} に対応する PR #${n} が見つかりません。手で作ったブランチの可能性があるので触りません"
+              continue
+            fi
+            [ "$info" = "OPEN true" ] || orphans="$orphans $n"
+          done
           echo "numbers=$stale" >> "$GITHUB_OUTPUT"
+          echo "orphans=$orphans" >> "$GITHUB_OUTPUT"
           if [ -n "$stale" ]; then
             echo "::notice::Stale previews (>${STALE_DAYS}d): $stale"
-          else
-            echo "No stale previews."
+          fi
+          if [ -n "$orphans" ]; then
+            echo "::notice::DB ブランチだけが残っている preview:$orphans"
+          fi
+          if [ -z "$stale" ] && [ -z "$orphans" ]; then
+            echo "No previews to destroy."
           fi
 
       - uses: ./.github/actions/setup-workspace
-        if: steps.readiness.outputs.ready == 'true' && steps.stale.outputs.numbers != ''
+        if: steps.readiness.outputs.ready == 'true' && (steps.stale.outputs.numbers != '' || steps.stale.outputs.orphans != '')
 
-      - name: Destroy stale previews
-        if: steps.readiness.outputs.ready == 'true' && steps.stale.outputs.numbers != ''
+      - name: Destroy previews
+        if: steps.readiness.outputs.ready == 'true' && (steps.stale.outputs.numbers != '' || steps.stale.outputs.orphans != '')
         env:
           NUMBERS: ${{ steps.stale.outputs.numbers }}
+          ORPHANS: ${{ steps.stale.outputs.orphans }}
         run: |
+          # alchemy destroy は削除に失敗しても exit 0 で終わるので、DB ブランチが消えたかで成否を決める。
+          # 1 件の失敗で残りを止めないよう失敗を集め、最後にジョブを赤にする（翌日の実行で拾い直す）
+          destroy_preview() {
+            echo "==> Destroying preview pr-$1 ..."
+            bunx alchemy destroy --stage "pr-$1" && bash scripts/deploy/preview-db-branch.sh wait-gone "pr-$1"
+          }
+          failed=""
           for n in $NUMBERS; do
-            echo "==> Destroying preview pr-$n ..."
-            bunx alchemy destroy --stage "pr-$n"
-            gh pr edit "$n" --remove-label preview
-            gh pr comment "$n" --body "🧹 ${STALE_DAYS}日以上更新がないため preview 環境（\`pr-$n\`）を自動削除しました。再度必要なら \`preview\` ラベルを付け直してください（DB は空の状態で作り直されます）。" || true
+            if destroy_preview "$n"; then
+              gh pr edit "$n" --remove-label preview || echo "::warning::PR #$n の preview ラベルを外せませんでした"
+              gh pr comment "$n" --body "🧹 ${STALE_DAYS}日以上更新がないため preview 環境（\`pr-$n\`）を自動削除しました。再度必要なら \`preview\` ラベルを付け直してください（DB は空の状態で作り直されます）。" || true
+            else
+              failed="$failed $n"
+            fi
           done
+          for n in $ORPHANS; do
+            destroy_preview "$n" || failed="$failed $n"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::次の preview を削除できませんでした（DB ブランチが残っており、PS-DEV の課金が続きます）:$failed"
+            exit 1
+          fi

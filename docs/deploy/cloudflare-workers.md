@@ -23,7 +23,7 @@ Hyperdrive / Worker を IaC として作成・reconcile するため、**DB やH
 ① alchemy deploy（SKIP_WORKER=1）  # DB / Role / Hyperdrive を provision
 ② drizzle-kit migrate              # 新コードが動く前にスキーマを揃える
 ③ alchemy deploy                   # Worker をデプロイ
-④ smoke check                      # 失敗したら wrangler rollback で自動巻き戻し
+④ smoke check                      # 失敗したらデプロイ前に稼働していた commit を再デプロイ（SMOKE_BASE_URL 設定時のみ）
 ```
 
 ## 前提

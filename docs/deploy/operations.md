@@ -10,10 +10,15 @@
 ### 自動ロールバック（smoke 失敗時）
 
 `.github/workflows/deploy.yml` は smoke チェック（`/api/health` + `/`）が失敗すると、
-GitHub の Deployment レコード（environment 付きジョブごとに自動記録される）から
-**「最後に成功した Deployment の commit」を解決し、再ビルドして再デプロイ**する。
-ロールバック後もジョブは赤のまま残るので、原因を修正するまで
+**デプロイ前に稼働していた commit**（デプロイの最初に `SMOKE_BASE_URL/api/health/live` の `commit` から読む）
+**を再ビルドして再デプロイ**する。ロールバック後もジョブは赤のまま残るので、原因を修正するまで
 次のデプロイ（main への push / タグ作成）は行わないこと。
+
+- `SMOKE_BASE_URL` が未設定なら smoke 自体を実行しないので、自動ロールバックも無い
+- 初回デプロイ・デプロイ前から停止していた・稼働中の版が同じ commit だった場合は、戻り先が無いので
+  ジョブがエラーで止まる。下の「手動ロールバック」で対応する
+- GitHub の Deployment レコードは戻り先に使わない。workflow_run のジョブが記録する commit はその時点の
+  main の先端で、タグを打った commit と一致しないことがあるため
 
 > **注意**: `wrangler rollback` は使えない。Alchemy のデプロイは上書き型で Cloudflare 側に
 > Worker のバージョン履歴が残らないため（実地訓練で確認済み）、ロールバックは常に

@@ -19,9 +19,16 @@ on:
   pull_request:
     types: [labeled, unlabeled, synchronize, closed]
 
-# 同一 PR の deploy / destroy を直列化する（ラベル操作と push の競走を防ぐ）
+# 同一 PR の deploy / destroy を直列化する（ラベル操作と push の競走を防ぐ）。
+# 同じグループで待てる run は 1 つだけで、後から来た run が待機中の run を置き換える。preview に関係ない
+# イベント（他のラベル操作、ラベルの無い PR への push・クローズ）まで同じグループに入れると、待機中の destroy が
+# それに置き換えられて環境が残るので、関係ないイベントは run ごとの別グループに逃がす（条件は preflight と同じ）。
 concurrency:
-  group: preview-${{ github.event.number }}
+  group: >-
+    preview-${{ github.event.number }}-${{
+    (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name == 'preview') ||
+    ((github.event.action == 'synchronize' || github.event.action == 'closed') && contains(github.event.pull_request.labels.*.name, 'preview')))
+    && 'op' || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -66,8 +73,9 @@ jobs:
       ((github.event.action == 'labeled' && github.event.label.name == 'preview') ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview')))
     runs-on: ubuntu-latest
-    # preview 専用 environment。staging を使うと preview デプロイの GitHub Deployment
-    # レコードが staging 履歴を汚し、deploy.yml の rollback 戻り先解決が誤動作する。
+    timeout-minutes: 30
+    # preview 専用 environment。PR のコードを実行するので、staging / production に届く資格情報を渡さない
+    # （docs/dev/alchemy-iac.md「state と資格情報の権限境界」）。
     environment: preview
     permissions:
       contents: read
@@ -156,14 +164,22 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           url="https://${APP_NAME}-${PREVIEW_STAGE}.${WORKERS_SUBDOMAIN}.workers.dev"
-          body="🔍 **Preview**: ${url}
+          marker="<!-- preview-url -->"
+          body="${marker}
+          🔍 **Preview**: ${url}
 
           - commit: ${HEAD_SHA}
           - DB: \`${APP_NAME}-staging\` のブランチ \`${PREVIEW_STAGE}\`（空の状態から migration 適用済み）
           - \`preview\` ラベルを外すかこの PR を閉じると環境ごと削除されます（放置しても7日で自動削除）"
-          # 既存のプレビューコメントがあれば編集、なければ新規作成
-          gh pr comment "$PR_NUMBER" --edit-last --body "$body" 2>/dev/null \
-            || gh pr comment "$PR_NUMBER" --body "$body"
+          # 既存のプレビューコメントがあれば編集、なければ新規作成。`gh pr comment --edit-last` は同じ bot の
+          # 最後のコメント（Knip の結果や needs-rebase の通知）を上書きしうるので、マーカーで探す
+          comment_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | tail -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body" --silent
+          else
+            gh pr comment "$PR_NUMBER" --body "$body"
+          fi
 
   destroy:
     name: Destroy preview
@@ -174,6 +190,7 @@ jobs:
       ((github.event.action == 'unlabeled' && github.event.label.name == 'preview') ||
       (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview')))
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # deploy と同じ preview 専用 environment（destroy も同じ secrets を参照する）。
     environment: preview
     permissions:
@@ -212,6 +229,12 @@ jobs:
       - name: Destroy preview environment
         if: steps.readiness.outputs.ready == 'true'
         run: bunx alchemy destroy --stage "$PREVIEW_STAGE"
+
+      # alchemy destroy は削除に失敗しても exit 0 で終わるので、課金が続く DB ブランチが消えたかを確かめる。
+      # 残っていればジョブを赤にして「削除しました」とは書かない（preview-cleanup.yml が翌日以降に拾い直す）
+      - name: Verify the DB branch is gone
+        if: steps.readiness.outputs.ready == 'true'
+        run: bash scripts/deploy/preview-db-branch.sh wait-gone "$PREVIEW_STAGE"
 
       - name: Comment teardown
         if: steps.readiness.outputs.ready == 'true'
