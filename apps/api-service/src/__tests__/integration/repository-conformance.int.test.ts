@@ -44,7 +44,7 @@ type Harness = {
   tasks: TasksRepository;
   activity: ActivityRepository;
   seedOwner: () => Promise<string>;
-  // 時刻を明示して行を入れ、その行を含むリポジトリを返す（in-memory は seed を渡して作り直す）
+  // 時刻を明示して行を入れ、その行が見える（= harness の tasks / activity と同じ）リポジトリを返す
   seedTasks: (
     ownerId: string,
     createdAts: Date[],
@@ -64,44 +64,58 @@ function seedTitle(i: number) {
 const implementations: { name: string; make: () => Harness }[] = [
   {
     name: "in-memory（createFakeApp）",
-    make: () => ({
-      tasks: createInMemoryTasksRepository(),
-      activity: createInMemoryActivityRepository(),
-      seedOwner: async () => `conformance-owner-${crypto.randomUUID()}`,
-      seedTasks: async (ownerId, createdAts) => {
-        const seeded = createdAts.map((createdAt, i) =>
-          reconstituteTask({
-            id: crypto.randomUUID(),
-            ownerId,
-            title: seedTitle(i),
-            status: "todo",
-            createdAt,
-            updatedAt: createdAt,
-          }),
-        );
-        return { tasks: createInMemoryTasksRepository(seeded), seeded };
-      },
-      seedActivities: async (ownerId, occurredAts) => {
-        const seeded = occurredAts.map((occurredAt, i) =>
-          reconstituteActivity({
-            id: crypto.randomUUID(),
-            ownerId,
-            kind: "task_created",
-            message: `seeded ${i}`,
-            occurredAt,
-          }),
-        );
-        return { activity: createInMemoryActivityRepository(seeded), seeded };
-      },
-    }),
+    make: () => {
+      // シードもリポジトリ自身の操作も同じ保存先に入れる。Drizzle 側は同じトランザクションの全行が
+      // 見えるので、シードのたびにリポジトリを作り直すと両側で見える行が食い違う
+      const taskStore = new Map<string, Task>();
+      const activityStore: Activity[] = [];
+      const tasks = createInMemoryTasksRepository([], taskStore);
+      const activity = createInMemoryActivityRepository([], activityStore);
+      return {
+        tasks,
+        activity,
+        seedOwner: async () => `conformance-owner-${crypto.randomUUID()}`,
+        seedTasks: async (ownerId, createdAts) => {
+          const seeded = createdAts.map((createdAt, i) =>
+            reconstituteTask({
+              id: crypto.randomUUID(),
+              ownerId,
+              title: seedTitle(i),
+              status: "todo",
+              createdAt,
+              updatedAt: createdAt,
+            }),
+          );
+          for (const t of seeded) {
+            taskStore.set(t.id, t);
+          }
+          return { tasks, seeded };
+        },
+        seedActivities: async (ownerId, occurredAts) => {
+          const seeded = occurredAts.map((occurredAt, i) =>
+            reconstituteActivity({
+              id: crypto.randomUUID(),
+              ownerId,
+              kind: "task_created",
+              message: `seeded ${i}`,
+              occurredAt,
+            }),
+          );
+          activityStore.push(...seeded);
+          return { activity, seeded };
+        },
+      };
+    },
   },
   {
     name: "drizzle（実DB）",
     make: () => {
       const db = getDb();
+      const tasks = createTasksRepository({ db });
+      const activity = createActivityRepository({ db });
       return {
-        tasks: createTasksRepository({ db }),
-        activity: createActivityRepository({ db }),
+        tasks,
+        activity,
         seedOwner: async () => {
           const id = `conformance-owner-${crypto.randomUUID()}`;
           await db
@@ -121,7 +135,7 @@ const implementations: { name: string; make: () => Harness }[] = [
               })),
             )
             .returning();
-          return { tasks: createTasksRepository({ db }), seeded: rows.map(mapDbTaskToDomain) };
+          return { tasks, seeded: rows.map(mapDbTaskToDomain) };
         },
         seedActivities: async (ownerId, occurredAts) => {
           const rows = await db
@@ -135,10 +149,7 @@ const implementations: { name: string; make: () => Harness }[] = [
               })),
             )
             .returning();
-          return {
-            activity: createActivityRepository({ db }),
-            seeded: rows.map(mapDbActivityToDomain),
-          };
+          return { activity, seeded: rows.map(mapDbActivityToDomain) };
         },
       };
     },

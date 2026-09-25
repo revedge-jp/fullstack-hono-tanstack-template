@@ -17,8 +17,15 @@ function byCreatedDesc(a: Task, b: Task): number {
   return diff !== 0 ? diff : b.id < a.id ? -1 : b.id > a.id ? 1 : 0;
 }
 
-export function createInMemoryTasksRepository(seed: Task[] = []): TasksRepository {
-  const store = new Map<string, Task>(seed.map((t) => [t.id, t]));
+// store を渡すと、呼び出し側がリポジトリの外から同じ保存先へ行を足せる（適合テストで時刻を明示した
+// シードを、同じリポジトリから見えるように入れるため）。省略時は seed だけを持つ新しい保存先を作る。
+export function createInMemoryTasksRepository(
+  seed: Task[] = [],
+  store: Map<string, Task> = new Map(),
+): TasksRepository {
+  for (const t of seed) {
+    store.set(t.id, t);
+  }
   return {
     create: ({ ownerId, title }) => {
       for (const t of store.values()) {
@@ -76,8 +83,11 @@ export function createInMemoryTasksRepository(seed: Task[] = []): TasksRepositor
   };
 }
 
-export function createInMemoryActivityRepository(seed: Activity[] = []): ActivityRepository {
-  const store: Activity[] = [...seed];
+export function createInMemoryActivityRepository(
+  seed: Activity[] = [],
+  store: Activity[] = [],
+): ActivityRepository {
+  store.push(...seed);
   return {
     record: ({ ownerId, kind, message }) => {
       const activity = reconstituteActivity({
