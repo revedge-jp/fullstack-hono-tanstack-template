@@ -33,25 +33,30 @@ apps/client/
 │       ├── ui/             # UI コンポーネント
 │       └── index.ts        # パブリック API
 ├── shared/                 # 共有レイヤ（横断関心）
-│   └── lib/                # api-client / auth-client 等
-└── components/             # 汎用 UI コンポーネント
-    └── ui/                 # shadcn/ui コンポーネント
+│   └── lib/                # api-client / browser-api-client / auth-client 等
+├── components/             # 汎用 UI コンポーネント
+│   ├── ui/                 # shadcn/ui コンポーネント
+│   ├── patterns/           # 画面パターン（PageHeader / EmptyState 等）
+│   └── layout/             # ページ枠・常駐バナー
+├── test-helpers/           # actions / queries テスト用のモック（api-mock.ts）
+└── tests/e2e/              # Playwright
 ```
 
 ### レイヤー規則
 
 - **features**: 機能単位のスライス。`actions`、`queries`、`ui` に分割
-- **shared**: 横断関心（lib, utils, styles）を配置
-- **components**: 汎用的な UI コンポーネント（shadcn/ui など）
+- **shared**: 横断関心（`shared/lib/` の API クライアント・認証クライアント・ロガー等）を配置
+- **components**: 汎用的な UI コンポーネント（shadcn/ui・画面パターン・レイアウト）
 
 ### 依存関係ルール
 
-- `shared` から `features` への参照は禁止（dependency-cruiser で検証）
-- `features` 間の直接参照は禁止（dependency-cruiser で検証、feature 名はディレクトリから自動導出）
+- `shared` から `features` への参照は禁止
+- `features` 間の直接参照は禁止
 
 ## API 呼び出し
 
-- **ブラウザ（CSR）**: 相対 URL の Hono RPC クライアント `hc<AppType>("/")` → 同一 Worker の `/api/*`
+- **ブラウザ（CSR）**: `shared/lib/browser-api-client.ts` の共有インスタンス `browserApiClient`（相対 URL の
+  Hono RPC クライアント）→ 同一 Worker の `/api/*`。`hc<AppType>("/")` を各ファイルで作らない
 - **SSR（loader / createServerFn）**: CF Workers では同一オリジンへの `fetch()` がループバックしない
   （[ADR-001](../../docs/architecture/adr-001-cf-workers-session-check.md)）ため、
   `shared/lib/api-client.ts` が AsyncLocalStorage 経由で注入するインプロセス Hono RPC クライアントで呼ぶ。
@@ -62,7 +67,7 @@ apps/client/
 
 ```bash
 cd apps/client
-npx shadcn@latest add button
+bunx shadcn@latest add button
 ```
 
 - コンポーネントは `components/ui/` に配置、`components.json` で設定管理
@@ -71,9 +76,9 @@ npx shadcn@latest add button
 ## 品質チェック
 
 ```sh
-bun run lint       # Biome
+bun run lint       # oxlint + oxfmt --check
 bun run typecheck  # TypeScript
-bun run test:unit  # actions/queries の co-located テスト
+bun run test:unit  # app / features / shared の co-located テスト
 bun run dep:cycles # 依存循環チェック（madge）
 ```
 

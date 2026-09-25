@@ -18,8 +18,10 @@ fullstack-hono-tanstack-template のコーディング規約です。
 |------|------|-----|
 | 変数・関数 | camelCase | `getUserById`, `isValid` |
 | 定数 | SCREAMING_SNAKE_CASE | `MAX_RETRY_COUNT` |
-| 型・インターフェース | PascalCase | `UserRepository`, `CreatePostInput` |
+| 型（`type`） | PascalCase | `UserRepository`, `CreatePostInput` |
 | ファイル名 | kebab-case | `user-repository.ts`, `create-post.ts` |
+
+`class` / `interface` は使わない（型は `type`、実装は関数とオブジェクトで書く。`bun run arch:guards` が検出する）。
 
 ```typescript
 // ✅ 良い例
@@ -63,7 +65,7 @@ if (!isValidJobStatus(row.status)) {
 **許容される例外**（詳細判定フローは [ADR-003](../architecture/adr-003-as-type-assertion-policy.md) / ブランド型は [ADR-004](../architecture/adr-004-branded-types-as-cast.md)）:
 - `as const`（リテラル型の固定）
 - `import { X as Y }`（名前の変更）
-- テストコードでの `as unknown`
+- `*.test.ts` 内のキャスト
 - ブランド型ファクトリ（`makeXxx`）・再構築関数（`reconstituteXxx`）内のバリデーション/信頼済みデータに限定したキャスト
 
 #### 型のエクスポート
@@ -146,14 +148,18 @@ try {
   // 何もしない
 }
 
-// ✅ 良い例: 適切なエラーハンドリング
+// ✅ 良い例: 捕まえたら扱いを決める（pino はオブジェクトが第1引数、メッセージが第2引数）
 try {
   doSomething();
-} catch (e) {
-  logger.error("Failed to do something", { error: e });
-  throw e;
+} catch (error) {
+  logger.error({ err: error }, "Failed to do something");
+  throw error;
 }
 ```
+
+api-service では throw を使わない（middlewares・`config.ts`・テストを除く `src/` 全体。`usecase.ts` は try/catch も禁止）。
+失敗しうる Promise は `ResultAsync.fromPromise` で Result にする（下の「Result型」と ADR-005）。`err` / `error` キーを使ってよい
+ログレベルは [`.claude/rules/logging.md`](../../.claude/rules/logging.md) を参照。
 
 ### コメント
 
@@ -224,15 +230,18 @@ export function makeCreatePostStep(deps: { postsRepository: PostsRepository }) {
 
 ## api-service（クリーンアーキテクチャ）
 
+feature の構成・依存方向・ROP のパターンは [`apps/api-service/AGENTS.md`](../../apps/api-service/AGENTS.md) が
+正典（依存方向は dependency-cruiser が強制する）。ここでは層ごとの要点だけ示す。
+
 ### 層の責務
 
 | 層 | 責務 | 依存先 |
 |----|------|--------|
-| **routes** | HTTP I/O、バリデーション | application |
+| **presentation** | HTTP I/O、リクエストのバリデーション（`router.ts`） | application |
 | **application** | ユースケース、DTO定義 | domain, ports |
 | **domain** | ドメインモデル、ビジネスルール | なし（純粋） |
-| **infrastructure** | リポジトリ実装 | domain, integrations |
-| **integrations** | 外部SDKラッパー | 外部SDK |
+| **infrastructure** | リポジトリ実装 | domain, integrations/external |
+| **integrations** | `external/`: 外部SDKラッパー / `composition/`: feature 間 adapter | 外部SDK / 各 feature の application |
 
 ### Domain層のルール
 
@@ -263,8 +272,8 @@ export type CreatePostInput = { ... };  // NG
 ### 外部SDKの扱い
 
 ```typescript
-// ✅ integrations層にラッパーを作成
-// src/integrations/send-email.ts
+// ✅ integrations/external にラッパーを作成
+// src/integrations/external/send-email.ts
 import { SomeEmailClient } from "some-email-sdk";
 
 export async function sendEmail(params: SendEmailParams) {
@@ -281,33 +290,20 @@ import { SomeEmailClient } from "some-email-sdk";  // NG
 
 ## client（FSD）
 
+構成・データ取得・mutation・認証のパターンは [`apps/client/AGENTS.md`](../../apps/client/AGENTS.md) が正典。
+
 ### 依存ルール
 
-```typescript
-// ✅ shared から features への参照は禁止
-// shared/lib/api.ts
-import { getUsers } from "@/features/users";  // NG
-
-// ✅ features 間の直接参照は避ける（widgets経由）
-// features/users/ui/user-list.tsx
-import { PostCard } from "@/features/posts";  // 警告
-import { PostCard } from "@/widgets/post-card";  // OK
-```
+- `shared` から `features` への import は禁止
+- `features` 間の直接 import は禁止（避ける、ではない）。複数の feature で使うものは `shared/` か `components/` に置く
 
 ### API呼び出し
 
-```typescript
-// ✅ API クライアントを使用
-import { api } from "@/shared/lib/api";
-
-export async function getUsers() {
-  const res = await api.users.list();
-  if (!res.ok) {
-    return [];
-  }
-  return (await res.json()).items;
-}
-```
+- ブラウザからは `@/shared/lib/browser-api-client` の `browserApiClient`、SSR（`createServerFn`）からは
+  `@/shared/lib/api-client` の `getApiClient()` を使う。`hc<AppType>()` を各ファイルで作らない
+- 取得の失敗は空配列や `null` で返さず throw し、ルートの errorComponent に任せる（「0 件」と区別できなくなる）。
+  例外は SSR の 401/403 だけ（`apps/client/AGENTS.md` の「Auth pattern」）
+- 実例: `apps/client/features/tasks/queries/get-tasks.ts`
 
 ---
 
@@ -421,40 +417,9 @@ user_repository.ts     # snake_case（使わない）
 
 ## テスト
 
-### ファイル配置
-
-```
-feature/
-├── domain/
-│   └── models.test.ts          # Value Objectsのテスト
-└── application/
-    └── {usecase}/
-        ├── validators.test.ts  # バリデーションのテスト
-        └── usecase.test.ts     # ユースケースのテスト
-```
-
-### テストの書き方
-
-```typescript
-describe("shifts.get usecase", () => {
-  test("ok: returns shift when found", async () => {
-    // Arrange
-    const shiftsRepository: ShiftsRepository = {
-      findByTrainerAndMonth: async () => mockShift,
-    };
-    const usecase = makeGetShiftUseCase({ shiftsRepository });
-
-    // Act
-    const result = await usecase({ trainerId: "trainer-1", year: 2024, month: 12 });
-
-    // Assert
-    expect(result.type).toBe("ok");
-    if (result.type === "ok" && result.value !== null) {
-      expect(result.value.trainerId).toBe("trainer-1");
-    }
-  });
-});
-```
+どこに何のテストを書くか・書き始めに開く実物は [テストガイド](testing.md) を参照。Result は
+`isOk()` / `isErr()` で絞ってから `value` / `error` を検証する（旧 API の `result.type === "ok"` は
+api-service では `bun run arch:guards` が検出する）。
 
 ---
 
@@ -495,7 +460,7 @@ bun run knip
 ## 関連ドキュメント
 
 - [開発ガイド](development.md) - 開発環境の詳細
-- [機能追加ガイド](adding-features.md) - クリーンアーキテクチャの実装例
+- [機能追加の入口](adding-features.md) - feature を足すときに読む正典と参照実装の案内
 - [ドメインモデル設計](../architecture/domain-model.md) - DDD/ROPの詳細
 - [api-service README](../../apps/api-service/README.md) - サーバー側の詳細
 - [client README](../../apps/client/README.md) - クライアント側の詳細

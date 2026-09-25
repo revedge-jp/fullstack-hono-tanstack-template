@@ -73,7 +73,6 @@ gh auth login          # 未認証の場合
 - `packages/database` (`@repo/db`): Drizzle スキーマ/クライアントのラッパ
 - `packages/logging` (`@repo/logging`): pino ベースのロガー（Workers 対応）
 - 型共有は Hono RPC（`AppType`）、Result 型は npm の `neverthrow` を使用
-- `packages/ui`: 共有 UI コンポーネント（client/admin-client で共有）
 - `packages/typescript-config`, `packages/tailwind-config`: 共有設定
 
 詳細は [開発ガイド - パッケージ](docs/dev/development.md#パッケージ) を参照してください。
@@ -86,7 +85,7 @@ gh auth login          # 未認証の場合
 - [環境変数ガイド](docs/dev/environment-variables.md) - 環境変数一覧と追加フロー
 - [開発コマンド詳細](docs/dev/dev-commands.md) - よく使うコマンドの詳細説明
 - [システムアーキテクチャ](docs/architecture/architecture.md) - システム全体の構成とデプロイフロー
-- [サーバー設計ガイド](apps/api-service/README.md) - ROP/Result、ユースケース/ステップ、DI、テスト方針
+- [api-service README](apps/api-service/README.md) - 単体での起動・エンドポイント一覧と、規約の正典への案内
 
 ### デプロイ向け
 
@@ -104,8 +103,8 @@ bun run build         # 変更対象の build（Turbo 依存）
 bun run lint          # oxlint + oxfmt --check
 bun run lint:fix      # oxlint --fix + oxfmt
 bun run typecheck     # TypeScript
-bun run test          # サーバーのテスト（統合/契約含む）
-bun run test:unit     # サーバーのユニットテスト
+bun run test          # 全パッケージのテスト（api-service は統合/契約含む。TEST_DATABASE_URL の DB が必要）
+bun run test:unit     # DB 不要のユニットテスト
 bun run check-all     # まとめて検証（lint/type/test/arch）
 ```
 
@@ -179,69 +178,11 @@ git push -u origin <branch>
 ## 環境変数
 
 ルートの `.env` を利用（`dotenv -e .env`）。まず `cp .env.example .env` でひな形を用意する。
-全変数の一覧・追加フローは [環境変数ガイド](docs/dev/environment-variables.md) を参照。
+`.env.example` はダミー値で埋めてあり、コピーしただけで dev サーバーは起動する（`apps/api-service/src/config.ts`
+が起動時に Zod で検証する）。実際の Google サインインを使うときだけ `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+に本物の値を設定する。
 
-### 必須環境変数
-
-`apps/api-service/src/config.ts` が起動時に Zod で検証する。未設定だと dev サーバーが
-起動しない（`.env.example` はいずれもダミー値で埋めてあるため、コピーすれば起動する）。
-
-- `DATABASE_URL`: 本番/開発用データベース URL
-  - Docker Compose 使用時: `postgresql://postgres:postgres@localhost:5432/app_db`
-  - 本番環境: `postgresql://appuser:password@<private-ip>:5432/app`
-- `BETTER_AUTH_SECRET`: Better Auth のセッション署名鍵（本番はランダムな強い値にする）
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: Google OAuth クレデンシャル
-  - ダミー値のままでも起動し、開発時は「Dev サインイン」ボタンで Google を介さず
-    ログインできる。実際の Google サインインを使う場合のみ本物の値を設定する
-- `TEST_DATABASE_URL`: テスト用データベース URL（テスト実行時に必要）
-  - Docker Compose 使用時: `postgresql://postgres:postgres@localhost:5433/app_db`
-
-### 開発環境用（オプション）
-
-#### Server (`apps/api-service`)
-
-- `API_PORT`: API サーバーのポート（既定: 8080。`PORT` も後方互換で受理される）
-- `NODE_ENV`: 環境（`development` / `test` / `production`、既定: `production` — fail-closed。ローカル開発は `.env` で `NODE_ENV=development` を明示する）
-- `CORS_ORIGIN`: CORS 許可オリジン（本番では必須。開発/テスト時は未設定時 `http://localhost:3000`）
-- `LOG_PRETTY`: ログの整形出力（`true` で有効化）
-- `BETTER_AUTH_URL` / `BETTER_AUTH_TRUSTED_ORIGINS`: Better Auth のベース URL / 信頼オリジン
-
-#### Client (`apps/client`)
-
-- `CLIENT_PORT`: client（Vite）のポート（既定: 3000）
-- `API_BASE_URL`: API サーバーの URL（既定: `http://localhost:8080`）
-  - client と api-service は本番では同一 Worker のため、SSR からの API 呼び出しは
-    `shared/lib/api-client.ts` が AsyncLocalStorage 経由で注入するインプロセス
-    Hono RPC クライアントで行う（ADR-001）
-
-### 設定例
-
-`.env` の例（`cp .env.example .env` の中身に相当）:
-
-```bash
-# データベース
-# Docker Compose で起動した場合のデフォルト設定:
-# - ユーザー名: postgres / パスワード: postgres / データベース名: app_db
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_db
-TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/app_db
-
-# Auth（ダミー値のままで起動可。実際の Google サインイン時のみ本物の値に差し替え）
-BETTER_AUTH_SECRET=your-secret-here
-BETTER_AUTH_URL=http://localhost:8080
-BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-
-# Server
-NODE_ENV=development
-LOG_PRETTY=false
-# API_PORT=8080
-# CORS_ORIGIN=http://localhost:3000
-```
-
-**注意**: Docker Compose で起動する場合、デフォルトではユーザー名 `postgres`、パスワード `postgres`、データベース名 `app_db` になります。本番環境では `appuser` ユーザーを使用しますが、開発環境では `postgres` ユーザーを使用します。
-
-詳細は [開発ガイド - 環境変数](docs/dev/development.md#環境変数) を参照してください。**新しい環境変数を追加する際の手順**は [環境変数ガイド](docs/dev/environment-variables.md) を参照してください。
+全変数の一覧・既定値・**新しい環境変数を追加する際の手順**は [環境変数ガイド](docs/dev/environment-variables.md) を参照。
 
 ## 要件
 

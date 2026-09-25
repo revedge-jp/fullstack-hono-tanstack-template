@@ -8,7 +8,7 @@ worktree の作り方は2つある。**エージェント（Claude Code）が使
 | 方式 | 置き場所 | セットアップ | DB |
 |---|---|---|---|
 | Claude Code の worktree（`EnterWorktree`） | `.claude/worktrees/<name>` | WorktreeCreate フックが自動 | main の共有コンテナ内の `wt_<name>` |
-| 手動 worktree（`bun run worktree`） | `../<project>-<branch>` | `scripts/worktree.sh` | worktree ごとに起動 |
+| 手動 worktree（`bun run worktree`） | `../<project>-<branch>` | `scripts/worktree.sh` | `dev-<N>` ブランチなら worktree ごとに起動（それ以外は main と同じ設定） |
 
 ## Claude Code の worktree（`.claude/worktrees/<name>`）
 
@@ -131,7 +131,7 @@ git worktree prune
 ## セットアップ
 
 新しい worktree を作成した後、以下のセットアップが必要です。
-ヘルパースクリプトはこれらを自動実行します。
+ヘルパースクリプトは 1〜2 を自動実行します（3 は手で行う）。
 
 ### 1. 環境変数の設定
 
@@ -148,15 +148,23 @@ cp ../fullstack-hono-tanstack-template/.env .env
 bun install
 ```
 
-### 3. マイグレーションファイル生成（スキーマ変更時のみ）
+### 3. DB の起動とマイグレーションの適用
 
 ```bash
-bun run db:generate
+bun run db:up
+bun run db:migrate
 ```
+
+マイグレーションはスキーマを変更したブランチで 1 回だけ `bun run db:generate` してコミットする。他の worktree は
+取り込んだマイグレーションを `bun run db:migrate` で当てるだけにする（各 worktree で生成し直すと、同じ変更の
+マイグレーションが別名で重複する）。
 
 ## ポート設定
 
-worktree ごとに異なるポートが自動設定されます。これにより、複数の worktree で同時に `bun run dev` と `bun run db:up` を実行できます。
+`dev-<N>` という名前のブランチの worktree には、スロット N のポートが自動設定されます。これにより、複数の
+worktree で同時に `bun run dev` と `bun run db:up` を実行できます。**それ以外の名前（`feat/xxx` 等）はスロット 0 =
+main と同じポート・コンテナ名になる**ので、main と同時に動かすなら `.env` を手で書き換える（スロットの判定は
+`scripts/worktree.sh` の `extract_slot_number`）。
 
 ### ポート割り当て
 
@@ -169,25 +177,10 @@ worktree ごとに異なるポートが自動設定されます。これによ�
 
 ### 自動設定される環境変数
 
-`bun run worktree add dev-1` を実行すると、`.env` に以下が自動追加されます:
-
-```bash
-# Worktree ポート設定 (スロット: 1)
-CLIENT_PORT=3001
-API_PORT=8082
-API_BASE_URL="http://localhost:8082"
-SERVER_PUBLIC_URL="http://localhost:8082"
-
-# Worktree DB設定 (スロット: 1)
-DATABASE_PORT=5434
-TEST_DATABASE_PORT=5435
-DATABASE_URL="postgresql://postgres:postgres@localhost:5434/app_db?schema=public"
-TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5435/app_db?schema=public"
-POSTGRES_CONTAINER_NAME="app_postgres_slot1"
-POSTGRES_TEST_CONTAINER_NAME="app_postgres_test_slot1"
-POSTGRES_VOLUME_NAME="postgres-data_slot1"
-POSTGRES_TEST_VOLUME_NAME="postgres-test-data_slot1"
-```
+`bun run worktree add dev-1` を実行すると、`scripts/worktree.sh` の `setup_worktree` が `.env` 末尾に
+スロット 1 の値を書き足す（ポート・`DATABASE_URL` / `TEST_DATABASE_URL`・Postgres のコンテナ名と volume 名。
+値は `.env` を開いて確認する）。コンテナ名・volume 名は `app_postgres_slot1` のような固定の接頭辞で書かれ、
+main の `.env` に設定した固有名は引き継がない。
 
 ### 手動でポートを変更する場合
 
@@ -221,7 +214,7 @@ bun run worktree add dev-2
 
 ### 3. データベースの扱い
 
-worktree ごとに独立した DB コンテナが自動設定されます。
+`dev-<N>` の worktree には独立した DB コンテナ（スロット N のポート・コンテナ名）が自動設定されます。
 
 ```bash
 # 各 worktree で独自の DB を起動
@@ -247,8 +240,7 @@ bun run db:migrate
 以下のディレクトリは worktree ごとに独立しているため、競合しません:
 
 - `node_modules/`
-- `.next/`
-- `dist/`
+- `dist/` / `.output/`（ビルド成果物）
 - `.turbo/`
 
 ### 5. Git 操作
@@ -298,10 +290,13 @@ Bun のグローバルキャッシュにより、2回目以降は高速化され
 
 ### Q: Drizzle のスキーマ変更が反映されない
 
+`dev-<N>` の worktree は DB が main と別なので、マイグレーションはそれぞれの worktree で適用する。
+
 ```bash
-# 各 worktree で再生成が必要
-bun run db:generate
+bun run db:migrate
 ```
+
+`bun run db:generate` はスキーマを変更したブランチでだけ実行する（上の「3. DB の起動とマイグレーションの適用」）。
 
 ## 関連コマンド
 

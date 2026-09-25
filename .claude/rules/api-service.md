@@ -152,4 +152,4 @@ mutate されるため、既存コードのテスト不足がそのまま自分�
 確認する。下流のチェックと同じ入力を弾いているだけのガード節は、消しても観測可能な差が出ないため
 **原理的にテストで殺せない**（等価ミュータント）。この場合の正解はテスト追加ではなく**分岐の削除**。
 
-参照: `docs/dev/adding-features.md`（実装例）/ `docs/dev/coding-standards.md`
+参照: `docs/dev/adding-features.md`（機能追加時に読む正典・参照実装ファイルの案内と、写すときに落としやすい点）/ `docs/dev/coding-standards.md`

@@ -14,9 +14,11 @@ paths:
 
 ## 設計原則
 
-- `features/` 配下での `process.env` 直参照は禁止。api-service は `src/config.ts` の `loadConfig()` → container DI、client も `loadConfig()` 経由で受け取る。
-- `integrations/` 層も `process.env` 直参照禁止。呼び出し元からパラメータで受け取る。
-- 検証: `bun run arch:guards` が直参照を検出する。
+- アプリケーションコード（テスト・`alchemy.run.ts`・ツールの設定ファイルを除く）で `process.env` を読んでよいのは
+  api-service の `src/config.ts` だけ。api-service は `loadConfig()` → container DI で受け取り、`integrations/` 層も
+  呼び出し元からパラメータで受け取る。client は独自の設定機構を持たない（下の「client / Docker のみの場合」）。
+- 検証: api-service は `scripts/check/api-process-env.sh`（`src/` 全体。`bun run arch:check` と `bun run check-all` が呼ぶ）、
+  client は `bun run arch:guards` の `guard_client_features_no_process_env`（`apps/client/features/` のみ）が検出する。
 
 ## api-service に追加する場合
 
@@ -45,4 +47,4 @@ paths:
 - [ ] CI / デプロイの workflow を更新したか（必要な場合）
 - [ ] `alchemy.run.ts` の `bindings`（と deploy.yml の env）を更新したか（本番で使う場合）
 - [ ] `docs/dev/environment-variables.md` を更新したか
-- [ ] `bun run arch:guards` が通るか
+- [ ] `bun run arch:check` が通るか

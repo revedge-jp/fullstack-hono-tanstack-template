@@ -15,7 +15,7 @@
 
 **worktree で作業したものをレビューに掛けるときは、対象を明示する。**
 
-- PR があるなら **PR 番号を引数に渡す**（`/review-full 559`・`/code-review high 559`）。レビューは CONFIRMED がゼロに
+- PR があるなら **PR 番号を引数に渡す**（`/review-full <PR番号>`・`/code-review high <PR番号>`）。レビューは CONFIRMED がゼロに
   なる周まで回し、収束の記録を PR 本文に残す（手順と auto-merge は `.claude/commands/ship.md`）。これが最も確実 — レビュー側が
   GitHub から差分を取るので、ローカルのブランチ状態に依存しない
 - PR を作る前にレビューしたいなら、**先に PR を作る**（Draft でよい）。「PR前に見たい」と
@@ -43,12 +43,12 @@ typecheck / lint / test:unit は通り、`git push` の pre-push で初めて原
 
 ### `git diff main` はローカル main の鮮度に依存する（worktree の有無を問わない）
 
-`code-review` スキルの Step 0 は `git diff main` を使うが、これは**ローカルの `main` ブランチ**
-（`origin/main` ではない）を基準にする。ローカル `main` が `origin/main` から遅れていると、
-実装と無関係な差分が大量に混ざり、レビューが実質的に成立しない（エラーにはならないため、
-結果を読むまで気づけない）。
+`git diff main` は**ローカルの `main` ブランチ**（`origin/main` ではない）を基準にする。ローカル `main` が
+`origin/main` から遅れていると、実装と無関係な差分が大量に混ざり、レビューが実質的に成立しない（エラーには
+ならないため、結果を読むまで気づけない）。
 
-レビュー・監査の前に `git fetch origin main` してから `git diff origin/main` で差分を確認する。
+レビュー・監査で差分を取るときは `git fetch origin main` してから `git diff origin/main...HEAD` を使う
+（`/codex-review` の Step 0 もこの形）。レビュー手順を書くときも `git diff main` と書かない。
 PR がある場合は PR 番号を渡す方がより確実。
 
 ## 編集方針
