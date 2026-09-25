@@ -130,7 +130,8 @@ Step 1-D で言語化した各追加振る舞いについて、実装が期待�
 
 - 参照実装（`apps/api-service/src/features/tasks`・`apps/api-service/src/integrations/composition`・
   `apps/api-service/src/test-helpers`・`apps/client/features/tasks`・`apps/client/shared/lib`）の形
-  （関数のシグネチャ、エラー型の正規化、ファイル構成、呼び出し方）を変えたのに、`apps/*/AGENTS.md` の
+  （関数のシグネチャ、エラー型の正規化、ファイル構成、呼び出し方）を変えたのに、`apps/*/AGENTS.md` と
+  `.claude/rules/*.md`（`api-service.md` の `createTransactionalDb`、`client.md` の `createApiMock` 等）の
   サンプルコードや構造図が古い形のまま残っていないか
   - 実害: サンプルは新しい feature を書くときの型紙として写されるので、ずれた形がそのまま量産される
     （文字列では照合できないため機械検査にはしていない）
