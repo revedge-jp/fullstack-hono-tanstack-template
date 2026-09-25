@@ -17,9 +17,10 @@ function HomePage() {
 
   return (
     <CenteredPage>
-      <main className="flex flex-col items-center gap-4">
+      {/* 塊は CenteredPage で中央に置き、中は左揃え（client.md「文章を中央揃えにしない」） */}
+      <main className="flex w-full max-w-sm flex-col items-start gap-4 px-6">
         <PageHeader title="{{APP_NAME}}" />
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-start gap-1">
           <p className="text-sm font-medium">{user.name}</p>
           <p className="text-sm text-muted-foreground">{user.email}</p>
         </div>
