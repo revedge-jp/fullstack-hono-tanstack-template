@@ -21,13 +21,29 @@ set -uo pipefail
 INPUT=$(cat)
 TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 GLOB=$(printf '%s' "$INPUT" | jq -r '.tool_input.glob // ""' 2>/dev/null || echo "")
-case "$GLOB" in
-  .env.example|*/.env.example) ;;
-  *.env*|*.dev.vars*)
-    jq -cn --arg r "glob「${GLOB}」は秘密情報(.env / .dev.vars)を検索対象にするため使いません。設定項目は .env.example を参照してください" \
-      '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
-    exit 0 ;;
-esac
+# Grep ツールは glob を空白で区切り、{} を含まない部分はさらにカンマで区切って、それぞれを rg の --glob に
+# 渡す。全体を 1 つの文字列として判定すると `.env */.env.example` のような並べ方で .env を通してしまうので、
+# 同じ規則で分けて要素ごとに見る(set -f: 分割した要素をパス名として展開させない)
+GLOB_DENY=0
+set -f
+for part in $GLOB; do
+  case "$part" in
+    *'{'*) pieces="$part" ;;
+    *) pieces="${part//,/ }" ;;
+  esac
+  for piece in $pieces; do
+    case "$piece" in
+      .env.example|*/.env.example) ;;
+      *.env*|*.dev.vars*) GLOB_DENY=1 ;;
+    esac
+  done
+done
+set +f
+if [ "$GLOB_DENY" = "1" ]; then
+  jq -cn --arg r "glob「${GLOB}」は秘密情報(.env / .dev.vars)を検索対象にするため使いません。設定項目は .env.example を参照してください" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
+  exit 0
+fi
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""' 2>/dev/null || echo "")
 [ -z "$FILE" ] && exit 0
 

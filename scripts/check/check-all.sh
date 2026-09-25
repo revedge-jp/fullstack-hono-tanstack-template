@@ -67,6 +67,7 @@ run_step_bg() {
 # 2 つの tsc で同時に走り、型定義を書き合って偶発的に落ちる（turbo は 1 回の呼び出しの中でしか重複を排除しない）。
 # --continue は lint と typecheck の両方の失敗を出すため。dependencies-successful にするのは、依存の build が
 # 落ちたまま lint を走らせると型情報を使うルールが空振りし、その「成功」がキャッシュに残るため
+# （代償: 上流の typecheck が落ちた回は、それに依存する client の typecheck は次の回まで出ない）
 LINT_TASKS=()
 if [ "${SKIP_LINT:-}" != "1" ]; then LINT_TASKS+=(lint); fi
 if [ "${SKIP_TYPECHECK:-}" != "1" ]; then LINT_TASKS+=(typecheck); fi
