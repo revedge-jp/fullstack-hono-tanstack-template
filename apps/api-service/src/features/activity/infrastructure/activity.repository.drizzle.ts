@@ -1,3 +1,4 @@
+import { toUnexpectedDbError } from "@app/shared/db-error";
 import { activities, type Database } from "@repo/db";
 import { desc, eq } from "drizzle-orm";
 import { err, ok, ResultAsync } from "neverthrow";
@@ -5,14 +6,19 @@ import { err, ok, ResultAsync } from "neverthrow";
 import type { ActivityRepository } from "../domain/activity.repository";
 import { mapDbActivityToDomain } from "./mappers";
 
-export function createActivityRepository(deps: { db: Database }): ActivityRepository {
-  const { db } = deps;
+type WarnLogger = { warn: (obj: unknown, msg?: string) => void };
+
+export function createActivityRepository(deps: {
+  db: Database;
+  logger: WarnLogger;
+}): ActivityRepository {
+  const { db, logger } = deps;
 
   return {
     record: (input) =>
       ResultAsync.fromPromise(
         db.insert(activities).values(input).returning(),
-        () => "Unexpected" as const,
+        toUnexpectedDbError(logger, "activity.record"),
       ).andThen((rows) => {
         const row = rows[0];
         return row ? ok(mapDbActivityToDomain(row)) : err("Unexpected" as const);
@@ -25,7 +31,7 @@ export function createActivityRepository(deps: { db: Database }): ActivityReposi
           orderBy: [desc(activities.occurredAt)],
           limit: 50,
         }),
-        () => "Unexpected" as const,
+        toUnexpectedDbError(logger, "activity.list"),
       ).map((rows) => ({ items: rows.map(mapDbActivityToDomain) })),
   };
 }

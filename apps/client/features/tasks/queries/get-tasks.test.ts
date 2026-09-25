@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { isRedirect } from "@tanstack/react-router";
+
 import { createApiMock, reactStartModule, reactStartServerModule } from "@/test-helpers/api-mock";
 
 const TASKS_PAGE = {
@@ -41,6 +43,22 @@ describe("tasks.getTasksServerFn", () => {
       expect(result).toEqual({ items: [], nextCursor: null });
     },
   );
+
+  test("cursor 付きで 400（壊れた ?cursor=）なら、エラーにせず最初のページへ redirect する", async () => {
+    api.state.ok = false;
+    api.state.status = 400;
+    const error = await getTasksServerFn({ data: { cursor: "broken" } }).catch((e: unknown) => e);
+    expect(isRedirect(error)).toBe(true);
+    if (isRedirect(error)) {
+      expect(error.options.to).toBe("/tasks");
+    }
+  });
+
+  test("cursor 無しの 400 はリダイレクトで隠さず throw する（ループさせない）", async () => {
+    api.state.ok = false;
+    api.state.status = 400;
+    await expect(getTasksServerFn({ data: {} })).rejects.toThrow("タスク一覧の取得に失敗しました");
+  });
 
   test("異常: API が 500 を返した場合は throw する（0件と区別してエラーバウンダリへ）", async () => {
     api.state.ok = false;

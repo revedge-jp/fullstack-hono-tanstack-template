@@ -1,3 +1,5 @@
+import { readCauseCode, stringifyErrorSafe } from "@repo/logging";
+
 function readCode(e: unknown): string | undefined {
   if (typeof e !== "object" || e === null) {
     return undefined;
@@ -22,4 +24,25 @@ export function isPgError(e: unknown, code: string): boolean {
 
   const cause = typeof e === "object" && e !== null && "cause" in e ? e.cause : undefined;
   return readCode(cause) === code;
+}
+
+type WarnLogger = { warn: (obj: unknown, msg?: string) => void };
+
+/**
+ * DB 障害を "Unexpected" に畳む前に、原因を warn で残す errorMapper を返す。畳んだ後は toHttp の
+ * 500 ログに "Unexpected" しか残らず、DB の停止（ECONNREFUSED）とマイグレーションの当て忘れ（42P01）の
+ * 区別がつかない。error / err キーは使わない（Errors は toHttp の 500 で 1 件数えるので二重にしない）。
+ * Error 本体は渡さない: DrizzleQueryError は message・stack・params にバインド値を持つので、
+ * stringifyErrorSafe で切り落とした文字列と SQLSTATE（causeCode）だけにする（.claude/rules/logging.md）。
+ * container のロガーを受け取るので requestId は付かない（付くのは requestLogger ミドルウェアが作る子ロガー
+ * だけ）。toHttp の 500 ログとは operation と時刻で突き合わせる。
+ */
+export function toUnexpectedDbError(logger: WarnLogger, operation: string) {
+  return (e: unknown): "Unexpected" => {
+    logger.warn(
+      { operation, causeCode: readCauseCode(e), detail: stringifyErrorSafe(e) },
+      "db_query_failed",
+    );
+    return "Unexpected";
+  };
 }

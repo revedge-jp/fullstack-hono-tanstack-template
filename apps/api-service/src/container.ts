@@ -42,11 +42,11 @@ export function createContainer(config: AppConfig): Container {
   const getSession = makeGetSession({ verifySession });
 
   // activity は tasks より先に組み立てる — tasks は ActivityRecorder(ports.ts)経由でのみ依存する
-  const activityRepository = createActivityRepository({ db });
+  const activityRepository = createActivityRepository({ db, logger });
   const activity = createActivityService({ activityRepository });
   const activityRecorder = createActivityRecorder({ activity });
 
-  const tasksRepository = createTasksRepository({ db });
+  const tasksRepository = createTasksRepository({ db, logger });
   const tasks = createTasksService({ tasksRepository, activityRecorder, logger });
 
   return { db, end, logger, auth, devAuth, getSession, tasks, activity };

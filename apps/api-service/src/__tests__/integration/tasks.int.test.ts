@@ -5,6 +5,8 @@ import { createTasksRepository } from "@app/features/tasks/infrastructure/tasks.
 import { createTransactionalDb } from "@app/test-helpers/transactional-db";
 import { authUsers, type Database, tasks } from "@repo/db";
 
+import { createLoggerSpy } from "../../test-helpers/create-logger-spy";
+
 // 各テストは BEGIN → ROLLBACK で包まれる（test-helpers/transactional-db.ts）。
 // テスト中に作ったユーザー・タスクは終了時に自動で消えるので、手書きの delete は書かない。
 const { getDb: getTx, end } = createTransactionalDb(process.env.DATABASE_URL ?? "");
@@ -36,7 +38,7 @@ afterAll(async () => {
 describe("TasksRepository (実DB)", () => {
   test("create → list → getById → update → delete の往復", async () => {
     const db = getDb();
-    const tasksRepository = createTasksRepository({ db });
+    const tasksRepository = createTasksRepository({ db, logger: createLoggerSpy().logger });
     const OWNER_ID = await seedOwner(db);
     const created = await tasksRepository.create({
       ownerId: OWNER_ID,
@@ -83,7 +85,7 @@ describe("TasksRepository (実DB)", () => {
 
   test("同一オーナー内でタイトルが重複すると Conflict を返す(一意制約)", async () => {
     const db = getDb();
-    const tasksRepository = createTasksRepository({ db });
+    const tasksRepository = createTasksRepository({ db, logger: createLoggerSpy().logger });
     const OWNER_ID = await seedOwner(db);
     const dupTitle = title(`Duplicate title ${crypto.randomUUID()}`);
     const first = await tasksRepository.create({ ownerId: OWNER_ID, title: dupTitle });
@@ -98,7 +100,7 @@ describe("TasksRepository (実DB)", () => {
 
   test("存在しないタスクの getById は null を返す(他ユーザーのタスクと区別しない)", async () => {
     const db = getDb();
-    const tasksRepository = createTasksRepository({ db });
+    const tasksRepository = createTasksRepository({ db, logger: createLoggerSpy().logger });
     const OWNER_ID = await seedOwner(db);
     const result = await tasksRepository.getById(crypto.randomUUID(), OWNER_ID);
     expect(result.isOk()).toBe(true);
@@ -112,7 +114,7 @@ describe("TasksRepository (実DB)", () => {
   // （同着タイブレークの `id` 側しか通らない）。時刻がすべて別の行と、同着の組の両方を入れる。
   test("keyset ページネーション: limit 件ずつ取得し、重複も欠落もなく (created_at, id) 降順で全件を辿れる", async () => {
     const db = getDb();
-    const tasksRepository = createTasksRepository({ db });
+    const tasksRepository = createTasksRepository({ db, logger: createLoggerSpy().logger });
     const pgOwner = await seedOwner(db, "int-test-pagination");
 
     const base = Date.UTC(2026, 0, 1);
@@ -160,7 +162,7 @@ describe("TasksRepository (実DB)", () => {
 
   test("所有者が異なる delete は NotFound を返す", async () => {
     const db = getDb();
-    const tasksRepository = createTasksRepository({ db });
+    const tasksRepository = createTasksRepository({ db, logger: createLoggerSpy().logger });
     const OWNER_ID = await seedOwner(db);
     const created = await tasksRepository.create({
       ownerId: OWNER_ID,
