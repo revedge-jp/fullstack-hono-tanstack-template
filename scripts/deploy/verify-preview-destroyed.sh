@@ -32,7 +32,38 @@ PS_API="https://api.planetscale.com/v1/organizations/${PLANETSCALE_ORGANIZATION}
 CF_API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
 
 http_status() {
-  curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$@" || echo "000"
+  local code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$@") || true
+  printf '%s' "${code:-000}"
+}
+
+# Hyperdrive は名前で引く API が無いので一覧を全ページ辿る（alchemy の findHyperdriveConfigByName と同じ方式）。
+# 出力: found / absent / unknown
+hyperdrive_state() {
+  local page=1 configs found total_pages
+  while true; do
+    if ! configs=$(curl -sSf --max-time 20 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+      "${CF_API}/hyperdrive/configs?page=${page}" 2>/dev/null); then
+      echo unknown
+      return
+    fi
+    # jq -e の終了コード: 0 = 一致あり / 1 = 一致なし / それ以外 = 応答を読めない（「無い」扱いにしない）
+    found=0
+    printf '%s' "$configs" | jq -e --arg name "$RESOURCE_NAME" \
+      'if (.result | type) == "array" then any(.result[]; .name == $name) else error("result がありません") end' \
+      >/dev/null 2>&1 || found=$?
+    case "$found" in
+      0) echo found; return ;;
+      1) ;;
+      *) echo unknown; return ;;
+    esac
+    total_pages=$(printf '%s' "$configs" | jq -r '.result_info.total_pages // 1')
+    if ! [[ "$total_pages" =~ ^[0-9]+$ ]] || [ "$page" -ge "$total_pages" ]; then
+      echo absent
+      return
+    fi
+    page=$((page + 1))
+  done
 }
 
 # 1 回の問い合わせで「残っているもの」を remaining に積む。確かめられなかったら unknown に積む
@@ -57,21 +88,11 @@ check_once() {
     *) unknown="$unknown Worker(HTTP ${status})" ;;
   esac
 
-  if configs=$(curl -sSf --max-time 20 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-    "${CF_API}/hyperdrive/configs" 2>/dev/null); then
-    # jq -e の終了コード: 0 = 一致あり / 1 = 一致なし / それ以外 = 応答を読めない（「無い」扱いにしない）
-    found=0
-    printf '%s' "$configs" | jq -e --arg name "$RESOURCE_NAME" \
-      'if (.result | type) == "array" then any(.result[]; .name == $name) else error("result がありません") end' \
-      >/dev/null 2>&1 || found=$?
-    case "$found" in
-      0) remaining="$remaining Hyperdrive:${RESOURCE_NAME}" ;;
-      1) ;;
-      *) unknown="$unknown Hyperdrive(一覧を読めない)" ;;
-    esac
-  else
-    unknown="$unknown Hyperdrive(一覧の取得に失敗)"
-  fi
+  case "$(hyperdrive_state)" in
+    found) remaining="$remaining Hyperdrive:${RESOURCE_NAME}" ;;
+    absent) ;;
+    *) unknown="$unknown Hyperdrive(一覧を取得・解釈できない)" ;;
+  esac
 }
 
 attempt=1
@@ -85,9 +106,10 @@ while true; do
   if [ "$attempt" -ge "$max_attempts" ]; then
     break
   fi
-  echo "  残り:${remaining:- なし} / 未確認:${unknown:- なし}（${attempt}/${max_attempts} 回目。10 秒後に再確認）"
+  interval="${VERIFY_INTERVAL_SECONDS:-10}"
+  echo "  残り:${remaining:- なし} / 未確認:${unknown:- なし}（${attempt}/${max_attempts} 回目。${interval} 秒後に再確認）"
   attempt=$((attempt + 1))
-  sleep "${VERIFY_INTERVAL_SECONDS:-10}"
+  sleep "$interval"
 done
 
 if [ -n "$remaining" ]; then

@@ -166,25 +166,38 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # smoke 失敗時の戻り先は「このデプロイの前に実際に動いていた版」。/api/health が ok を返し、
-      # commit が 40 桁の SHA のときだけ記録する。GitHub の Deployment レコードは使わない — workflow_run の
-      # run では記録される sha が main の先端になり、タグを打った commit とずれる。何もデプロイしなかった
-      # run（readiness=false）も success として残る。
+      # smoke 失敗時の戻り先は「このデプロイの前に実際に動いていた版」。GitHub の Deployment レコードは
+      # 使わない — workflow_run の run では記録される sha が main の先端になり、タグを打った commit とずれる。
+      # 何もデプロイしなかった run（readiness=false）も success として残る。
+      # 読むのは DB に依存しない /api/health/live（DB の一時的な遅延で戻り先を失わない）。commit が 40 桁の SHA で、
+      # main に含まれるときだけ記録する（戻り先はこの environment の資格情報でビルド・デプロイされるので、
+      # detect-target と同じく main に無い commit は動かさない）。
       - name: Record running version (rollback target)
         id: running
         if: steps.readiness.outputs.ready == 'true' && vars.SMOKE_BASE_URL != ''
         env:
           SMOKE_BASE_URL: ${{ vars.SMOKE_BASE_URL }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          body=$(curl -fsS --max-time 10 "${SMOKE_BASE_URL%/}/api/health" || true)
-          sha=$(printf '%s' "$body" | jq -r 'select(.status == "ok") | .commit // empty' 2>/dev/null || true)
+          sha=""
+          for attempt in 1 2 3; do
+            body=$(curl -fsS --max-time 10 "${SMOKE_BASE_URL%/}/api/health/live" || true)
+            sha=$(printf '%s' "$body" | jq -r 'select(.status == "ok") | .commit // empty' 2>/dev/null || true)
+            [ -n "$sha" ] && break
+            [ "$attempt" -lt 3 ] && sleep 5
+          done
           # grep -x は行ごとに判定するので、改行を含む値の 1 行目だけで通ってしまう。文字列全体で判定する
-          if [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "sha=$sha" >> "$GITHUB_OUTPUT"
-            echo "smoke 失敗時の戻り先: $sha"
-          else
-            echo "::notice::稼働中の版を特定できませんでした（初回デプロイ・停止中・/api/health が異常）。このデプロイの smoke が失敗しても自動ロールバックはできません"
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::notice::稼働中の版を特定できませんでした（初回デプロイ・停止中・手動デプロイで commit が dev 等）。このデプロイの smoke が失敗しても自動ロールバックはできません"
+            exit 0
           fi
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$sha...refs/heads/main" --jq .status 2>/dev/null || true)
+          case "$status" in
+            identical|ahead)
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              echo "smoke 失敗時の戻り先: $sha" ;;
+            *) echo "::warning::稼働中の $sha は main に含まれない（$status）ため、ロールバックの戻り先にしません" ;;
+          esac
 
       - uses: ./.github/actions/setup-workspace
         if: steps.readiness.outputs.ready == 'true'

@@ -91,14 +91,33 @@ jobs:
         id: stale
         if: steps.readiness.outputs.ready == 'true'
         run: |
+          # 既定の bash -e には pipefail が無く、curl の失敗がパイプの後ろの jq に隠れて「取り残し 0 件」になる
+          set -o pipefail
           cutoff=$(date -u -d "-${STALE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
           open_previews=$(gh pr list --label preview --state open --limit 1000 --json number,updatedAt)
           stale=$(printf '%s' "$open_previews" | jq -r --arg cutoff "$cutoff" '.[] | select(.updatedAt < $cutoff) | .number' | tr '\n' ' ')
           active=$(printf '%s' "$open_previews" | jq -r '.[].number' | tr '\n' ' ')
-          branches=$(curl -sSf --max-time 30 \
-            -H "Authorization: ${PLANETSCALE_SERVICE_TOKEN_ID}:${PLANETSCALE_SERVICE_TOKEN}" \
-            "https://api.planetscale.com/v1/organizations/${PLANETSCALE_ORGANIZATION}/databases/${APP_NAME}-staging/branches?per_page=100" \
-            | jq -r '.data[].name | select(test("^pr-[0-9]+$")) | ltrimstr("pr-")')
+          # 一覧を取れない・読めないときは失敗させる（取り残しを確かめられないのに緑で終わらせない）
+          branches=""
+          page=1
+          while true; do
+            if ! body=$(curl -sSf --max-time 30 \
+              -H "Authorization: ${PLANETSCALE_SERVICE_TOKEN_ID}:${PLANETSCALE_SERVICE_TOKEN}" \
+              "https://api.planetscale.com/v1/organizations/${PLANETSCALE_ORGANIZATION}/databases/${APP_NAME}-staging/branches?page=${page}&per_page=100"); then
+              echo "::error::PlanetScale の ${APP_NAME}-staging のブランチ一覧を取得できません（取り残しの preview を確かめられない）"
+              exit 1
+            fi
+            if ! printf '%s' "$body" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
+              echo "::error::PlanetScale のブランチ一覧を読めません: $(printf '%s' "$body" | head -c 300)"
+              exit 1
+            fi
+            names=$(printf '%s' "$body" | jq -r '.data[].name | strings | select(test("^pr-[0-9]+$")) | ltrimstr("pr-")')
+            branches="$branches $names"
+            if [ "$(printf '%s' "$body" | jq -r '.next_page // empty')" = "" ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
           orphans=""
           for n in $branches; do
             case " $active " in
@@ -124,9 +143,32 @@ jobs:
           STALE: ${{ steps.stale.outputs.stale }}
           ORPHANS: ${{ steps.stale.outputs.orphans }}
         run: |
+          # 一覧を取ってから依存のインストールを挟むので、その間にラベルが付け直されたり PR 側の destroy が
+          # 走っていたりする。削除の直前に PR の状態を読み直し、条件を満たさなくなったものは飛ばす。
+          # orphan は PR の最終更新から 2 時間は触らない（preview.yml の destroy が実行中・待機中の可能性がある）
+          recent_cutoff=$(date -u -d "-2 hours" +%Y-%m-%dT%H:%M:%SZ)
+          stale_cutoff=$(date -u -d "-${STALE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
+          still_target() {
+            local n=$1 kind=$2 info labeled_open updated
+            # 読めなければ消さない側に倒す（API の一時的な失敗で使用中の preview を消さない）
+            info=$(gh pr view "$n" --json state,labels,updatedAt 2>/dev/null) || return 1
+            labeled_open=$(printf '%s' "$info" | jq -r '(.state == "OPEN") and any(.labels[]?; .name == "preview")')
+            updated=$(printf '%s' "$info" | jq -r '.updatedAt // ""')
+            if [ "$kind" = stale ]; then
+              [ "$labeled_open" = true ] && [ -n "$updated" ] && [[ "$updated" < "$stale_cutoff" ]]
+            else
+              [ "$labeled_open" != true ] && { [ -z "$updated" ] || [[ "$updated" < "$recent_cutoff" ]]; }
+            fi
+          }
           failed=""
           for n in $STALE $ORPHANS; do
-            echo "==> Destroying preview pr-$n ..."
+            kind=orphan
+            case " $STALE " in *" $n "*) kind=stale ;; esac
+            if ! still_target "$n" "$kind"; then
+              echo "==> pr-$n は条件を満たさなくなったので飛ばします（$kind）"
+              continue
+            fi
+            echo "==> Destroying preview pr-$n ($kind) ..."
             bunx alchemy destroy --stage "pr-$n"
             # destroy は失敗しても exit 0 なので、消えたのを確かめてからラベルを外す（残ったまま外すと
             # stale の一覧から見えなくなる。orphan として翌日また拾うが、赤くして人に知らせる）
@@ -134,12 +176,10 @@ jobs:
               failed="$failed pr-$n"
               continue
             fi
-            case " $STALE " in
-              *" $n "*)
-                gh pr edit "$n" --remove-label preview
-                gh pr comment "$n" --body "🧹 ${STALE_DAYS}日以上更新がないため preview 環境（\`pr-$n\`）を自動削除しました。再度必要なら \`preview\` ラベルを付け直してください（DB は空の状態で作り直されます）。" || true
-                ;;
-            esac
+            if [ "$kind" = stale ]; then
+              gh pr edit "$n" --remove-label preview
+              gh pr comment "$n" --body "🧹 ${STALE_DAYS}日以上更新がないため preview 環境（\`pr-$n\`）を自動削除しました。再度必要なら \`preview\` ラベルを付け直してください（DB は空の状態で作り直されます）。" || true
+            fi
           done
           if [ -n "$failed" ]; then
             echo "::error::次の preview を削除できませんでした:${failed}"
