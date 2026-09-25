@@ -115,8 +115,9 @@ curl -s -X POST -H 'content-type: application/json' \
 ## Testing Conventions
 
 - `bun test`（ネイティブ）。vitest / jest は使わない
-- テストヘルパ（`createFakeApp` 等）・書くべきテストの一覧は各アプリの AGENTS.md の
-  「Testing Conventions」節（api-service は `apps/api-service/AGENTS.md`、client は `apps/client/AGENTS.md`）
+- テストヘルパ（`createFakeApp` 等）・書くべきテストの一覧は各アプリの AGENTS.md にある:
+  - `apps/api-service/AGENTS.md` の「Testing Conventions」
+  - `apps/client/AGENTS.md` の「Testing Conventions」
 
 ## TypeScript Style
 

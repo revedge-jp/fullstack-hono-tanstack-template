@@ -55,7 +55,7 @@ github-actions bot のコメントはチェック結果として扱い、指摘�
 **ルール化すべき判定基準（すべて満たす場合に提案する）:**
 1. 今回の指摘が「事前にルールがあれば防げた」バグ・設計ミスを含む
 2. 同種の指摘が今後も繰り返されそうなパターンである
-3. `AGENTS.md` / `.claude/rules/` の既存ルール、`.claude/commands/codex-review.md` の既存チェック項目、`scripts/check/` の既存ガードのいずれにも対応する記述がない
+3. `AGENTS.md`（ルートと `apps/*/AGENTS.md`）/ `.claude/rules/` の既存ルール、`.claude/commands/codex-review.md` の既存チェック項目、`scripts/check/` の既存ガードのいずれにも対応する記述がない
 
 該当する場合は以下の形式で提案し、AskUserQuestion でユーザーに確認を取ること：
 
