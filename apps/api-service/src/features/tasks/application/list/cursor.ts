@@ -31,6 +31,12 @@ export function decodeTaskCursor(raw: string): Result<TaskCursor, "InvalidCursor
     if (Number.isNaN(createdAt.getTime())) {
       return err("InvalidCursor" as const);
     }
+    // JS の Date として正しくても、PostgreSQL の timestamptz が受け付けない年（0 年以前・10000 年以降）は
+    // 比較の時点で 22008 / 22009 になり 500 になる。エンコーダは 4 桁の年しか出さないので、改ざん・破損として弾く
+    const year = createdAt.getUTCFullYear();
+    if (year < 1 || year > 9999) {
+      return err("InvalidCursor" as const);
+    }
     return ok({ createdAt, id });
   } catch {
     return err("InvalidCursor" as const);

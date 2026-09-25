@@ -89,4 +89,20 @@ describe("task cursor codec", () => {
     const r = decodeTaskCursor(btoa(JSON.stringify({ t: "not-a-date", id: "task-1" })));
     expect(r.isErr()).toBe(true);
   });
+  test.each([
+    "0000-01-01T00:00:00.000Z",
+    "-000001-01-01T00:00:00.000Z",
+    "+010000-01-01T00:00:00.000Z",
+  ])("年が PostgreSQL の範囲外（%s）のカーソルは InvalidCursor", (t) => {
+    const raw = btoa(JSON.stringify({ t, id: "5f0c2b8e-3d4a-4c1e-9b7a-2e6d8f1a0c93" }));
+    expect(decodeTaskCursor(raw).isErr()).toBe(true);
+  });
+
+  test.each(["0001-01-01T00:00:00.000Z", "9999-12-31T23:59:59.999Z"])(
+    "範囲の端（%s）は通す",
+    (t) => {
+      const raw = btoa(JSON.stringify({ t, id: "5f0c2b8e-3d4a-4c1e-9b7a-2e6d8f1a0c93" }));
+      expect(decodeTaskCursor(raw).isOk()).toBe(true);
+    },
+  );
 });

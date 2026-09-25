@@ -23,6 +23,16 @@ describe("tasks.advanceTask action", () => {
     expect(result).toEqual({ ok: false, message: "このタスクは既に完了しています" });
   });
 
+  test("異常: 並行更新の Conflict は再読み込みを促す文言にする", async () => {
+    api.state.ok = false;
+    api.state.body = { ok: false, error: "Conflict" };
+    const result = await advanceTask({ id: "task-1" });
+    expect(result).toEqual({
+      ok: false,
+      message: "他の操作でタスクの状態が変わりました。再読み込みしてからやり直してください",
+    });
+  });
+
   test("異常: エラーレスポンスの形が想定外の場合は既定メッセージ", async () => {
     api.state.ok = false;
     api.state.body = "not-json-shape";
