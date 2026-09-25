@@ -7,6 +7,7 @@
 あわせて読むもの（Claude Code 以外のツールは自動ロードされない）:
 
 - `../../.claude/rules/client.md` — SSR / `window` 参照 / a11y / テストヘルパ
+- `../../.claude/rules/logging.md` — ログを出すコードを書くとき（生の `console.*` 禁止・`error`/`err` キーの使い分け）
 - `../../.claude/rules/env-vars.md` — 環境変数を足すとき
 
 参照実装は `features/tasks`。actions / queries のテストは `test-helpers/api-mock.ts` から書き始める。

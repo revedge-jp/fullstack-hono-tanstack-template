@@ -10,11 +10,12 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
   `apps/client/AGENTS.md` を読む。Claude Code は各アプリの `CLAUDE.md`（`@AGENTS.md` のみ）経由で、
   そのディレクトリのファイルを読んだ時点で自動ロードするが、ファイルを開く前の計画段階では
   読み込まれていないので、feature 追加などの設計はまず明示的に読んでから始める
-- `.claude/rules/`: Claude Code は `general.md` / `package-management.md` を常時ロードし、
-  `api-service.md` / `client.md` / `env-vars.md` をパススコープ（該当ファイルを読んだとき）でロードする。
+- `.claude/rules/`: Claude Code は `general.md` / `package-management.md` を常時ロードし、残り
+  （`api-service.md` / `client.md` / `env-vars.md` / `logging.md` / `gemini.md` / `agent-permissions.md` /
+  `worktree.md`）をパススコープ（該当ファイルを読んだとき）でロードする。
   **Claude Code 以外のツールは、このファイルの次に `.claude/rules/general.md` と
-  `.claude/rules/package-management.md` を読む**（ログ規約・Git 安全運用・`bun add` 必須など、最初に
-  破りやすい規約はそこにある）。パススコープの 3 つは各アプリの AGENTS.md から辿る
+  `.claude/rules/package-management.md` を読む**（Git 安全運用・`bun add` 必須・ログ規約の要点など、最初に
+  破りやすい規約はそこにある）。パススコープのルールは各アプリの AGENTS.md と `general.md` の案内から辿る
 - `REVIEW.md`: コードレビューの採否基準。Claude Code の `/code-review` と Claude Code Review が読む
 
 ## Stack
