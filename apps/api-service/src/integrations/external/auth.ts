@@ -1,5 +1,6 @@
 import type { AppConfig } from "@app/config";
 import { authAccounts, authSessions, authUsers, authVerifications, type Database } from "@repo/db";
+import { stringifyErrorSafe } from "@repo/logging";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
@@ -12,13 +13,60 @@ type BetterAuthLogLevel = "debug" | "info" | "warn" | "error";
 
 export type AuthLogger = Record<BetterAuthLogLevel, (obj: unknown, msg?: string) => void>;
 
+// DrizzleQueryError はメッセージ末尾に `\nparams: <バインド値>` を埋め込む。pino の redact は
+// キー単位でしか効かず文字列の中身には届かないため、ここで切り落とす(SQL 文は残す)。
+const BIND_PARAMS_MARKER = "\nparams:";
+
+function stripBindParams(message: string): string {
+  const markerIndex = message.indexOf(BIND_PARAMS_MARKER);
+  return markerIndex === -1 ? message : message.slice(0, markerIndex);
+}
+
+// stack の先頭行(複数行メッセージなら複数行)はメッセージの複製でバインド値を含みうるので、
+// 呼び出しフレームの行だけを残す。
+function extractStackFrames(stack: string): string {
+  return stack
+    .split("\n")
+    .filter((line) => line.trimStart().startsWith("at "))
+    .join("\n");
+}
+
+// cause が Error 以外のオブジェクトなら JSON 全体が文字列になり、redact は掛からない
+// (DrizzleQueryError の cause は postgres.js の Error なのでこの経路は通らない)。
+function describeCause(cause: unknown): string {
+  if (cause instanceof Error) {
+    return `${cause.name}: ${stripBindParams(cause.message)}`;
+  }
+  return stringifyErrorSafe(cause);
+}
+
+// pino の既定シリアライザが Error を直列化するのはトップレベルの `err` だけで、それ以外の
+// 位置の Error は JSON.stringify で `{}` になる(message も stack も消える)。一方 `err` /
+// `error` は 5xx 専用の予約キーなので、Better Auth の warn ログをそこへ載せることはできない。
+// そのため betterAuthArgs の中で Error を平たいオブジェクトに置き換える。own プロパティは
+// 展開しない(DrizzleQueryError は `params` にバインド値を持つ)。
+function serializeBetterAuthArg(arg: unknown): unknown {
+  if (!(arg instanceof Error)) {
+    return arg;
+  }
+  return {
+    name: arg.name,
+    message: stripBindParams(arg.message),
+    ...(arg.stack === undefined ? {} : { stack: extractStackFrames(arg.stack) }),
+    ...(arg.cause === undefined ? {} : { cause: describeCause(arg.cause) }),
+  };
+}
+
 export function toBetterAuthLoggerOption(logger: AuthLogger) {
   return {
     // Better Auth 既定の閾値(warn)をそのまま使う。debug/info は publish されない。
     log: (level: BetterAuthLogLevel, message: string, ...args: unknown[]) => {
       // message は SQL 文などを含みうるので pino の msg に置く(msg は $metadata.error に
       // 取り込まれないキー)。args は Better Auth が付ける補足情報で、構造化して残す。
-      logger[level](args.length > 0 ? { betterAuthArgs: args } : {}, message);
+      logger[level](
+        args.length > 0 ? { betterAuthArgs: args.map(serializeBetterAuthArg) } : {},
+        message,
+      );
     },
   };
 }

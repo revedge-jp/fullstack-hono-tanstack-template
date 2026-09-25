@@ -29,6 +29,9 @@ Observability データセットに入る。そのためこの規約は両方に
 - 安全網として `@repo/logging` が warn 以下のログの `error` / `err` を `failure` へ退避する。
   **`failure` はその退避先の予約キー**なので別の意味に使わない。Error オブジェクトは `err` に
   載せてよい（pino の既定シリアライザがスタックを直列化するのはこのキーだけで、退避後も形は保たれる）。
+- **`err` 以外の位置（ネストしたキー・配列の中）に置いた Error は `{}` になる**（message も stack も消える）。
+  そこに載せるなら `name` / `message` / `stack` を持つ平たいオブジェクトに置き換える
+  （例: `toBetterAuthLoggerOption` の `betterAuthArgs`）。
 
 ## なぜ生の console を禁止するか（実測メモ）
 
