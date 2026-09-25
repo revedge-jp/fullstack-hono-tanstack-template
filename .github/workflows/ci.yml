@@ -80,16 +80,23 @@ jobs:
     timeout-minutes: 5
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
+      # fetch-depth: 2 で merge commit と両親が揃う
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
+      # 差分は merge commit(refs/pull/N/merge)とその第 1 親(merge を作った時点の base の先端)で取る。
+      # pull_request.base.sha は synchronize のペイロードで古いままのことがあり、merge ref は最新の
+      # base で作られるため、"$BASE_SHA"...HEAD だと間に main に入った他 PR の変更まで拾う(#111 で発生)。
+      # origin/main...<head> にしないのは、PR を積み重ねると base が main ではないため
       - name: 検証器の変更に理由があるか
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          changed=$(git diff --name-only "$BASE_SHA"...HEAD)
+          if ! git rev-parse -q --verify HEAD^2 >/dev/null; then
+            echo "::error::HEAD が merge commit ではないため PR の差分を特定できません"; exit 1
+          fi
+          changed=$(git diff --name-only HEAD^1 HEAD)
           [ -z "$changed" ] && { echo "変更なし"; exit 0; }
           # shellcheck disable=SC2086
           if ! hits=$(bash scripts/check/is-verifier-path.sh $changed); then
