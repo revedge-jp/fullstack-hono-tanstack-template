@@ -45,10 +45,11 @@ bash scripts/agent-worktree-setup.sh
 
 - worktree から `db:up` / `db:down` を実行しない（DB は main の共有コンテナ。compose プロジェクトが
   別になりポートを奪い合う）。逆に **main で `db:down` すると全 worktree の `wt_*` DB が消える**
-- main の `.env` の `POSTGRES_CONTAINER_NAME` / `POSTGRES_TEST_CONTAINER_NAME` / `POSTGRES_VOLUME_NAME`
-  は、このテンプレートから作った他プロジェクトと同じ既定値（`app_*`）のままだと衝突する。フックは
-  衝突を検出すると共有 Postgres に触れず DB を飛ばす（他プロジェクトの稼働中 DB の volume を
-  2つ目の Postgres がマウントするのを防ぐため）
+- main の `.env` の DB コンテナ名・volume 名が、このテンプレートから作った他プロジェクトと同じ既定値
+  （`app_*`）のままだと衝突する。フックは衝突を検出すると共有 Postgres に触れず DB を飛ばし、
+  `db:up` / `db:down` も止まる（`scripts/lib/compose-ownership.sh`。他プロジェクトの稼働中 DB の
+  volume を2つ目の Postgres がマウントする・`down -v` で消すのを防ぐため）。名前は
+  `docs/dev/environment-variables.md` の「Docker / インフラ」に従って固有にする
 
 ### `.worktreeinclude` で `.env` を worktree に複製しない
 

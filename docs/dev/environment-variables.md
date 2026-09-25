@@ -63,6 +63,14 @@
 | `DATABASE_PORT` | Postgres ポート | `5432` |
 | `TEST_DATABASE_PORT` | テスト用 Postgres ポート | `5433` |
 
+> **コンテナ名と volume 名はプロジェクトごとに一意にする。** 既定値（`app_*`）はこのテンプレートから
+> 作った全プロジェクトで共通で、Docker の named volume は compose プロジェクトを跨いで共有される。
+> 同じ名前のままだと `db:up` は他プロジェクトの DB の volume をマウントし（データ破損）、`db:down` は
+> 消しうる。`scripts/init-template.sh` が `.env.example` の5つをアプリ名入りに書き換え、`bun run db:up` /
+> `db:down` 系（`scripts/dev/db-compose.sh`）は別プロジェクトの持ち物と衝突していたら compose を動かさずに
+> 止まる。既に動いている環境の名前を変えると空の volume で起動するので、変えるなら `db:down` してから
+> （データは消える）。
+>
 > テスト用 Postgres（`postgres-test`）は使い捨てで named volume を持たないため、
 > `POSTGRES_TEST_VOLUME_NAME` は使用しない。`SERVER_PUBLIC_URL` は `scripts/worktree.sh` が
 > worktree 用 `.env` に書き込むだけで、アプリ本体（`config.ts`）は参照しない残置変数。
