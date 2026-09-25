@@ -10,8 +10,10 @@
 ### 自動ロールバック（smoke 失敗時）
 
 `.github/workflows/deploy.yml` は smoke チェック（`/api/health` + `/`）が失敗すると、
-GitHub の Deployment レコード（environment 付きジョブごとに自動記録される）から
-**「最後に成功した Deployment の commit」を解決し、再ビルドして再デプロイ**する。
+**デプロイ前に動いていた版の commit を再ビルドして再デプロイ**する。戻り先はデプロイの最初に
+`SMOKE_BASE_URL` の `/api/health` から読む（`status` が `ok` で、`commit` が 40 桁の SHA のときだけ）。
+初回デプロイや、直前から停止していた場合は戻り先が無いので、手動で対応する。
+`SMOKE_BASE_URL` が未設定なら smoke も自動ロールバックも行わない。
 ロールバック後もジョブは赤のまま残るので、原因を修正するまで
 次のデプロイ（main への push / タグ作成）は行わないこと。
 

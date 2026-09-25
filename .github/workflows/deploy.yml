@@ -108,7 +108,6 @@ jobs:
     environment: ${{ needs.detect-target.outputs.target }}
     permissions:
       contents: read
-      deployments: read # rollback の戻り先解決（過去の成功 Deployment の commit を参照）
     env:
       # Alchemy（alchemy.run.ts）が参照する環境変数。
       # APP_NAME / WORKERS_SUBDOMAIN / APP_ORIGIN / CUSTOM_DOMAIN / EDGE_RATE_LIMIT_RPM は
@@ -167,6 +166,26 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # smoke 失敗時の戻り先は「このデプロイの前に実際に動いていた版」。/api/health が ok を返し、
+      # commit が 40 桁の SHA のときだけ記録する。GitHub の Deployment レコードは使わない — workflow_run の
+      # run では記録される sha が main の先端になり、タグを打った commit とずれる。何もデプロイしなかった
+      # run（readiness=false）も success として残る。
+      - name: Record running version (rollback target)
+        id: running
+        if: steps.readiness.outputs.ready == 'true' && vars.SMOKE_BASE_URL != ''
+        env:
+          SMOKE_BASE_URL: ${{ vars.SMOKE_BASE_URL }}
+        run: |
+          body=$(curl -fsS --max-time 10 "${SMOKE_BASE_URL%/}/api/health" || true)
+          sha=$(printf '%s' "$body" | jq -r 'select(.status == "ok") | .commit // empty' 2>/dev/null || true)
+          # grep -x は行ごとに判定するので、改行を含む値の 1 行目だけで通ってしまう。文字列全体で判定する
+          if [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+            echo "smoke 失敗時の戻り先: $sha"
+          else
+            echo "::notice::稼働中の版を特定できませんでした（初回デプロイ・停止中・/api/health が異常）。このデプロイの smoke が失敗しても自動ロールバックはできません"
+          fi
+
       - uses: ./.github/actions/setup-workspace
         if: steps.readiness.outputs.ready == 'true'
 
@@ -207,12 +226,9 @@ jobs:
         if: steps.readiness.outputs.ready == 'true'
         run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
 
-      # smoke 失敗時は「最後に smoke を通過した commit」を再ビルドして再デプロイする
-      # （壊れた版を出しっぱなしにしない）。ロールバック後もジョブは赤のまま残る（失敗の可視化のため）。
-      #
-      # 戻り先は GitHub が environment 付きジョブごとに自動記録する Deployment レコードから
-      # 「success ステータスを持つ最新の Deployment の commit」を解決する（今回の失敗 run の
-      # Deployment には success が付かないため自然に除外される）。
+      # smoke 失敗時は、デプロイ前に動いていた版（Record running version で記録した commit）を
+      # 再ビルドして再デプロイする（壊れた版を出しっぱなしにしない）。ロールバック後もジョブは赤のまま
+      # 残る（失敗の可視化のため）。
       # `wrangler rollback` は使えない — Alchemy のデプロイは上書き型で CF 側にバージョン
       # 履歴が残らない（実地訓練で確認済み）。
       # DB スキーマは戻さない — expand/contract 規律（docs/deploy/operations.md）が
@@ -221,22 +237,11 @@ jobs:
         if: failure() && steps.smoke.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
-          # 戻り先候補を絞り込む防御。workflow_run 由来の正規デプロイは Deployment レコードの
-          # ref が既定ブランチ（= github.ref_name）になる。preview 等が誤って同じ environment に
-          # 記録した PR ブランチ ref のレコードを候補から除外し、無関係な commit へ戻さない。
-          DEPLOY_REF: ${{ github.ref_name }}
+          GOOD_SHA: ${{ steps.running.outputs.sha }}
         run: |
-          good_sha=""
-          for id_sha in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$DEPLOY_TARGET&ref=$DEPLOY_REF&per_page=30" --jq '.[] | "\(.id):\(.sha)"'); do
-            id="${id_sha%%:*}"
-            sha="${id_sha##*:}"
-            if gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" --jq '.[].state' | grep -qx "success"; then
-              good_sha="$sha"
-              break
-            fi
-          done
+          good_sha="$GOOD_SHA"
           if [ -z "$good_sha" ]; then
-            echo "::error::この environment に成功した Deployment がなくロールバックできません（初回デプロイの失敗）。手動対応してください: docs/deploy/operations.md"
+            echo "::error::デプロイ前に稼働中の版を特定できなかったためロールバックできません（初回デプロイ・直前から停止中など）。手動対応してください: docs/deploy/operations.md"
             exit 1
           fi
           echo "==> Rolling back to $good_sha ..."

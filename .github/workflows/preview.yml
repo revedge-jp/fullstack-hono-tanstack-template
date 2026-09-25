@@ -19,10 +19,9 @@ on:
   pull_request:
     types: [labeled, unlabeled, synchronize, closed]
 
-# 同一 PR の deploy / destroy を直列化する（ラベル操作と push の競走を防ぐ）
-concurrency:
-  group: preview-${{ github.event.number }}
-  cancel-in-progress: false
+# 同一 PR の deploy / destroy の直列化は、ワークフロー単位ではなく deploy / destroy のジョブ単位で行う。
+# ワークフロー単位だと、関係ないイベント（他のラベルの付け外し等）の run も同じグループに入り、保留中の
+# destroy を置き換えて消してしまう（ラベルは外れたままなので、リソースが残る）。
 
 jobs:
   # `environment: preview` を参照するジョブは、Environment が存在しないと（workflow の
@@ -66,8 +65,11 @@ jobs:
       ((github.event.action == 'labeled' && github.event.label.name == 'preview') ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview')))
     runs-on: ubuntu-latest
-    # preview 専用 environment。staging を使うと preview デプロイの GitHub Deployment
-    # レコードが staging 履歴を汚し、deploy.yml の rollback 戻り先解決が誤動作する。
+    timeout-minutes: 30
+    concurrency:
+      group: preview-${{ github.event.number }}
+      cancel-in-progress: false
+    # preview 専用 environment。PR のコードを動かすので、staging / production の資格情報を渡さない。
     environment: preview
     permissions:
       contents: read
@@ -161,9 +163,18 @@ jobs:
           - commit: ${HEAD_SHA}
           - DB: \`${APP_NAME}-staging\` のブランチ \`${PREVIEW_STAGE}\`（空の状態から migration 適用済み）
           - \`preview\` ラベルを外すかこの PR を閉じると環境ごと削除されます（放置しても7日で自動削除）"
-          # 既存のプレビューコメントがあれば編集、なければ新規作成
-          gh pr comment "$PR_NUMBER" --edit-last --body "$body" 2>/dev/null \
-            || gh pr comment "$PR_NUMBER" --body "$body"
+          # 既存のプレビューコメントがあれば編集、なければ新規作成。見出しの 1 行目で探す
+          # （`gh pr comment --edit-last` は同じ bot の最後のコメントを編集するので、Knip の結果や
+          # needs-rebase の通知を上書きしてしまう）
+          marker="🔍 **Preview**:"
+          comment_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
+            | tail -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body" --silent
+          else
+            gh pr comment "$PR_NUMBER" --body "$body"
+          fi
 
   destroy:
     name: Destroy preview
@@ -174,6 +185,10 @@ jobs:
       ((github.event.action == 'unlabeled' && github.event.label.name == 'preview') ||
       (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview')))
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: preview-${{ github.event.number }}
+      cancel-in-progress: false
     # deploy と同じ preview 専用 environment（destroy も同じ secrets を参照する）。
     environment: preview
     permissions:
@@ -212,6 +227,11 @@ jobs:
       - name: Destroy preview environment
         if: steps.readiness.outputs.ready == 'true'
         run: bunx alchemy destroy --stage "$PREVIEW_STAGE"
+
+      # alchemy destroy は削除に失敗しても exit 0 で終わるので、実物が消えたかを API で確かめる
+      - name: Verify preview resources are gone
+        if: steps.readiness.outputs.ready == 'true'
+        run: bash scripts/deploy/verify-preview-destroyed.sh "$PREVIEW_STAGE"
 
       - name: Comment teardown
         if: steps.readiness.outputs.ready == 'true'
