@@ -47,7 +47,7 @@ command -v codex >/dev/null 2>&1 || skip "codex CLI が見つからない（npm 
 LOGIN_STATUS=$(codex_chatgpt login status -c cli_auth_credentials_store=file 2>&1 || true)
 case "$LOGIN_STATUS" in
   *"Logged in using ChatGPT"*) ;;
-  *) skip "codex が ChatGPT でログインしていない（codex login。API キーでは動かさない）: ${LOGIN_STATUS}" ;;
+  *) skip "codex が ChatGPT でログインしていない（codex login。API キーでは動かさない。認証を keyring に保存している場合は cli_auth_credentials_store=file にしてログインし直す）: ${LOGIN_STATUS}" ;;
 esac
 [ -s "$DIFF_FILE" ] || skip "差分ファイルが空か存在しない: $DIFF_FILE"
 [ -z "$CONTEXT_DIFF" ] || [ -s "$CONTEXT_DIFF" ] || skip "文脈用の全体差分が空か存在しない: $CONTEXT_DIFF"
