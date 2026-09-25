@@ -32,12 +32,15 @@ describe("tasks.getTasksServerFn", () => {
     expect(api.state.lastQuery).toEqual({});
   });
 
-  test("401 の場合は空ページを返す（リダイレクトは _authenticated ガードが担う）", async () => {
-    api.state.ok = false;
-    api.state.status = 401;
-    const result = await getTasksServerFn({ data: {} });
-    expect(result).toEqual({ items: [], nextCursor: null });
-  });
+  test.each([401, 403])(
+    "%d の場合は空ページを返す（リダイレクトは _authenticated ガードが担う）",
+    async (status) => {
+      api.state.ok = false;
+      api.state.status = status;
+      const result = await getTasksServerFn({ data: {} });
+      expect(result).toEqual({ items: [], nextCursor: null });
+    },
+  );
 
   test("異常: API が 500 を返した場合は throw する（0件と区別してエラーバウンダリへ）", async () => {
     api.state.ok = false;

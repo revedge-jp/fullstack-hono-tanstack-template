@@ -59,9 +59,8 @@ test.describe("tasks シナリオ", () => {
   // Better Auth は getSession の途中で AsyncLocalStorage に置いたリクエスト状態を読む。
   // 並行安全でない ALS 代替実装に解決されていると、同じ isolate で重なった getSession が
   // 互いの状態を消し合い "Failed to get session"（/api/me・/api/tasks が 500）になる。
-  // SSR の /tasks は _authenticated と tasks の loader が並行に getSession するため、
-  // 再読み込みだけでエラーバウンダリに落ちる。1 回の遷移だとタイミング次第で重ならないので、
-  // 並行リクエストを束ねて確実に重ねる。
+  // 同じ isolate で別リクエスト（別タブ・プリロード等）と重なるだけで起きるが、1 回の遷移だと
+  // タイミング次第で重ならないので、並行リクエストを束ねて確実に重ねる。
   test("同一ユーザーの並行リクエストでもセッション検証が失敗しない", async ({ context }) => {
     await user.signIn(context);
 
@@ -83,6 +82,25 @@ test.describe("tasks シナリオ", () => {
       await expect(page.getByRole("heading", { name: "タスク" })).toBeVisible();
       await expect(page.getByText("問題が発生しました")).not.toBeVisible();
     }
+  });
+
+  // 認証ガードは _authenticated の beforeLoad にあり、子ルートは useRouteContext で user を受け取る。
+  // サインイン済みなら /signin は / へ戻される（signin の beforeLoad も同じセッションのキャッシュを見る）
+  test("サインイン済み: ホームにユーザーが出て、画面内の遷移でタスクへ進め、/signin は / へ戻される", async ({
+    context,
+    page,
+  }) => {
+    await user.signIn(context);
+
+    await page.goto("/");
+    await expect(page.getByText(user.email)).toBeVisible();
+
+    await page.getByRole("link", { name: "tasks" }).click();
+    await page.waitForURL("**/tasks");
+    await expect(page.getByRole("heading", { name: "タスク" })).toBeVisible();
+
+    await page.goto("/signin");
+    await page.waitForURL((url) => url.pathname === "/");
   });
 
   test("未認証で /tasks にアクセスすると /signin へリダイレクトされる", async ({ browser }) => {

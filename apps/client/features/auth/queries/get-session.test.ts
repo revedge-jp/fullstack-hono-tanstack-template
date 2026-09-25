@@ -10,7 +10,7 @@ await mock.module("@/shared/lib/api-client", api.apiClientModule);
 await mock.module("@tanstack/react-start", reactStartModule);
 await mock.module("@tanstack/react-start/server", reactStartServerModule());
 
-const { getSessionServerFn } = await import("./get-session");
+const { getSessionServerFn, sessionQueryOptions } = await import("./get-session");
 
 describe("auth.getSessionServerFn", () => {
   beforeEach(() => api.reset());
@@ -36,5 +36,21 @@ describe("auth.getSessionServerFn", () => {
   test("異常: 500（バックエンド障害）は throw する（未認証と区別してエラーバウンダリへ）", async () => {
     api.reset({ ok: false, status: 500, body: { ok: false, error: "Unauthorized" } });
     await expect(getSessionServerFn()).rejects.toThrow("セッションの取得に失敗しました");
+  });
+});
+
+describe("auth.sessionQueryOptions", () => {
+  beforeEach(() => api.reset());
+
+  test('queryKey は ["session"]（サインアウトの queryClient.clear() と beforeLoad のデデュープが同じキーを見る）', () => {
+    expect([...sessionQueryOptions().queryKey]).toEqual(["session"]);
+  });
+
+  test("queryFn は getSessionServerFn の結果をそのまま返す（未認証は null）", async () => {
+    const queryFn = sessionQueryOptions().queryFn;
+    expect(queryFn).toBeDefined();
+    expect(await queryFn!({} as never)).toEqual(mockUser);
+    api.reset({ ok: false, status: 401, body: { ok: false, error: "Unauthorized" } });
+    expect(await queryFn!({} as never)).toBeNull();
   });
 });
