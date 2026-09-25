@@ -4,11 +4,15 @@ import { stringifyErrorSafe } from "@repo/logging";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
-// Better Auth の内蔵ロガー(@better-auth/core の createLogger)は options.logger が未指定だと
-// 自前の console.error/warn/log で出力する。それはこのアプリの pino を通らないため、
-// (1) @repo/logging の redact が効かない、(2) 生の console.error はメッセージ全文がそのまま
-// Cloudflare の `$metadata.error` に入る、という2点で問題になる。DB 障害時には SQL 文と
-// バインド値が丸ごとログ基盤へ載りうる。pino へ委譲して出力経路を1本にする。
+// Better Auth の出力のうち生の console に出る経路は2つあり、どちらもこのアプリの pino を
+// 通らないため、(1) @repo/logging の redact が効かない、(2) 生の console.error はメッセージ全文が
+// そのまま Cloudflare の `$metadata.error` に入る、という2点で問題になる。DB 障害時には SQL 文と
+// バインド値(OAuth の codeVerifier 等)が丸ごとログ基盤へ載る。
+// - 内蔵ロガー(@better-auth/core の createLogger): options.logger が未指定だと自前の
+//   console.error/warn/log で出力する → logger オプションで pino へ委譲する
+// - ルーター(better-call の createRouter): APIError 以外の例外は logger オプションと無関係に
+//   `console.error("# SERVER_ERROR: ", error)` で出す → createAuth の onAPIError で
+//   Hono へ再送出させ、app.ts の onError(pino・本番マスキング)に任せる
 type BetterAuthLogLevel = "debug" | "info" | "warn" | "error";
 
 export type AuthLogger = Record<BetterAuthLogLevel, (obj: unknown, msg?: string) => void>;
@@ -157,6 +161,12 @@ export function createAuth(
     baseURL: config.baseURL,
     trustedOrigins: config.trustedOrigins,
     logger: toBetterAuthLoggerOption(logger),
+    // APIError 以外の例外(DB 障害時の DrizzleQueryError 等)を auth.handler の外へ投げ、
+    // better-call の console.error を通さない。APIError は 4xx・500 とも、これまでどおり
+    // better-call がレスポンスに変換する(再送出しても better-call が APIError だけは拾い直す)。
+    // 副作用として Better Auth 既定のルーター側エラーログ(APIError 500 の ctx.logger.error)も
+    // 走らなくなるので、5xx レスポンスのログは app.ts の /api/auth/* ルートで出す。
+    onAPIError: { throw: true },
     session: {
       cookieCache: {
         // 署名付き cookie にセッションを最大5分キャッシュし、getSession ごとの
