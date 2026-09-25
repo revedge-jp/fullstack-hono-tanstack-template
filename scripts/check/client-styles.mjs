@@ -21,7 +21,14 @@ import { relative } from "node:path";
 
 import { collectClientSources } from "./client-sources.mjs";
 
-const ROOTS = ["apps/client/app", "apps/client/features", "apps/client/components"];
+const ROOTS = [
+  "apps/client/app",
+  "apps/client/features",
+  "apps/client/components",
+  "apps/client/shared",
+];
+const EXCLUDED_DIRS = ["apps/client/components/ui"];
+const EXCLUDED_FILES = [/\.test\.tsx?$/, /\.spec\.tsx?$/, /routeTree\.gen\.ts$/];
 
 const PALETTE_NAMES =
   "red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white";
@@ -108,6 +115,22 @@ const RULES = [
     allowedIn: ["apps/client/components/patterns/page-header.tsx"],
     message:
       "h1 を直接書かないでください。ページ見出しは @/components/patterns/page-header の PageHeader を使ってください",
+  },
+  {
+    id: "inline-style",
+    // style 属性はクラスの規則（パレット・任意値・margin 等）をすべて迂回できる
+    // （style={{ color: "#7c3aed", marginTop: 12 }}）。見た目はクラスで書き、動的な値が必要なら
+    // components/ に部品として切り出す。
+    pattern: /\bstyle=\{/g,
+    message:
+      "style 属性で見た目を書かないでください（クラスの規則をすべて迂回できる）。トークンとスケールのクラスを使い、動的な値が必要なら components/ に部品として切り出してください",
+  },
+  {
+    id: "svg-raw-color",
+    // SVG の fill / stroke 属性に直接書いた色。currentColor（文字色に追従）と none だけを許す。
+    pattern: /\b(?:fill|stroke)=["'](?!currentColor["']|none["'])[^"']+["']/g,
+    message:
+      "SVG の fill / stroke に色を直接書かないでください。currentColor にして、色はクラス（text-primary 等）で付けてください",
   },
   {
     id: "emoji",

@@ -34,7 +34,8 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
 
 一覧は `package.json` の `scripts`（ルートと `apps/*`）を見る。ここには名前から分からないことだけ書く。
 
-- `git push` の pre-push フックが `bun run check-all`（lint / typecheck / 全テスト / アーキテクチャのチェック）を実行する。
+- `git push` の pre-push フックが `bun run check-all`（lint / typecheck / テスト / アーキテクチャのチェック。knip は除く）を実行する。
+  lint / typecheck / テストは `origin/main` との差分の影響を受けるパッケージに絞る（全件は `bun run test`）。
   テストは DB を使うので、DB が無いと push できない（worktree なら `.claude/rules/general.md` の worktree 節）
 - 途中の確認は `bun run typecheck` と `bun run arch:check`、DB 不要のテストは `bun run test:unit`。
   1 ファイルだけなら `cd apps/api-service && bun test <file>`

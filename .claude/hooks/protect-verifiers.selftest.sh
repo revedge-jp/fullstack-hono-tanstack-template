@@ -7,9 +7,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$ROOT/.claude/hooks/protect-verifiers.sh"
 FAIL=0
 
-expect() { # $1 label, $2 tool, $3 absolute path, $4 expected decision ("" = 素通り), $5 CLAUDE_PROJECT_DIR
+expect() { # $1 label, $2 tool, $3 absolute path, $4 expected decision ("" = 素通り), $5 CLAUDE_PROJECT_DIR, $6 入力キー(既定 file_path)
   local out decision
-  out=$(printf '{"tool_name":"%s","tool_input":{"file_path":"%s"}}' "$2" "$3" | CLAUDE_PROJECT_DIR="$5" bash "$HOOK")
+  out=$(printf '{"tool_name":"%s","tool_input":{"%s":"%s"}}' "$2" "${6:-file_path}" "$3" | CLAUDE_PROJECT_DIR="$5" bash "$HOOK")
   decision=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // ""' 2>/dev/null || echo "")
   if [ "$decision" = "$4" ]; then
     echo "✅ hook: $1"
@@ -37,6 +37,11 @@ expect ".env の Read は deny" Read "$ROOT/.env" deny "$ROOT"
 expect ".env.local の Edit は deny" Edit "$ROOT/.env.local" deny "$ROOT"
 expect ".dev.vars の Read は deny" Read "$ROOT/apps/client/.dev.vars" deny "$ROOT"
 expect ".env.example は素通り" Read "$ROOT/.env.example" "" "$ROOT"
+expect "Grep で .env を名指しすると deny" Grep "$ROOT/.env" deny "$ROOT" path
+expect "Grep の通常パスは素通り" Grep "$ROOT/apps" "" "$ROOT" path
+expect "NotebookEdit も検証器なら ask" NotebookEdit "$ROOT/scripts/check/x.ipynb" ask "$ROOT" notebook_path
+expect "REVIEW.md（レビュー収束の採否基準）の編集は ask" Edit "$ROOT/REVIEW.md" ask "$ROOT"
+expect "depcruise の解決設定の編集は ask" Edit "$ROOT/tsconfig.depcruise.json" ask "$ROOT"
 
 out=$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s/.oxlintrc.json"}}' "$ROOT" | CLAUDE_PROJECT_DIR="$ROOT" CLAUDE_EVAL_DISABLE_VERIFIER_ASK=1 bash "$HOOK")
 if [ -z "$out" ]; then echo "✅ hook: 評価用の無効化で ask が外れる"; else echo "❌ hook: 評価用の無効化が効かない"; FAIL=1; fi

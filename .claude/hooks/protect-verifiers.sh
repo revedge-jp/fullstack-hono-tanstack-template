@@ -11,14 +11,15 @@
 # settings.json の permissions.deny ではなくここで行うのは、`.env.*` を deny しつつ
 # `.env.example` だけ許可する例外が permissions では書けないため。
 #
-# 限界: Edit / Write / Read ツールのパスだけを見る。Bash の sed / cat 経由は対象外
+# 限界: Edit / Write / MultiEdit / NotebookEdit / Read / Grep ツールのパスだけを見る(Grep は `path` に
+# 名指しした場合。ディレクトリ検索は ripgrep が gitignore 済みの .env を読まない)。Bash の sed / cat 経由は対象外
 # (そこまで塞ぐと作業が成立しない)。Bash 迂回・他エージェント・手編集は CI の
 # verifier-change ジョブ(PR 本文に理由を要求)が同じ一覧で受け止める。
 set -uo pipefail
 
 INPUT=$(cat)
 TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
-FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null || echo "")
+FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""' 2>/dev/null || echo "")
 [ -z "$FILE" ] && exit 0
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -46,7 +47,7 @@ case "$BASE" in
 esac
 
 case "$TOOL" in
-  Edit|Write|MultiEdit) ;;
+  Edit|Write|MultiEdit|NotebookEdit) ;;
   *) exit 0 ;;
 esac
 

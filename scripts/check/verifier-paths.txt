@@ -26,3 +26,12 @@ commitlint.config.mjs
 apps/*/stryker.conf.*
 apps/*/stryker.config.*
 apps/*/.jscpd.json
+# 依存規約の解決設定（@/ alias が消えると client のルールが黙って空振りする）と FSD の規約
+tsconfig.depcruise.json
+steiger.config.mjs
+# CI の全ジョブが使うセットアップ（ここでテストの前提を変えられる）
+.github/actions/*
+# レビュー収束ゲート（Review converged）の採否基準と手順
+REVIEW.md
+.claude/commands/ship.md
+.claude/commands/review-full.md

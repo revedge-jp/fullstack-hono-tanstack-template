@@ -186,12 +186,12 @@ expect_guard "client features process.env 直接参照禁止" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "client features 配下で process.env を直接参照できません"
 
-expect_guard "UI からの processXxx 直接 import 禁止" \
-  guard_ui_no_process_import \
+expect_guard "createServerFn の配置（queries / actions 以外は禁止）" \
+  guard_server_fn_placement \
   "apps/client/features/__selftest/ui/x.tsx" \
-  'import { processFoo } from "../actions/foo";
-export const SelftestUi = processFoo;' \
-  "UI コンポーネントから processXxx を直接 import できません"
+  'import { createServerFn } from "@tanstack/react-start";
+export const selftestFn = createServerFn().handler(() => null);' \
+  "createServerFn は features/**/queries/**"
 
 # client のスタイル規約(client-styles.mjs)は規則ごとに 1 件ずつ既知違反を置く。
 expect_guard "スタイル規約: 既定パレット色の禁止" \
@@ -278,6 +278,24 @@ expect_guard "スタイル規約: 絵文字の禁止" \
   'export const SelftestUi = () => <p>🚀 Launch</p>;' \
   "違反 [emoji]"
 
+expect_guard "スタイル規約: style 属性の禁止" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <p style={{ color: "#7c3aed", marginTop: 12 }}>x</p>;' \
+  "違反 [inline-style]"
+
+expect_guard "スタイル規約: SVG の fill に直接書いた色の禁止" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <svg><path fill="#ff0000" d="M0 0" /></svg>;' \
+  "違反 [svg-raw-color]"
+
+expect_guard "スタイル規約: shared/ 配下も走査する" \
+  guard_client_styles \
+  "apps/client/shared/__selftest/selftest-style.tsx" \
+  'export const SelftestUi = () => <p className="text-zinc-500">x</p>;' \
+  "違反 [raw-palette]"
+
 # コメントも検査対象（禁止クラス名を書いたコメントは変更履歴なので書かない）。
 # 行内・行全体のどちらのコメントも検出することを確認する。
 expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
@@ -328,7 +346,8 @@ expect_guard "UI 文言: 前後に空白のある全角ダッシュ" \
 mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
 export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
-export const D = () => <p>© 2026 → 次へ</p>;'
+export const D = () => <p>© 2026 → 次へ</p>;
+export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /></svg>;'
 if STYLE_OK_OUT=$(node scripts/check/client-styles.mjs 2>&1); then
   echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号）を誤検出しない"
 else
@@ -568,16 +587,43 @@ export const selftestDcDb = tasks;'
     fi
   done
   rm -f "$D/application/__selftest_dc_cross_feature.ts" "$D/presentation/__selftest_dc_infra.ts" "$D/domain/__selftest_dc_db.ts"
+
+  # client は @/ alias 経由の import が主流。tsconfig.depcruise.json に @/* が無いと解決できずに
+  # ルールが空振りする（相対 import だけ検出して緑になる）ので、alias の形で置く
+  CD="apps/client/features/tasks"
+  mkfix "$CD/ui/__selftest_dc_client_cross.tsx" 'import { signOut } from "@/features/auth/actions/sign-out";
+export const selftestDcClientCross = signOut;'
+  mkfix "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" 'import { advanceTask } from "@/features/tasks/actions/advance-task";
+export const selftestDcShared = advanceTask;'
+  DC_CLIENT_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/client 2>/dev/null || true)
+  for rule in client-cross-features-tasks client-shared-to-features; do
+    if printf '%s' "$DC_CLIENT_OUT" | grep -q "$rule"; then
+      echo "✅ dep-cruiser: $rule（@/ alias 経由）"
+    else
+      echo "❌ dep-cruiser: $rule が @/ alias 経由の違反を検出しませんでした（tsconfig.depcruise.json の paths を確認）"
+      FAIL=1
+    fi
+  done
+  rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts"
 fi
 
 echo "=== 指示ファイル参照チェック自己テスト ==="
 mkfix ".claude/rules/__selftest_refs.md" \
   '参照: `scripts/check/nope.sh` と `bun run no-such-script` と AGENTS.md の「存在しない見出し」
 アプリ別: `apps/api-service/AGENTS.md` の「Feature structure」「パス付きの存在しない見出し」と apps/no-such-app/AGENTS.md の「X」'
+# docs/ と README も対象(旧構成のまま古くなったガイドがゲートを素通りしていた)。相対リンクも見る。
+# gitignore 対象の生成物(ビルド成果物)への参照は誤検出しない
+mkfix "docs/dev/__selftest_refs.md" \
+  '参照: `scripts/check/docs-nope.sh` と [壊れたリンク](no-such-doc.md) と [正しいリンク](testing.md) と `apps/client/dist/server/index.js`'
 INSTR_OUT=$(node scripts/check/instruction-files.mjs 2>&1 || true)
-rm -f ".claude/rules/__selftest_refs.md"
+rm -f ".claude/rules/__selftest_refs.md" "docs/dev/__selftest_refs.md"
+if printf '%s' "$INSTR_OUT" | grep -qE "testing\.md|dist/server"; then
+  echo "❌ instruction-files: 実在するリンク・gitignore 対象の生成物を誤検出しました"
+  FAIL=1
+fi
 for expected in "nope.sh" "no-such-script" "「存在しない見出し」" \
-  "apps/api-service/AGENTS.md に見出し「パス付きの存在しない見出し」" "apps/no-such-app/AGENTS.md\` が実在しない"; do
+  "apps/api-service/AGENTS.md に見出し「パス付きの存在しない見出し」" "apps/no-such-app/AGENTS.md\` が実在しない" \
+  "docs-nope.sh" "リンク先 no-such-doc.md"; do
   if printf '%s' "$INSTR_OUT" | grep -qF "$expected"; then
     echo "✅ instruction-files: $expected を検出"
   else

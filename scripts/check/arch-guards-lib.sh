@@ -47,12 +47,11 @@ ARCH_GUARDS=(
   guard_application_no_http_client
   guard_application_no_google_cloud
   guard_no_legacy_integration_alias
-  guard_server_actions_placement
+  guard_server_fn_placement
   guard_kebab_case
   guard_routes_flat_files
   guard_features_no_process_env
   guard_client_features_no_process_env
-  guard_ui_no_process_import
   guard_no_direct_zod_validator
   guard_no_legacy_result_api
   guard_usecase_result_chain
@@ -87,7 +86,7 @@ guard_export_star() {
 }
 
 guard_window_location_href() {
-  echo "[guard] window.location.href への代入禁止（router.push() を使用）"
+  echo "[guard] window.location.href への代入禁止（router.navigate() / <Link> を使用）"
   # 旧 Biome GritQL プラグイン (no-window-location-href.grit) からの移設
   LOCATION_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/.output/*' \) -prune -o \
@@ -96,7 +95,7 @@ guard_window_location_href() {
   if [ -z "$LOCATION_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: window.location.href への代入は禁止されています。router.push() を使用してください"
+    echo "違反: window.location.href への代入は禁止されています。router.navigate() / <Link> を使用してください"
     echo "$LOCATION_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
@@ -246,14 +245,14 @@ guard_no_legacy_integration_alias() {
   fi
 }
 
-guard_server_actions_placement() {
-  echo "[guard] Server Actions 配置（features/**/actions/** または features/**/queries/** のみ許容）"
-  SA_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/actions/*' ! -path '*/queries/*' -print0 2>/dev/null |
-    xargs -0 grep -nE "'use server'|\"use server\"" || true)
+guard_server_fn_placement() {
+  echo "[guard] createServerFn の配置（features/**/queries/** または features/**/actions/** のみ許容）"
+  SA_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/actions/*' ! -path '*/queries/*' ! -name '*.test.ts' -print0 2>/dev/null |
+    xargs -0 grep -nE "\bcreateServerFn\(" || true)
   if [ -z "$SA_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: Server Actions は features/**/actions/** または features/**/queries/** に配置してください"
+    echo "違反: createServerFn は features/**/queries/**（取得）か features/**/actions/**（更新）に置いてください"
     echo "$SA_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
@@ -318,29 +317,14 @@ guard_features_no_process_env() {
 }
 
 guard_client_features_no_process_env() {
-  echo "[guard] client features 配下での process.env 直接参照禁止（loadConfig() 経由に統一）"
+  echo "[guard] client features 配下での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
   CLIENT_ENV_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
     xargs -0 grep -nE "process\.env\." -- || true)
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: client features 配下で process.env を直接参照できません（loadConfig() 経由に統一してください）"
+    echo "違反: client features 配下で process.env を直接参照できません（値は api-service の config.ts に足し、loader / serverFn 経由で受け取ってください）"
     echo "$CLIENT_ENV_VIOL" | while IFS= read -r line; do
-      echo "  • $line"
-    done
-    return 1
-  fi
-}
-
-guard_ui_no_process_import() {
-  echo "[guard] UI コンポーネントから processXxx の直接 import 禁止（xxxAction 経由に統一）"
-  PROCESS_IMPORT_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) -path '*/ui/*' -print0 2>/dev/null | \
-    xargs -0 grep -nE "import\s+.*\bprocess[A-Z][a-zA-Z]*" -- || true)
-  if [ -z "$PROCESS_IMPORT_VIOL" ]; then
-    echo "OK"
-  else
-    echo "違反: UI コンポーネントから processXxx を直接 import できません（xxxAction 経由に統一してください）"
-    echo "$PROCESS_IMPORT_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
     return 1
