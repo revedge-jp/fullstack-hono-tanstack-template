@@ -204,8 +204,9 @@ jobs:
     timeout-minutes: 20
     # deps（ルートの package.json / bun.lock）変更時も必ず走らせる。ここを外すと
     # Renovate の devDeps 自動マージがビルド/テストを素通りする。
-    # tooling（ガード・lint/依存検査の設定・scripts と受け皿）も同じ。外すとガードを壊した・消した PR が
-    # arch-check と自己テストを1度も通らずにマージできる
+    # tooling（ガード・lint/依存検査の設定・scripts・ワークフロー・フック）と catchall（どのフィルタにも当たらない
+    # コード変更の受け皿。tooling とは別の出力）も同じ。外すとガードを壊した・消した PR が arch-check と
+    # 自己テストを1度も通らずにマージできる
     if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.tooling == 'true' || needs.changes.outputs.catchall == 'true'
     steps:
       # fetch-depth: 0（フル履歴）+ persist-credentials: true は mutation testing の
