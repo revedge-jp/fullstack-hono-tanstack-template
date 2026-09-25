@@ -45,7 +45,34 @@ esac
 
 echo ""
 echo "==> Environment '$STAGE' を作成（既存ならそのまま）..."
-gh api -X PUT "repos/$REPO/environments/$STAGE" --silent
+if [ "$STAGE" = "preview" ]; then
+  # preview は PR のブランチから動くのでデプロイ元を制限できない。production に届く値を置かないことで守る
+  gh api -X PUT "repos/$REPO/environments/$STAGE" --silent
+else
+  # staging / production のデプロイ元を main に限る。制限の無い Environment の secrets は、それを参照する
+  # どのジョブにも渡る（同じリポジトリの PR がワークフローを足して environment: production を参照すれば、
+  # マージ前に読める）。deploy.yml は workflow_run で main 上のジョブとして動くので、main に限っても止まらない。
+  # 再実行のたびに同じ設定を送る（本文なしの PUT で既存の制限を消さないため）
+  if gh api -X PUT "repos/$REPO/environments/$STAGE" --silent --input - <<'JSON'
+{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+JSON
+  then
+    if ! gh api "repos/$REPO/environments/$STAGE/deployment-branch-policies" \
+      --jq '.branch_policies[] | select(.name == "main" and (.type // "branch") == "branch") | .id' | grep -q .; then
+      gh api -X POST "repos/$REPO/environments/$STAGE/deployment-branch-policies" \
+        -f name=main -f type=branch --silent
+    fi
+    echo "    デプロイ元を main に限りました"
+  else
+    # private リポジトリの Free プラン等、デプロイ元の制限が使えない場合。既にある Environment には触らない
+    # （本文なしの PUT は既存の制限を消しうるので、一時的な失敗で制限を外さない）
+    echo "⚠️  デプロイ元を main に限れませんでした（プランの制限か一時的な失敗）。"
+    echo "   制限が無いと、PR がワークフローを足せば ${STAGE} の secrets を読めます（docs/dev/alchemy-iac.md「state と資格情報の権限境界」）"
+    if ! gh api "repos/$REPO/environments/$STAGE" --silent 2>/dev/null; then
+      gh api -X PUT "repos/$REPO/environments/$STAGE" --silent
+    fi
+  fi
+fi
 
 # item: "名前|kind|説明" （kind: secret = 隠し入力 / var = 通常入力）
 # bash 3.2（macOS 標準）互換のため連想配列は使わない
