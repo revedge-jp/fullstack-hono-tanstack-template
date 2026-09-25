@@ -33,9 +33,11 @@ REL="${FILE_PATH#"$ROOT"/}"
 case "$REL" in
   AGENTS.md | REVIEW.md | apps/*/AGENTS.md | .claude/rules/*.md | .claude/commands/*.md | docs/*.md)
     OUT=$(cd "$ROOT" && ./node_modules/.bin/textlint "$REL" 2>&1)
-    # textlint は指摘ありで 1、設定の読み込み失敗などで 2 を返す。チェックを実行できないとき
-    # （node_modules が無い等）は編集を止めない。pre-push で同じチェックが走る
-    if [ $? -eq 1 ]; then
+    RC=$?
+    # 指摘の有無は集計行（「✖ N problems」）で判断する。textlint はルールの例外でも 1 を返すので、終了コード
+    # だけでは見分けられない。チェックを実行できないとき（node_modules が無い・例外等）は編集を止めない。
+    # pre-push で同じチェックが走る
+    if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -qE '✖ [0-9]+ problems?'; then
       echo "AI が書く文章に出やすい表現が見つかりました（${REL}）。何がどうなるかを書く言葉に直してください（.claude/rules/general.md の「編集方針」）。" >&2
       printf '%s\n' "$OUT" >&2
       exit 2
