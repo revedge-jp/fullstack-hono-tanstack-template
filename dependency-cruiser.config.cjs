@@ -62,12 +62,14 @@ module.exports = {
     //   2. 他の worktree で mutation テスト(Stryker)が動いていると、走査中にサンドボックスが
     //      破棄されて ENOENT で落ちる。自分の変更と無関係に push が失敗し、原因も分かりにくい
     // `.stryker-tmp` 自体も、メイン側で mutation テストを回した場合に同じ問題を起こすため除外する。
+    // ビルド成果物・生成物は各パッケージの直下だけを先頭から指定する。"dist" のような部分一致だと、
+    // hono の解決先（node_modules/.bun/hono@…/hono/dist/…）や feature 名（distribution 等）にも当たり、
+    // hono への依存がグラフから消えて hono の層ルールが一度も発火しなかった。
     exclude: {
       path: [
-        "\\.next",
-        "dist",
-        "build",
-        "generated",
+        "^(apps|packages)/[^/]+/(dist|build|\\.output|\\.next)/",
+        // 量指定子を入れ子にしない（depcruise が遅い正規表現として実行を拒否する）
+        "^(apps|packages)/.*/generated/",
         "__tests__",
         "\\.test\\.",
         "\\.spec\\.",

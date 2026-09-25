@@ -54,8 +54,8 @@ PR がある場合は PR 番号を渡す方がより確実。
 ## 編集方針
 
 - 検証器（一覧は `scripts/check/verifier-paths.txt` が正）の編集は PreToolUse フック
-  （`.claude/hooks/protect-verifiers.sh`）で**ユーザー確認**が入り、PR では CI の `verifier-change`
-  ジョブが本文の「## 検証器の変更理由」節を要求する。ゲートに引っかかったときの既定はコードを
+  （`.claude/hooks/protect-verifiers.sh`）で**ユーザー確認**が入り、PR では必須チェックの `Review converged`
+  （`review-converged.yml`）が本文の「## 検証器の変更理由」節を要求する。ゲートに引っかかったときの既定はコードを
   直すこと。`.env*` の読み書きはフックが拒否する（設定の一覧は `.env.example` が正）。
 
 - 既存ファイルのインデント（タブ/スペース、幅）は必ず維持する。変換・混在をしない。

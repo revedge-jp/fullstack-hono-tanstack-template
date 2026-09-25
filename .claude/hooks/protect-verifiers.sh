@@ -5,7 +5,7 @@
 # 「ゲートを緩める」(閾値を下げる・除外を足す・ガードを消す)になりがちで、lint も
 # テストも通ったまま検証能力だけが静かに落ちる。ここでは検証器の編集を「禁止」ではなく
 # 「ユーザー確認(ask)」にして、緩和が人の目を通らずに入らないようにする。
-# 対象パスは scripts/check/verifier-paths.txt が正典(CI の verifier-change ジョブと共有)。
+# 対象パスは scripts/check/verifier-paths.txt が正典(CI の Review converged ジョブと共有)。
 #
 # `.env` 系はエージェントが読む理由が無い(config は .env.example が正)ので deny。
 # settings.json の permissions.deny ではなくここで行うのは、`.env.*` を deny しつつ
@@ -15,7 +15,7 @@
 # `glob` に .env / .dev.vars を含む指定を deny する。ripgrep はホワイトリストの glob（`*` 等）が gitignore を
 # 上書きするので、`glob: "*"` のような広い指定では .env も検索対象になりうる(そこまでは塞がない)。Bash の sed / cat 経由は対象外
 # (そこまで塞ぐと作業が成立しない)。Bash 迂回・他エージェント・手編集は CI の
-# verifier-change ジョブ(PR 本文に理由を要求)が同じ一覧で受け止める。
+# Review converged ジョブ(PR 本文に理由を要求。判定は base 側の一覧)が同じ一覧で受け止める。
 set -uo pipefail
 
 INPUT=$(cat)

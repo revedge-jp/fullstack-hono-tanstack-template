@@ -303,8 +303,9 @@ guard_routes_flat_files() {
 
 guard_features_no_process_env() {
   echo "[guard] features 配下での process.env 直接参照禁止（config 経由に統一）"
+  # process.env.X だけでなく process.env["X"]・分割代入・Bun.env・import.meta.env も拾う
   ENV_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
-    xargs -0 grep -nE "process\.env\." -- || true)
+    xargs -0 grep -nE "process\.env|Bun\.env|import\.meta\.env" -- || true)
   if [ -z "$ENV_VIOL" ]; then
     echo "OK"
   else
@@ -318,8 +319,9 @@ guard_features_no_process_env() {
 
 guard_client_features_no_process_env() {
   echo "[guard] client features 配下での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
+  # process.env.X だけでなく process.env["X"]・分割代入・Bun.env も拾う（import.meta.env.DEV は許可）
   CLIENT_ENV_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
-    xargs -0 grep -nE "process\.env\." -- || true)
+    xargs -0 grep -nE "process\.env|Bun\.env" -- || true)
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"
   else
@@ -472,7 +474,10 @@ guard_no_id_token_write() {
   # エージェントを動かすワークフローに OIDC を渡すと、プロンプトインジェクションでデプロイ先の
   # クラウド資格情報まで奪われる(CVE-2026-24887 系)。デプロイに必要なら専用ワークフローで
   # エージェントと分離し、この guard の除外を理由付きで明示する。
-  IDTOKEN=$(grep -rnE '^\s*id-token:\s*write' .github/workflows --include='*.yml' --include='*.yaml' 2>/dev/null || true)
+  # ブロック形式だけでなく、フロー形式（permissions: { id-token: write }）・クォート付きのキー・
+  # 全権限を付ける write-all（id-token も含む）も拾う
+  IDTOKEN=$(grep -rnE "id-token['\"]?\s*:\s*['\"]?write|permissions:\s*['\"]?write-all" .github/workflows \
+    --include='*.yml' --include='*.yaml' 2>/dev/null || true)
   if [ -z "$IDTOKEN" ]; then
     echo "OK"
   else

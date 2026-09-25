@@ -41,7 +41,7 @@ export function createRateLimitStore(): RateLimitStore {
  * isolate 数倍に緩む。厳密な分散レート制限が必要なら Workers KV / Durable Objects などの
  * 共有ストアに差し替えること。
  *
- * process.env は読まない（config → DI 経由で渡す）。
+ * 環境変数は直接読まない（config → DI 経由で渡す）。
  */
 export function rateLimit(options: RateLimitOptions & { store: RateLimitStore }) {
   const { windowMs, max, keyGenerator = defaultKey, store } = options;

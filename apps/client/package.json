@@ -13,9 +13,9 @@
     "test:unit": "sh -c 'files=$(find app features shared -name \"*.test.ts\" 2>/dev/null | head -1); [ -z \"$files\" ] || bun test app features shared'",
     "coverage:unit": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov app features shared",
     "typecheck": "tsc --noEmit",
-    "dep:cycles": "madge app --ts-config tsconfig.json --extensions ts,tsx --circular --exclude 'node_modules|.output|dist|routeTree\\.gen'",
-    "dep:orphans": "madge app/router.tsx --ts-config tsconfig.json --extensions ts,tsx --orphans --exclude 'node_modules|.output|dist'",
-    "dep:graph": "madge app --ts-config tsconfig.json --extensions ts,tsx --image ../../docs/client-deps.svg --exclude 'node_modules|.output|dist'"
+    "dep:cycles": "madge app --ts-config tsconfig.json --extensions ts,tsx --circular --exclude '(^|/)node_modules/|(^|/)\\.output/|(^|/)dist/|routeTree\\.gen'",
+    "dep:orphans": "madge app/router.tsx --ts-config tsconfig.json --extensions ts,tsx --orphans --exclude '(^|/)node_modules/|(^|/)\\.output/|(^|/)dist/'",
+    "dep:graph": "madge app --ts-config tsconfig.json --extensions ts,tsx --image ../../docs/client-deps.svg --exclude '(^|/)node_modules/|(^|/)\\.output/|(^|/)dist/'"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
