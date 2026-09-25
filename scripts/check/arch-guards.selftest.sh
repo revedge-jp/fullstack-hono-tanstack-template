@@ -408,6 +408,33 @@ else
   echo "❌ feature 構造: co-located テスト欠落を検出できませんでした"
   FAIL=1
 fi
+
+# **本体（arch-guards.sh）が全検査を実際に呼ぶことの検証。** 上の各ケースは検査関数を直接呼ぶので、
+# 本体から検査が抜ける・並べ忘れる・ループが失敗を握りつぶす、を捕まえられない。
+# (1) 定義済みの guard_* 関数の集合と ARCH_GUARDS の集合が一致すること（件数ではなく集合で比べる。
+#     関数を1つ足して別の1つを並べ忘れる、名前を打ち間違える、のように件数が合ってしまう形を捕まえるため）
+DEFINED_GUARDS=$(declare -F | awk '{print $3}' | grep '^guard_' | sort)
+LISTED_GUARDS=$(printf '%s\n' "${ARCH_GUARDS[@]}" | sort)
+if [ "$DEFINED_GUARDS" = "$LISTED_GUARDS" ]; then
+  echo "✅ ARCH_GUARDS に定義済みの全検査関数が並んでいる"
+else
+  echo "❌ ARCH_GUARDS と定義済みの検査関数が一致しません（並べ忘れ・消し忘れ・打ち間違い）"
+  diff <(printf '%s\n' "$DEFINED_GUARDS") <(printf '%s\n' "$LISTED_GUARDS") | sed 's/^/    /'
+  FAIL=1
+fi
+# (2) 本体を1回だけ実行する。この時点で置いている fixture は最後の検査（feature 構造）にだけ
+#     引っかかるので、本体は全検査を順に実行したうえで最後に失敗するはず
+e2e_out=$(bash scripts/check/arch-guards.sh 2>&1)
+e2e_rc=$?
+e2e_headers=$(printf '%s\n' "$e2e_out" | grep -c '^\[guard\]')
+defined_count=$(printf '%s\n' "$DEFINED_GUARDS" | grep -c .)
+if [ "$e2e_rc" -ne 0 ] && [ "$e2e_headers" -eq "$defined_count" ] &&
+  printf '%s' "$e2e_out" | grep -qF "usecase.test.ts がありません"; then
+  echo "✅ arch-guards.sh が全 ${defined_count} 検査を実行し、違反で失敗する"
+else
+  echo "❌ arch-guards.sh: exit=$e2e_rc、実行した検査 ${e2e_headers}/${defined_count}（全検査を実行して違反で失敗するはず）"
+  FAIL=1
+fi
 rm -rf "$SELFTEST_ACTION_DIR"
 
 echo "=== dependency-cruiser 自己テスト ==="
