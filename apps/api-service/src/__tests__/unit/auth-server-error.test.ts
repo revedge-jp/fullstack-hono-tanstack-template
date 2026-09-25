@@ -89,6 +89,10 @@ describe("Better Auth のルーター例外 — onAPIError.throw で Hono の on
     expect(logged).toContain("Failed query: insert into");
     expect(logged).not.toContain("params:");
     expect(logged).not.toContain("codeVerifier");
+    // Better Auth 内部のロガーが同じ例外を別のログに載せていないことも見る
+    const everything = JSON.stringify([...spy.error, ...spy.warn, ...spy.info]);
+    expect(everything).not.toContain("params:");
+    expect(everything).not.toContain("codeVerifier");
   });
 
   test("development: レスポンスの detail(stack)からもバインド値を切り落とし、フレームは残す", async () => {
