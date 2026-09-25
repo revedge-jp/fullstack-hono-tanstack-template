@@ -56,6 +56,35 @@ test.describe("tasks シナリオ", () => {
     await expect(item).not.toBeVisible();
   });
 
+  // Better Auth は getSession の途中で AsyncLocalStorage に置いたリクエスト状態を読む。
+  // 並行安全でない ALS 代替実装に解決されていると、同じ isolate で重なった getSession が
+  // 互いの状態を消し合い "Failed to get session"（/api/me・/api/tasks が 500）になる。
+  // SSR の /tasks は _authenticated と tasks の loader が並行に getSession するため、
+  // 再読み込みだけでエラーバウンダリに落ちる。1 回の遷移だとタイミング次第で重ならないので、
+  // 並行リクエストを束ねて確実に重ねる。
+  test("同一ユーザーの並行リクエストでもセッション検証が失敗しない", async ({ context }) => {
+    await user.signIn(context);
+
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        context.request.get(index % 2 === 0 ? "/api/me" : "/api/tasks"),
+      ),
+    );
+
+    expect(responses.map((response) => response.status())).toEqual(Array(20).fill(200));
+  });
+
+  test("/tasks の再読み込み(SSR)でエラーバウンダリにならない", async ({ context, page }) => {
+    await user.signIn(context);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const response = await page.goto("/tasks");
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole("heading", { name: "タスク" })).toBeVisible();
+      await expect(page.getByText("問題が発生しました")).not.toBeVisible();
+    }
+  });
+
   test("未認証で /tasks にアクセスすると /signin へリダイレクトされる", async ({ browser }) => {
     // cookie を注入していない素のコンテキスト
     const anonymous = await browser.newContext();
