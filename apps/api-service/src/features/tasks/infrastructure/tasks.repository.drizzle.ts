@@ -1,4 +1,4 @@
-import { isPgError } from "@app/shared/db-error";
+import { isPgError, toUnexpectedDbError } from "@app/shared/db-error";
 import { type Database, tasks } from "@repo/db";
 import { and, desc, eq, lt, or } from "drizzle-orm";
 import { err, errAsync, ok, okAsync, ResultAsync } from "neverthrow";
@@ -6,13 +6,17 @@ import { err, errAsync, ok, okAsync, ResultAsync } from "neverthrow";
 import type { TasksRepository } from "../domain/tasks.repository";
 import { mapDbTaskToDomain } from "./mappers";
 
-export function createTasksRepository(deps: { db: Database }): TasksRepository {
-  const { db } = deps;
+type WarnLogger = { warn: (obj: unknown, msg?: string) => void };
+
+export function createTasksRepository(deps: { db: Database; logger: WarnLogger }): TasksRepository {
+  const { db, logger } = deps;
 
   return {
     create: (input) =>
       ResultAsync.fromPromise(db.insert(tasks).values(input).returning(), (e) =>
-        isPgError(e, "23505") ? ("Conflict" as const) : ("Unexpected" as const),
+        isPgError(e, "23505")
+          ? ("Conflict" as const)
+          : toUnexpectedDbError(logger, "tasks.create")(e),
       ).andThen((rows) => {
         const row = rows[0];
         return row ? ok(mapDbTaskToDomain(row)) : err("Unexpected" as const);
@@ -36,7 +40,7 @@ export function createTasksRepository(deps: { db: Database }): TasksRepository {
           // limit+1 件フェッチして「次のページがあるか」を判定する
           limit: limit + 1,
         }),
-        () => "Unexpected" as const,
+        toUnexpectedDbError(logger, "tasks.list"),
       ).map((rows) => ({
         items: rows.slice(0, limit).map(mapDbTaskToDomain),
         hasMore: rows.length > limit,
@@ -45,7 +49,7 @@ export function createTasksRepository(deps: { db: Database }): TasksRepository {
     getById: (id, ownerId) =>
       ResultAsync.fromPromise(
         db.query.tasks.findFirst({ where: and(eq(tasks.id, id), eq(tasks.ownerId, ownerId)) }),
-        () => "Unexpected" as const,
+        toUnexpectedDbError(logger, "tasks.getById"),
       ).map((row) => (row ? mapDbTaskToDomain(row) : null)),
 
     update: (task, expected) =>
@@ -61,7 +65,7 @@ export function createTasksRepository(deps: { db: Database }): TasksRepository {
             ),
           )
           .returning(),
-        () => "Unexpected" as const,
+        toUnexpectedDbError(logger, "tasks.update"),
       ).andThen((rows) => {
         const row = rows[0];
         if (row) {
@@ -73,7 +77,7 @@ export function createTasksRepository(deps: { db: Database }): TasksRepository {
             columns: { id: true },
             where: and(eq(tasks.id, task.id), eq(tasks.ownerId, task.ownerId)),
           }),
-          () => "Unexpected" as const,
+          toUnexpectedDbError(logger, "tasks.update.recheck"),
         ).andThen((existing) => errAsync(existing ? ("Conflict" as const) : ("NotFound" as const)));
       }),
 
@@ -83,7 +87,7 @@ export function createTasksRepository(deps: { db: Database }): TasksRepository {
           .delete(tasks)
           .where(and(eq(tasks.id, id), eq(tasks.ownerId, ownerId)))
           .returning({ id: tasks.id }),
-        () => "Unexpected" as const,
+        toUnexpectedDbError(logger, "tasks.delete"),
       ).andThen((rows) => (rows.length > 0 ? ok(undefined) : err("NotFound" as const))),
   };
 }

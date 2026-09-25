@@ -71,7 +71,10 @@ export function makeCreateXxx(deps: { xxxRepository: XxxRepository }) {
 action は `okAsync(input).andThen(step)` だけになる（`get` / `delete`）。
 - `usecase.ts` は `async`/`try-catch` 禁止。`okAsync().andThen()...` チェーンのみで表現する（`scripts/check/arch-guards.sh` で強制）
 - リポジトリは `ResultAsync<T, E>` を返す（`Promise<Result<T, E>>` ではない）
-- DB エラーは infrastructure 層で `ResultAsync.fromPromise(promise, errorMapper)` によりラップする
+- DB エラーは infrastructure 層で `ResultAsync.fromPromise(promise, errorMapper)` によりラップする。
+  `"Unexpected"` に畳む errorMapper は `toUnexpectedDbError(logger, "<feature>.<操作>")`（`src/shared/db-error.ts`）を
+  使う。`() => "Unexpected"` と書くと原因（SQLSTATE）がどのログにも残らず、DB の停止とマイグレーションの当て忘れを
+  見分けられない。実例: `features/tasks/infrastructure/tasks.repository.drizzle.ts`
 
 ### Key rules
 - **Domain is pure**: no Zod, no Drizzle, no HTTP, no DTOs from Application layer

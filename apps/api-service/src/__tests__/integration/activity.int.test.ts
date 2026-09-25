@@ -4,6 +4,8 @@ import { createActivityRepository } from "@app/features/activity/infrastructure/
 import { createTransactionalDb } from "@app/test-helpers/transactional-db";
 import { authUsers, type Database } from "@repo/db";
 
+import { createLoggerSpy } from "../../test-helpers/create-logger-spy";
+
 // 各テストは BEGIN → ROLLBACK で包まれる（test-helpers/transactional-db.ts）。
 const { getDb: getTx, end } = createTransactionalDb(process.env.DATABASE_URL ?? "");
 
@@ -28,7 +30,7 @@ afterAll(async () => {
 describe("ActivityRepository (実DB)", () => {
   test("record → list の往復で ownerId が保存される", async () => {
     const db = getDb();
-    const activityRepository = createActivityRepository({ db });
+    const activityRepository = createActivityRepository({ db, logger: createLoggerSpy().logger });
     const { ownerA: OWNER_A } = await seedOwners(db);
     const recorded = await activityRepository.record({
       ownerId: OWNER_A,
@@ -50,7 +52,7 @@ describe("ActivityRepository (実DB)", () => {
 
   test("他ユーザーの activity は list に含まれない（オーナー分離）", async () => {
     const db = getDb();
-    const activityRepository = createActivityRepository({ db });
+    const activityRepository = createActivityRepository({ db, logger: createLoggerSpy().logger });
     const { ownerA: OWNER_A, ownerB: OWNER_B } = await seedOwners(db);
     const messageA = `Task "only-a" created ${crypto.randomUUID()}`;
     const recordedA = await activityRepository.record({

@@ -20,6 +20,8 @@ import {
 import { createTransactionalDb } from "@app/test-helpers/transactional-db";
 import { activities, authUsers, type Database, tasks as tasksTable } from "@repo/db";
 
+import { createLoggerSpy } from "../../test-helpers/create-logger-spy";
+
 // fake↔real 適合テスト。createFakeApp の in-memory リポジトリ（contract テスト等が使う）と Drizzle
 // 実装に同じテストを流し、挙動のずれを検出する。ずれていると contract テストは緑のまま、本番だけ
 // 別の挙動になる。**Drizzle 実装が正**。落ちたら in-memory 側を直す。
@@ -111,8 +113,8 @@ const implementations: { name: string; make: () => Harness }[] = [
     name: "drizzle（実DB）",
     make: () => {
       const db = getDb();
-      const tasks = createTasksRepository({ db });
-      const activity = createActivityRepository({ db });
+      const tasks = createTasksRepository({ db, logger: createLoggerSpy().logger });
+      const activity = createActivityRepository({ db, logger: createLoggerSpy().logger });
       return {
         tasks,
         activity,

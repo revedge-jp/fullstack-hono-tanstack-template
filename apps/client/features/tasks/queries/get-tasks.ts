@@ -1,3 +1,4 @@
+import { redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
@@ -25,6 +26,11 @@ export const getTasksServerFn = createServerFn()
     );
     if (isSsrAuthIndeterminate(res.status)) {
       return { items: [], nextCursor: null };
+    }
+    // 400 は URL の ?cursor= が壊れているとき（手で書き換えた・古いブックマーク等）。障害ではないので
+    // エラーページ（と error レベルの通報）にせず、最初のページへ戻す
+    if (res.status === 400 && data.cursor) {
+      throw redirect({ to: "/tasks" });
     }
     if (!res.ok) {
       throw new Error("タスク一覧の取得に失敗しました");
