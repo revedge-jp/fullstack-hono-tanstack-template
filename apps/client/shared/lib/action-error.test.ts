@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-const reported: { error: unknown; context: string }[] = [];
-await mock.module("./report-client-error", () => ({
-  reportHandledError: (error: unknown, context: string) => reported.push({ error, context }),
-}));
+import { toActionResult } from "./action-error";
+import { resetClientErrorReportingForTest } from "./report-client-error";
 
-const { toActionResult } = await import("./action-error");
+// 通報は本物の report-client-error を通し、/api/client-errors への送信内容で確かめる。
+// mock.module で差し替えると同一プロセスで後に読み込まれる report-client-error.test.ts に漏れる。
+let reportedMessages: string[] = [];
+const originalFetch = globalThis.fetch;
 
 type Body = { ok: true } | { ok: false; error: "Conflict" | "Unexpected" };
 
@@ -20,7 +21,22 @@ const options = {
 
 describe("toActionResult", () => {
   beforeEach(() => {
-    reported.length = 0;
+    reportedMessages = [];
+    resetClientErrorReportingForTest();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { location: { pathname: "/tasks" } },
+    });
+    globalThis.fetch = mock(async (_url: string, init?: { body?: string }) => {
+      reportedMessages.push(String(JSON.parse(init?.body ?? "{}").message));
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    // @ts-expect-error テスト後片付け
+    delete globalThis.window;
   });
 
   test("正常: レスポンスが ok なら { ok: true }", async () => {
@@ -66,9 +82,7 @@ describe("toActionResult", () => {
         json: (): Promise<Body> => Promise.reject(new SyntaxError("Unexpected token '<'")),
       });
     expect(await toActionResult(request, options)).toEqual({ ok: false, message: "失敗しました" });
-    expect(reported).toEqual([
-      { error: expect.any(SyntaxError), context: "action response is not JSON" },
-    ]);
+    expect(reportedMessages).toEqual(["action response is not JSON: Unexpected token '<'"]);
   });
 
   test("異常: 呼び出し自体が reject（通信失敗）しても reject せず通信エラーの文言を返す", async () => {
@@ -78,13 +92,13 @@ describe("toActionResult", () => {
       ok: false,
       message: "通信に失敗しました。接続を確認して再度お試しください",
     });
-    expect(reported).toEqual([{ error: expect.any(TypeError), context: "action request failed" }]);
+    expect(reportedMessages).toEqual(["action request failed: Failed to fetch"]);
   });
 
   test("異常: API が返したエラー（4xx/5xx の JSON）は通報しない（サーバー側で記録済み）", async () => {
     await toActionResult(respond(false, { ok: false, error: "Conflict" }), options);
     await toActionResult(respond(false, { ok: false, error: "Unexpected" }), options);
-    expect(reported).toEqual([]);
+    expect(reportedMessages).toEqual([]);
   });
 
   test("異常: プロトタイプのキー名（toString 等）のコードでも関数を拾わず fallback", async () => {
