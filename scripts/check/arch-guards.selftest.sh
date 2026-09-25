@@ -338,12 +338,15 @@ else
 fi
 rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx"
 
-# 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、表の空欄に置く「—」単独では ui-copy.mjs が落ちない。
+# 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、文をつないでいないダッシュ（空欄の「—」・括弧の中・
+# 区切り線）では ui-copy.mjs が落ちない。ダッシュの例は日本語を含めて、ダッシュの判定まで届くようにしている。
 mkfix "apps/client/features/__selftest/ui/selftest-copy-ok.tsx" \
   '// この設定が効く（コメントは画面に出ない）
-export const SelftestUi = () => <td>—</td>;'
+export const SelftestUi = () => <td>—</td>;
+export const selftestUnset = "未設定（—）";
+export const selftestDivider = "──── または ────";'
 if COPY_OK_OUT=$(node scripts/check/ui-copy.mjs 2>&1); then
-  echo "✅ UI 文言: 正当なコード（コメント・空欄の「—」）を誤検出しない"
+  echo "✅ UI 文言: 正当なコード（コメント・文をつないでいないダッシュ）を誤検出しない"
 else
   echo "❌ UI 文言: 正当なコードを誤検出しました"
   printf '%s\n' "$COPY_OK_OUT"

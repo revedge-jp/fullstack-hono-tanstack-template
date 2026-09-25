@@ -10,7 +10,7 @@
 // （画面に出ないため。行単位で読む client-styles.mjs はコメントも見る）。
 //
 // 全角ダッシュだけはここの正規表現で見る。kuromoji は前後の文字次第でダッシュを名詞 1 つにも記号 2 つにも
-// 分けるため、辞書の形態素では拾えない。前後の空白の有無は問わない。表の空欄に置く「—」単独は文の途中ではないので対象外。
+// 分けるため、辞書の形態素では拾えない。前後の空白の有無は問わない。
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 
@@ -26,7 +26,10 @@ const ROOTS = [
   "apps/client/shared",
 ];
 const JAPANESE = /[\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Han}]/u;
-const DASH = /(?<=\S)\s*[—―─⸺⸻]+\s*(?=\S)/gu;
+// 文をつないでいるダッシュだけを拾う: 前が文字・閉じ括弧・句読点、後ろが文字・開き括弧。
+// 「未設定（—）」や「──── または ────」は前後がこれに当たらないので対象外。
+const DASH =
+  /(?<=[\p{L}\p{N}\p{Pe}\p{Pf}。、！？!?.,])\s*[—―─⸺⸻]+\s*(?=[\p{L}\p{N}\p{Ps}\p{Pi}])/gu;
 const DASH_RULE_ID = "fullwidth-dash";
 const DASH_MESSAGE =
   "全角ダッシュで文をつながないでください。句点で文を分けるか、読点・括弧を使ってください";
