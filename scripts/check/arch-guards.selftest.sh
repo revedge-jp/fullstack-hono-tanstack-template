@@ -282,10 +282,12 @@ fi
 
 echo "=== 指示ファイル参照チェック自己テスト ==="
 mkfix ".claude/rules/__selftest_refs.md" \
-  '参照: `scripts/check/nope.sh` と `bun run no-such-script` と AGENTS.md の「存在しない見出し」'
+  '参照: `scripts/check/nope.sh` と `bun run no-such-script` と AGENTS.md の「存在しない見出し」
+アプリ別: `apps/api-service/AGENTS.md` の「Feature structure」「パス付きの存在しない見出し」と apps/no-such-app/AGENTS.md の「X」'
 INSTR_OUT=$(node scripts/check/instruction-files.mjs 2>&1 || true)
 rm -f ".claude/rules/__selftest_refs.md"
-for expected in "nope.sh" "no-such-script" "存在しない見出し"; do
+for expected in "nope.sh" "no-such-script" "「存在しない見出し」" \
+  "apps/api-service/AGENTS.md に見出し「パス付きの存在しない見出し」" "apps/no-such-app/AGENTS.md\` が実在しない"; do
   if printf '%s' "$INSTR_OUT" | grep -qF "$expected"; then
     echo "✅ instruction-files: $expected を検出"
   else

@@ -3,11 +3,11 @@ paths:
   - "apps/api-service/src/**"
 ---
 
-# api-service 実装ルール（AGENTS.md の補足）
+# api-service 実装ルール（`apps/api-service/AGENTS.md` の補足）
 
-アーキテクチャの全体像・feature 構造・ROP パターンは AGENTS.md を参照。ここでは
+アーキテクチャの全体像・feature 構造・ROP パターンは `apps/api-service/AGENTS.md` を参照。ここでは
 `bun run arch:guards`（`scripts/check/arch-guards.sh`）で機械的に強制される規約と、
-AGENTS.md に載っていない細部の規約をまとめる。
+そこに載っていない細部の規約をまとめる。
 
 ## arch:guards で強制される禁止事項
 
@@ -46,7 +46,7 @@ AGENTS.md に載っていない細部の規約をまとめる。
 
 - 外部サービスの SDK は必ず `src/integrations/external/` に薄いラッパーとして配置。features / middlewares から SDK を直接 import しない。
 - ラッパーは `process.env` を参照せず、設定値は呼び出し元（container）からパラメータで受け取る。
-- feature 間連携は ports + `integrations/composition/` アダプタ（AGENTS.md 参照）。adapter を追加したら co-located テストを必ず書く。
+- feature 間連携は ports + `integrations/composition/` アダプタ（`apps/api-service/AGENTS.md` の「Feature-to-feature integration」）。adapter を追加したら co-located テストを必ず書く。
 
 ## 外部の結果で状態を進めるときは、「確定したこと」を見てから進める
 
