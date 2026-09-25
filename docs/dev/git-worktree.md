@@ -104,8 +104,9 @@ Claude Code の worktree は、作ったセッションの中なら `ExitWorktre
 
 ```bash
 git -C <worktree の絶対パス> status --short --branch --ignored
-# 1 行目が "## HEAD (no branch)" なら、残すコミットにブランチを付ける: git -C <path> branch <branch> HEAD
-# 2 行目以降に残したいファイルがあればコミットか退避をしてから進む
+# ① 2 行目以降に残したいファイルがあれば、先にコミットか退避をする
+# ② その後で 1 行目が "## HEAD (no branch)" なら、残すコミットにブランチを付ける（rebase 途中でも通る形）:
+#    git -C <path> branch <branch> HEAD
 echo '{"worktree_path":"<worktree の絶対パス>"}' | bash .claude/hooks/worktree-remove.sh
 ```
 
