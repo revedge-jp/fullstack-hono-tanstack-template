@@ -333,8 +333,8 @@ guard_client_queries_server_modules() {
   # createServerFn の外で api-client を使うと、UI → queries → api-client の経路でブラウザのバンドルに入る
   QUERY_VIOL=""
   while IFS= read -r -d '' file; do
-    if grep -qE "^import[^;]*from [\"']@/shared/lib/(api-client|hono-app|server-logger)[\"']" "$file" &&
-      ! grep -qE "^import type " <(grep -E "from [\"']@/shared/lib/(api-client|hono-app|server-logger)[\"']" "$file") &&
+    # 値の import（import type 以外）を、oxfmt が折り返した形・相対パスも含めて探す。型の import は数えない
+    if perl -0777 -ne 'exit(/\bimport\s+(?!type\b)[^;]*?from\s*["\x27][^"\x27]*shared\/lib\/(?:api-client|hono-app|server-logger)["\x27]/ ? 0 : 1)' "$file" &&
       ! grep -q "createServerFn" "$file"; then
       QUERY_VIOL="${QUERY_VIOL}${file}"$'\n'
     fi

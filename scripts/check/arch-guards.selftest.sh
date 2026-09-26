@@ -194,6 +194,12 @@ expect_guard "client process.env 直接参照禁止（node:process の default i
   $'import nodeProcess from "node:process";\nexport const selftestEnv = nodeProcess.env.SELFTEST;' \
   "で process.env を直接参照できません"
 
+expect_guard "client queries のサーバー専用モジュール（型の import と並んだ値の import・折り返した形）" \
+  guard_client_queries_server_modules \
+  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  $'import type { ApiClient } from "@/shared/lib/api-client";\nimport {\n  getApiClient,\n} from "../../../shared/lib/api-client";\nexport const selftestQuery = (): ApiClient => getApiClient();' \
+  "createServerFn のファイルだけ"
+
 expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
   guard_client_queries_server_modules \
   "apps/client/features/tasks/queries/__selftest-query.ts" \
