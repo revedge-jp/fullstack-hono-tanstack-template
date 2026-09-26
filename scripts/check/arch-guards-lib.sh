@@ -321,7 +321,7 @@ guard_features_no_process_env() {
 }
 
 guard_client_features_no_process_env() {
-  echo "[guard] client features 配下での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
+  echo "[guard] client（app/ features/ shared/ components/）での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
   # process.env.X だけでなく process.env["X"]・process["env"]・分割代入（const { env } = process も）・
   # node:process / cloudflare:workers から env を取り出す import・Bun.env も拾う（import.meta.env.DEV は許可）
   # app/server.ts は Worker の env（bindings）を引数で受け取るので process.env を使わない。features 以外も同じく見る
@@ -330,7 +330,7 @@ guard_client_features_no_process_env() {
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: client features 配下で process.env を直接参照できません（値は api-service の config.ts に足し、loader / serverFn 経由で受け取ってください）"
+    echo "違反: client（app/ features/ shared/ components/）で process.env を直接参照できません（値は api-service の config.ts に足し、loader / serverFn 経由で受け取ってください）"
     echo "$CLIENT_ENV_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
