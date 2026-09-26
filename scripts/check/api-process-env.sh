@@ -19,7 +19,10 @@ cd "$ROOT_DIR"
 hits=$(grep -rnE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env|import\.meta\.env" \
   apps/api-service/src/ --include="*.ts" --exclude="*.test.ts" --exclude-dir="__tests__")
 [ $? -gt 1 ] && exit 1
-hits=$(printf '%s\n' "$hits" | grep -v '^apps/api-service/src/config\.ts:' | grep -v '^$')
+# 改行をまたぐ import（oxfmt の折り返し）と default / namespace の import は 1 行の grep では拾えない
+imports=$(find apps/api-service/src -type f -name '*.ts' ! -name '*.test.ts' ! -path '*/__tests__/*' -print0 |
+  xargs -0 bash scripts/check/env-import-scan.sh) || exit 1
+hits=$(printf '%s\n%s\n' "$hits" "$imports" | grep -v '^apps/api-service/src/config\.ts:' | grep -v '^$')
 if [ -n "$hits" ]; then
   printf '%s\n' "$hits" >&2
   echo "違反: api-service で process.env を直接参照しています(src/config.ts 経由にしてください)" >&2

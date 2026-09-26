@@ -150,11 +150,13 @@ if (isDir(CLIENT_FEATURES_DIR)) {
       if (!isDir(dir)) {
         continue;
       }
-      for (const file of readdirSync(dir)) {
+      // サブディレクトリ（actions/bulk/*.ts 等）の中も見る
+      for (const file of readdirSync(dir, { recursive: true }).map(String)) {
+        const name = file.split("/").pop() ?? file;
         if (
-          !/\.tsx?$/.test(file) ||
-          /\.(test|d)\.tsx?$/.test(file) ||
-          CLIENT_TEST_EXEMPT.has(file)
+          !/\.tsx?$/.test(name) ||
+          /\.(test|d)\.tsx?$/.test(name) ||
+          CLIENT_TEST_EXEMPT.has(name)
         ) {
           continue;
         }

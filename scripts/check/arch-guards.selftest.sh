@@ -152,6 +152,54 @@ expect_guard "interface 禁止" \
   'export interface SelftestBar { x: number }' \
   "interface の使用が禁止"
 
+expect_guard "export default interface 禁止" \
+  guard_no_class_interface \
+  "$D/application/__selftest_default_interface.ts" \
+  'export default interface SelftestDefaultBar { x: number }' \
+  "interface の使用が禁止"
+
+expect_guard "declare interface 禁止" \
+  guard_no_class_interface \
+  "$D/application/__selftest_declare_interface.ts" \
+  'export declare interface SelftestDeclareBar { x: number }' \
+  "interface の使用が禁止"
+
+expect_guard "クラス式禁止" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_expression.ts" \
+  'export const SelftestExpr = class { x = 1 };' \
+  "class の使用が禁止"
+
+expect_guard "throw 禁止（src/config.ts 以外の config.ts）" \
+  guard_no_throw \
+  "$D/application/config.ts" \
+  'export function selftestConfig() { throw new Error("x"); }' \
+  "throw の使用が禁止"
+
+expect_guard "GitHub Actions 未ピン留め検出（行末のコメントに : # がある）" \
+  guard_actions_pinned_sha \
+  ".github/workflows/__selftest_unpinned.yml" \
+  $'name: selftest\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4 # pinned later, see: #123\n' \
+  "commit SHA でピン留め"
+
+expect_guard "features 配下 process.env 直接参照禁止（oxfmt が折り返した import）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  $'import {\n  arch,\n  env,\n  pid,\n} from "node:process";\nexport const selftestEnv = [arch, env.SELFTEST, pid];' \
+  "features 配下で process.env を直接参照できません"
+
+expect_guard "client process.env 直接参照禁止（node:process の default import）" \
+  guard_client_features_no_process_env \
+  "apps/client/shared/lib/__selftest_env.ts" \
+  $'import nodeProcess from "node:process";\nexport const selftestEnv = nodeProcess.env.SELFTEST;' \
+  "で process.env を直接参照できません"
+
+expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
+  guard_client_queries_server_modules \
+  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  $'import { getApiClient } from "@/shared/lib/api-client";\nexport const selftestQuery = () => getApiClient();' \
+  "createServerFn のファイルだけ"
+
 expect_guard "application→infrastructure 直参照禁止" \
   guard_application_no_infrastructure \
   "$D/application/__selftest_infra.ts" \
@@ -631,6 +679,13 @@ expect_guard "feature 構造（client の actions のテスト欠落）" \
   "apps/client/features/tasks/actions/__selftest-untested.ts" \
   'export const selftestUntested = 1;' \
   "actions/__selftest-untested.ts に co-located テスト"
+
+expect_guard "feature 構造（client の actions のサブディレクトリのテスト欠落）" \
+  guard_feature_structure \
+  "apps/client/features/tasks/actions/__selftest-bulk/archive.ts" \
+  'export const selftestUntested = 1;' \
+  "actions/__selftest-bulk/archive.ts に co-located テスト"
+rmdir "apps/client/features/tasks/actions/__selftest-bulk" 2>/dev/null || true
 
 # **本体（arch-guards.sh）が全検査を実際に呼ぶことの検証。** 上の各ケースは検査関数を直接呼ぶので、
 # 本体から検査が抜ける・並べ忘れる・ループが失敗を握りつぶす、を捕まえられない。
