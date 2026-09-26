@@ -56,7 +56,7 @@ PR がある場合は PR 番号を渡す方がより確実。
 - 検証器（一覧は `scripts/check/verifier-paths.txt` が正）の編集は PreToolUse フック
   （`.claude/hooks/protect-verifiers.sh`）で**ユーザー確認**が入り、PR では必須チェックの `Review converged`
   （`review-converged.yml`）が本文の「## 検証器の変更理由」節を要求する。ゲートに引っかかったときの既定はコードを
-  直すこと。`.env*` の読み書きはフックが拒否する（設定の一覧は `.env.example` が正）。
+  直すこと。`.env*` の Read / Edit / Write / Grep はフックが拒否する（Bash での読み書きはフックの対象外なので、`cat .env` 等も使わない。設定の一覧は `.env.example` が正）。
 
 - 既存ファイルのインデント（タブ/スペース、幅）は必ず維持する。変換・混在をしない。
 - 文書（AGENTS.md・`.claude/rules`・`.claude/commands`・`docs/`）は `bun run lint:prose` が pre-push と CI でチェックする。

@@ -52,6 +52,7 @@ ARCH_GUARDS=(
   guard_routes_flat_files
   guard_features_no_process_env
   guard_client_features_no_process_env
+  guard_client_queries_server_modules
   guard_no_direct_zod_validator
   guard_no_legacy_result_api
   guard_usecase_result_chain
@@ -106,19 +107,20 @@ guard_window_location_href() {
 guard_no_throw() {
   echo "[guard] api-service の throw 禁止（middlewares・起動時 config 検証・テストは除外）"
   # 除外対象を先に -prune し、ファイルのみを -type f で絞り込む
-  # config.ts は起動時（リクエスト処理の外）の fail-fast 検証であり、ROP フローの対象外のため除外する
+  # src/config.ts は起動時（リクエスト処理の外）の fail-fast 検証であり、ROP フローの対象外のため除外する
+  # （パスで一致させる。-name 'config.ts' だと、どの階層の config.ts も素通りする）
   # 同じ語がオブジェクトのプロパティキーとして現れる箇所（Better Auth の `onAPIError: { throw: true }`）は
   # 文ではないので数えない。キーの直後は必ず `:` になり、throw 文の直後には来ない。
   # 行ごと除外すると、同じ行のコメント・文字列・型注釈に `throw:` があるだけで throw 文を見逃すので、
   # 「直後が `:` でない出現」を1つでも含む行を拾う
   THROW_VIOL=$(find apps/api-service/src \
-    \( -path '*/__tests__/*' -o -name '*.test.ts' -o -name '*.spec.ts' -o -path '*/middlewares/*' -o -name 'config.ts' \) -prune -o \
+    \( -path '*/__tests__/*' -o -name '*.test.ts' -o -name '*.spec.ts' -o -path '*/middlewares/*' -o -path 'apps/api-service/src/config.ts' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
     xargs -0 grep -nE '\bthrow\b[[:space:]]*([^[:space:]:]|$)' -- || true)
   if [ -z "$THROW_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: api-service では throw の使用が禁止されています（middlewares・config.ts・テストは除外）"
+    echo "違反: api-service では throw の使用が禁止されています（middlewares・src/config.ts・テストは除外）"
     echo "$THROW_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
@@ -129,15 +131,18 @@ guard_no_throw() {
 guard_no_class_interface() {
   echo "[guard] class/interface 禁止"
   # `export class` / `class` に加え、`abstract class` / `export default class` /
-  # `export default abstract class` も検出する。
+  # `export default abstract class`・`declare class`・クラス式（`X = class`・`return class`）も検出する（行頭が `//` `*` の行と、`=` より前に `//` がある行末のコメントは
+  # 数えない）。文字列の中の `= class` は検出してしまうが、止める側の誤りなので文言を変えて避ける。
+  # 相手にするのは oxfmt で整形した通常のコードで、名前と `=` の間にコメントを挟む・行末の /* */ のような
+  # 形まで正規表現で読み分けない（読み分けを足すたびに別の形の見逃しと誤検出が出る）
   CLASS_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
-    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(abstract\s+)?class\b' || true)
+    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?(abstract\s+)?class\b|^\s*[^/*[:space:]]([^/]|/[^/])*[^=!<>/]=\s*class\b|^\s*return\s+class\b' || true)
   INTF_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
-    xargs -0 grep -nE '^\s*(export\s+)?interface\b' | grep -vE '^[^:]*\.(d|gen)\.ts:' || true)
+    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?interface\b' | grep -vE '^[^:]*\.(d|gen)\.ts:' || true)
   if [ -n "$CLASS_VIOL" ]; then
     echo "違反: class の使用が禁止されています"
     echo "$CLASS_VIOL" | while IFS= read -r line; do
@@ -309,11 +314,42 @@ guard_features_no_process_env() {
   # （cloudflare:workers の DurableObject 等、env 以外の import は止めない）
   ENV_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
     xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env|import\.meta\.env" -- || true)
+  # 改行をまたぐ import（oxfmt の折り返し）と default / namespace の import は 1 行の grep では拾えない
+  ENV_IMPORTS=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
+    xargs -0 bash scripts/check/env-import-scan.sh)
+  ENV_VIOL=$(printf '%s\n%s\n' "$ENV_VIOL" "$ENV_IMPORTS" | grep -v '^$' || true)
   if [ -z "$ENV_VIOL" ]; then
     echo "OK"
   else
     echo "違反: features 配下で process.env を直接参照できません（config 経由に統一してください）"
     echo "$ENV_VIOL" | while IFS= read -r line; do
+      echo "  • $line"
+    done
+    return 1
+  fi
+}
+
+guard_client_queries_server_modules() {
+  echo "[guard] client の queries でサーバー専用モジュール（api-client・hono-app・server-logger）を使うのは createServerFn のファイルだけ"
+  # dependency-cruiser の client-browser-no-server-modules は ui / actions / routes からの直接の import を止めるが、
+  # queries は createServerFn の中で api-client を使うので対象外にしている。そのため queries のファイルが
+  # createServerFn の外で api-client を使うと、UI → queries → api-client の経路でブラウザのバンドルに入る
+  QUERY_VIOL=""
+  while IFS= read -r -d '' file; do
+    # 値の import / re-export（type 以外）を、oxfmt が折り返した形・相対パスも含めて探す。型の import は数えない。
+    # 免除は createServerFn を import しているファイルだけ（コメントに語があるだけでは免除しない）。判定はファイル
+    # 単位なので、createServerFn のファイルが handler の外でサーバー専用モジュールを使う形はここでは分からない
+    # 行頭の import / export だけを見る（コメントの中の語から次の import type まで一致しない）
+    if perl -0777 -ne 'exit(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["\x27][^"\x27]*shared\/lib\/(?:api-client|hono-app|server-logger)["\x27]/m ? 0 : 1)' "$file" &&
+      ! perl -0777 -ne 'exit(/^import\s+\{[^}]*\bcreateServerFn\b[^}]*\}\s*from\s*["\x27]\@tanstack\/react-start["\x27]/m ? 0 : 1)' "$file"; then
+      QUERY_VIOL="${QUERY_VIOL}${file}"$'\n'
+    fi
+  done < <(find apps/client/features -path '*/queries/*' -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.test.ts' ! -name '*.test.tsx' -print0 2>/dev/null)
+  if [ -z "$QUERY_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: queries でサーバー専用モジュールを使えるのは createServerFn のファイルだけです（ブラウザからは browser-api-client を使う）"
+    printf '%s' "$QUERY_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
     return 1
@@ -327,6 +363,9 @@ guard_client_features_no_process_env() {
   # app/server.ts は Worker の env（bindings）を引数で受け取るので process.env を使わない。features 以外も同じく見る
   CLIENT_ENV_VIOL=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
     xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env" -- || true)
+  CLIENT_ENV_IMPORTS=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
+    xargs -0 bash scripts/check/env-import-scan.sh)
+  CLIENT_ENV_VIOL=$(printf '%s\n%s\n' "$CLIENT_ENV_VIOL" "$CLIENT_ENV_IMPORTS" | grep -v '^$' || true)
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"
   else
@@ -461,9 +500,9 @@ guard_actions_pinned_sha() {
   echo "[guard] GitHub Actions の uses: は commit SHA でピン留め（ローカル ./ と docker@sha256 は許可）"
   # タグ参照(@v4 等)は改竄されうる(2026年の trivy-action 事件)。actionlint は構文しか見ず、
   # Renovate の pinGitHubActionDigests も自分の PR でタグを書き換えるだけで新規の未ピン留めは
-  # 止めないため、ここで機械的に検査する。コメント行は対象外。
+  # 止めないため、ここで機械的に検査する。コメント行は先頭の grep（行頭が uses:）に当たらない
+  # （以前は `: #` を含む行を除いていたが、行末のコメントに `: #123` のような文字があるだけで未ピン留めを見逃した）
   UNPINNED=$(grep -rnE '^\s*-?\s*uses:' .github --include='*.yml' --include='*.yaml' 2>/dev/null | \
-    grep -vE ':\s*#' | \
     grep -vE 'uses:\s*(\./|[^ ]+@[0-9a-f]{40}(\s|$)|docker://[^ ]+@sha256:[0-9a-f]{64}(\s|$))' || true)
   if [ -z "$UNPINNED" ]; then
     echo "OK"

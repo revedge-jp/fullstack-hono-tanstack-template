@@ -152,6 +152,117 @@ expect_guard "interface 禁止" \
   'export interface SelftestBar { x: number }' \
   "interface の使用が禁止"
 
+expect_guard "export default interface 禁止" \
+  guard_no_class_interface \
+  "$D/application/__selftest_default_interface.ts" \
+  'export default interface SelftestDefaultBar { x: number }' \
+  "interface の使用が禁止"
+
+expect_guard "declare interface 禁止" \
+  guard_no_class_interface \
+  "$D/application/__selftest_declare_interface.ts" \
+  'export declare interface SelftestDeclareBar { x: number }' \
+  "interface の使用が禁止"
+
+expect_guard "クラス式禁止" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_expression.ts" \
+  'export const SelftestExpr = class { x = 1 };' \
+  "class の使用が禁止"
+
+expect_guard "クラス式禁止（型注釈付き・代入）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_annotated.ts" \
+  $'type Runner = { run(): void };\nexport const SelftestAnnotated: new () => Runner = class {\n  run() {}\n};' \
+  "__selftest_class_annotated.ts:2:"
+
+expect_guard "クラス式禁止（プロパティへの代入）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_property.ts" \
+  $'const holder: { Impl?: unknown } = {};\nholder.Impl = class {};' \
+  "__selftest_class_property.ts:2:"
+
+expect_guard "クラス式禁止（mixin の return class）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_mixin.ts" \
+  $'export function selftestMixin<T extends new () => object>(Base: T) {\n  return class extends Base {};\n}' \
+  "class の使用が禁止"
+
+expect_guard "throw 禁止（src/config.ts 以外の config.ts）" \
+  guard_no_throw \
+  "$D/application/config.ts" \
+  'export function selftestConfig() { throw new Error("x"); }' \
+  "throw の使用が禁止"
+
+expect_guard "GitHub Actions 未ピン留め検出（行末のコメントに : # がある）" \
+  guard_actions_pinned_sha \
+  ".github/workflows/__selftest_unpinned.yml" \
+  $'name: selftest\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4 # pinned later, see: #123\n' \
+  "commit SHA でピン留め"
+
+expect_guard "features 配下 process.env 直接参照禁止（oxfmt が折り返した import）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  $'import {\n  arch,\n  env,\n  pid,\n} from "node:process";\nexport const selftestEnv = [arch, env.SELFTEST, pid];' \
+  "features 配下で process.env を直接参照できません"
+
+expect_guard "client process.env 直接参照禁止（node:process の default import）" \
+  guard_client_features_no_process_env \
+  "apps/client/shared/lib/__selftest_env.ts" \
+  $'import nodeProcess from "node:process";\nexport const selftestEnv = nodeProcess.env.SELFTEST;' \
+  "で process.env を直接参照できません"
+
+expect_guard "client queries のサーバー専用モジュール（型の import と並んだ値の import・折り返した形）" \
+  guard_client_queries_server_modules \
+  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  $'import type { ApiClient } from "@/shared/lib/api-client";\nimport {\n  getApiClient,\n} from "../../../shared/lib/api-client";\nexport const selftestQuery = (): ApiClient => getApiClient();' \
+  "createServerFn のファイルだけ"
+
+expect_guard "client queries のサーバー専用モジュール（コメントに createServerFn の語があるだけ）" \
+  guard_client_queries_server_modules \
+  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  $'// createServerFn は使わない\nimport { getApiClient } from "@/shared/lib/api-client";\nexport const selftestQuery = () => getApiClient();' \
+  "createServerFn のファイルだけ"
+
+expect_guard "client process.env 直接参照禁止（{ default as p } の import）" \
+  guard_client_features_no_process_env \
+  "apps/client/shared/lib/__selftest_env.ts" \
+  $'import { default as nodeProcess } from "node:process";\nexport const selftestEnv = nodeProcess.env.SELFTEST;' \
+  "で process.env を直接参照できません"
+
+expect_guard "features 配下 process.env 直接参照禁止（/* を含むコメントの後の折り返した import）" \
+  guard_features_no_process_env \
+  "$D/infrastructure/__selftest_env_after_comment.ts" \
+  $'// /api/auth/* のハンドラから使う\nimport {\n  DurableObject,\n  env,\n  RpcTarget,\n} from "cloudflare:workers";\n/** 設定 */\nexport const selftestEnv = [DurableObject, env, RpcTarget];' \
+  "features 配下で process.env を直接参照できません"
+
+# 誤検出しないこと: コメントの中の import / return class の語、型だけの import
+NEG_QUERY="apps/client/features/tasks/queries/__selftest-type-only.ts"
+mkfix "$NEG_QUERY" $'import { queryOptions } from "@tanstack/react-query";\n\n// 値を import するとブラウザのバンドルに入るので型だけ使う\nimport type { SessionUser } from "@/shared/lib/api-client";\nexport const selftestTypeOnly = (user: SessionUser) => queryOptions({ queryKey: [user.id] });'
+NEG_CLASS="apps/client/shared/lib/__selftest_class_comment.ts"
+mkfix "$NEG_CLASS" $'// return class names for the given variant\nexport const selftestVariant = "a";'
+neg_query_out=$(run_guard guard_client_queries_server_modules 2>&1)
+neg_class_out=$(run_guard guard_no_class_interface 2>&1)
+rm -f "$NEG_QUERY" "$NEG_CLASS"
+if printf '%s' "$neg_query_out" | grep -qF "__selftest-type-only.ts"; then
+  echo "❌ client queries: コメントの後の型だけの import を誤検出しました"
+  FAIL=1
+else
+  echo "✅ client queries（コメントの後の型だけの import は許す）"
+fi
+if printf '%s' "$neg_class_out" | grep -qF "__selftest_class_comment.ts"; then
+  echo "❌ class 禁止: コメントの中の return class を誤検出しました"
+  FAIL=1
+else
+  echo "✅ class 禁止（コメントの中の語は数えない）"
+fi
+
+expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
+  guard_client_queries_server_modules \
+  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  $'import { getApiClient } from "@/shared/lib/api-client";\nexport const selftestQuery = () => getApiClient();' \
+  "createServerFn のファイルだけ"
+
 expect_guard "application→infrastructure 直参照禁止" \
   guard_application_no_infrastructure \
   "$D/application/__selftest_infra.ts" \
@@ -631,6 +742,13 @@ expect_guard "feature 構造（client の actions のテスト欠落）" \
   "apps/client/features/tasks/actions/__selftest-untested.ts" \
   'export const selftestUntested = 1;' \
   "actions/__selftest-untested.ts に co-located テスト"
+
+expect_guard "feature 構造（client の actions のサブディレクトリのテスト欠落）" \
+  guard_feature_structure \
+  "apps/client/features/tasks/actions/__selftest-bulk/archive.ts" \
+  'export const selftestUntested = 1;' \
+  "actions/__selftest-bulk/archive.ts に co-located テスト"
+rmdir "apps/client/features/tasks/actions/__selftest-bulk" 2>/dev/null || true
 
 # **本体（arch-guards.sh）が全検査を実際に呼ぶことの検証。** 上の各ケースは検査関数を直接呼ぶので、
 # 本体から検査が抜ける・並べ忘れる・ループが失敗を握りつぶす、を捕まえられない。

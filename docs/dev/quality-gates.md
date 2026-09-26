@@ -27,7 +27,8 @@
 | 検証器の変更理由 | `scripts/check/verifier-paths.txt` に当たる変更が PR 本文の「## 検証器の変更理由」を持つか | — | ✗ | ✓（`Review converged` の 1 ステップ。判定は base 側の一覧で、本文の編集でも再評価。ワークフロー定義の書き換えは防げないので、検証器に触る PR は手動マージ） |
 | カバレッジ閾値（api） | domain/application の網羅（85%） | `bun run coverage:check` | ✗ | ✓ |
 | カバレッジ閾値（client） | actions/queries の網羅（80%） | `bun run coverage:check:client` | ✗ | ✓ |
-| ミューテーション | domain/application のテストの**質**（90%） | `cd apps/api-service && bun run mutation` | ✗ | ✓（PR 差分のみ、[ADR-007](../architecture/adr-007-mutation-testing-diff-scope.md)） |
+| ミューテーション | domain/application のテストの**質**（90%） | `cd apps/api-service && bun run mutation` | ✗ | ✓（PR 差分のみ、[ADR-007](../architecture/adr-007-mutation-testing-diff-scope.md)。テストだけを変えた PR は、そのテストと同じディレクトリの実装を対象にする） |
+| schema とマイグレーションのずれ | `packages/database/src/schema` を変えてマイグレーションを作り忘れていないか（`drizzle-kit generate` が差分を出さないこと） | `cd packages/database && bun run db:generate` | ✗ | ✓（`ci` ジョブ） |
 | 依存脆弱性（bun audit） | allowlist（`.github/security-audit-allowlist.json`）に無い既知の advisory | `bun run check:security-audit` | ✗ | 週次のみ（`security-audit.yml`。PR では実行されず、該当があれば issue を立てる） |
 
 > **⚠ 対象範囲は `src/features/*/{domain,application}` に限られる。**

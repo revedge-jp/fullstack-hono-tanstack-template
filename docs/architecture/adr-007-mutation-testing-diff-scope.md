@@ -44,6 +44,8 @@ Stryker の `--incremental`（履歴キャッシュ方式）は使わず、実�
 - 対象は `stryker.config.json` の `mutate`/除外パターンと同じ基準
   （`domain/**`・`application/**` の `.ts`、`*.test.ts` と
   `application/{service,index,ports}.ts` は除外）で `git diff` の結果をフィルタする。
+- テスト（`*.test.ts`）だけを変えた差分は、そのテストと同じディレクトリの実装をすべて対象に加える。
+  実装の差分だけを見ると、テストを弱めた・消した PR では対象が空になり、mutation testing がスキップされる。
 - 差分に対象ファイルが無ければ mutation testing 自体をスキップする（0 件を
   スキャンして無駄に Stryker を起動しない）。
 - 履歴キャッシュを持たないため、`--incremental` を不採用にした理由
