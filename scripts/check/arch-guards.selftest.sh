@@ -170,6 +170,12 @@ expect_guard "クラス式禁止" \
   'export const SelftestExpr = class { x = 1 };' \
   "class の使用が禁止"
 
+expect_guard "クラス式禁止（mixin の return class）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_mixin.ts" \
+  $'export function selftestMixin<T extends new () => object>(Base: T) {\n  return class extends Base {};\n}' \
+  "class の使用が禁止"
+
 expect_guard "throw 禁止（src/config.ts 以外の config.ts）" \
   guard_no_throw \
   "$D/application/config.ts" \
@@ -199,6 +205,18 @@ expect_guard "client queries のサーバー専用モジュール（型の impor
   "apps/client/features/tasks/queries/__selftest-query.ts" \
   $'import type { ApiClient } from "@/shared/lib/api-client";\nimport {\n  getApiClient,\n} from "../../../shared/lib/api-client";\nexport const selftestQuery = (): ApiClient => getApiClient();' \
   "createServerFn のファイルだけ"
+
+expect_guard "client queries のサーバー専用モジュール（コメントに createServerFn の語があるだけ）" \
+  guard_client_queries_server_modules \
+  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  $'// createServerFn は使わない\nimport { getApiClient } from "@/shared/lib/api-client";\nexport const selftestQuery = () => getApiClient();' \
+  "createServerFn のファイルだけ"
+
+expect_guard "client process.env 直接参照禁止（{ default as p } の import）" \
+  guard_client_features_no_process_env \
+  "apps/client/shared/lib/__selftest_env.ts" \
+  $'import { default as nodeProcess } from "node:process";\nexport const selftestEnv = nodeProcess.env.SELFTEST;' \
+  "で process.env を直接参照できません"
 
 expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
   guard_client_queries_server_modules \

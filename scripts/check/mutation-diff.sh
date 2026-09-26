@@ -47,15 +47,13 @@ if ! DIFF_FILES=$(git diff --name-only "$BASE_REF"...HEAD -- 'apps/api-service/s
   exit 1
 fi
 # テストだけを変えた PR も対象にする。実装の差分だけを見ると、テストを弱めた・消した PR では対象が空になり、
-# mutation testing がスキップされて CI が通る。変えたテストと同じ名前の実装（x.test.ts → x.ts）を、無ければ同じ
-# ディレクトリの実装を対象に加える
+# mutation testing がスキップされて CI が通る。変えたテストと同じディレクトリの実装をすべて対象に加える
+# （同じ名前の実装だけだと、usecase.test.ts だけが検証する steps.ts・mappers.ts が外れる）
 TESTED_FILES=$(printf '%s\n' "$DIFF_FILES" | grep -E '/(domain|application)/.*\.test\.ts$' |
   while IFS= read -r test_file; do
-    source_file="${test_file%.test.ts}.ts"
-    if [ -f "$source_file" ]; then
-      echo "$source_file"
-    elif [ -d "$(dirname "$test_file")" ]; then
-      find "$(dirname "$test_file")" -maxdepth 1 -name '*.ts' ! -name '*.test.ts'
+    test_dir="$(dirname "$test_file")"
+    if [ -d "$test_dir" ]; then
+      find "$test_dir" -maxdepth 1 -name '*.ts' ! -name '*.test.ts'
     fi
   done || true)
 CHANGED_FILES=$(printf '%s\n%s\n' "$DIFF_FILES" "$TESTED_FILES" |
