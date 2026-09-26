@@ -94,7 +94,7 @@ if other="$(worktree_using_db "$DB_NAME" "$WT_PATH")"; then
 elif docker info >/dev/null 2>&1; then
   drop_worktree_databases "$DB_NAME"
   legacy="$(legacy_db_name_for "$name")"
-  if [ "$HAS_ENV_DB_NAME" = 0 ] && [ "$legacy" != "$DB_NAME" ]; then
+  if [ "$HAS_ENV_DB_NAME" = 0 ] && [ "$legacy" != "$DB_NAME" ] && ! worktree_using_db "$legacy" "$WT_PATH" >/dev/null; then
     log ".env が無かったため、以前の規則の DB 名 $legacy は確かめていません（残っていれば手動で DROP DATABASE）"
   fi
 else

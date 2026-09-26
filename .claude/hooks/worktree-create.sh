@@ -40,8 +40,8 @@ BRANCH="claude/$name"
 DB_NAME="$(db_name_for_worktree "$WT_PATH" "$name")"
 if other="$(worktree_using_db "$DB_NAME" "$WT_PATH")"; then
   if [ "$DB_NAME" = "$(db_name_from_env "$WT_PATH")" ]; then
-    # 以前から共有している（どちらも変更前の規則で作った）。名前を変えると空の DB に切り替わるので
-    # そのまま使い、知らせるだけにする
+    # 以前から共有している（どちらも変更前の規則で作った・.env をコピーした）。名前を変えると空の DB に
+    # 切り替わるのでそのまま使い、知らせるだけにする
     log "警告: DB $DB_NAME は $other と共有しています。片方を削除してももう片方の DB は消しません"
   else
     DB_NAME="$(hashed_db_name_for "$name")"

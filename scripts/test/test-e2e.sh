@@ -122,11 +122,12 @@ for pid in $ORPHAN_PIDS; do
   same_checkout=0
   if [ -z "$pid_cwd" ]; then
     :
-  elif [ -n "$ROOT_DIR_TOPLEVEL" ]; then
-    [ "$(toplevel_of "$pid_cwd")" = "$ROOT_DIR_TOPLEVEL" ] && same_checkout=1
-  else
+  elif [ ! -e "$ROOT_DIR/.git" ]; then
     # git の無いチェックアウト（ZIP で取得した直後）には worktree も無いので、パスの前方一致で足りる
     case "$pid_cwd" in "$ROOT_DIR_PHYSICAL" | "$ROOT_DIR_PHYSICAL"/*) same_checkout=1 ;; esac
+  elif [ -n "$ROOT_DIR_TOPLEVEL" ]; then
+    # git があるのにトップレベルを求められないとき（dubious ownership 等）は、止めない側に倒す
+    [ "$(toplevel_of "$pid_cwd")" = "$ROOT_DIR_TOPLEVEL" ] && same_checkout=1
   fi
   if [ "$same_checkout" = 1 ]; then
     echo "==> Killing orphaned E2E server on port $E2E_PORT (pid: $pid)..."

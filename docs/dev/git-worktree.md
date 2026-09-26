@@ -13,14 +13,14 @@
   分岐 → CLIENT/API ポートの割り当て → main の共有 Postgres（postgres / postgres-test）内に
   `wt_<name>` DB を作成 → main の `.env` をコピーして worktree 固有の値に書き換え → `bun install` →
   マイグレーション（dev/test）。DB まで用意できたときだけ `.env` に `WORKTREE_DB_READY=1` を書く。
-  DB 名は name が英小文字・数字・`_` だけならそのまま `wt_<name>`、`-` などを含む・長いときは
-  `wt_<変換した name>_<ハッシュ 6 桁>` になる（`feat-x` と `feat_x` が同じ DB を指さないようにするため）。
+  DB 名は name が英小文字・数字・`_` だけならそのまま `wt_<name>`、`-` などを含む・長い・末尾が `_<16進6桁>` の
+  ときは `wt_<変換した name>_<ハッシュ 6 桁>` になる（`feat-x` と `feat_x` が同じ DB を指さないようにするため）。
   この規則より前に作った worktree（`feat-x` → `wt_feat_x`）と名前が重なるときもハッシュ付きにする。
   実際の名前は worktree の `.env` の `DATABASE_URL` にある
 - **WorktreeRemove**（`.claude/hooks/worktree-remove.sh`）: `git worktree remove` → `wt_<name>` DB の
-  DROP → ポート割り当ての解放。ブランチは消さない（未 push の作業を守るため）。DB 名は `.env` から読むが、
-  その worktree の名前から求めうる名前でないとき（別の worktree の `.env` をコピーした等）は使わず、他の worktree の
-  `.env` が同じ DB を指しているときは DROP しない
+  DROP → ポート割り当ての解放。ブランチは消さない（未 push の作業を守るため）。DB 名は `.env` から読む
+  （`git worktree move` で改名しても作ったときの DB を消す）。他の worktree の `.env` が同じ DB を指しているとき
+  （`.env` をコピーした等）は DROP しない
 
 ### フックの性質（編集するときに読む）
 

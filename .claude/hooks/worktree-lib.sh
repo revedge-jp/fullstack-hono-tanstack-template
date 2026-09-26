@@ -59,22 +59,17 @@ legacy_db_name_for() {
   printf 'wt_%s' "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g')" | cut -c1-63
 }
 
-# worktree が使う DB 名。.env にある名前は、この worktree の名前から求めうるもの（今の規則・名前が重なった
-# ときのハッシュ付き・以前の規則）と一致するときだけ使う（別の worktree の .env をコピーした・DATABASE_URL を
-# 別の DB に向けたときに、その DB を自分のものとして DROP しない）
+# worktree が使う DB 名。.env にあればそれを使う（命名規則が変わった・git worktree move で改名したときも、
+# 作ったときの DB を指し続ける）。別の worktree の .env をコピーしたときにその DB を消さないための判定は、
+# 呼び出し側が worktree_using_db で行う
 db_name_for_worktree() {
   local wt_path="$1" name="$2" from_env
   from_env="$(db_name_from_env "$wt_path")"
-  if [ -n "$from_env" ] &&
-    { [ "$from_env" = "$(db_name_for "$name")" ] || [ "$from_env" = "$(hashed_db_name_for "$name")" ] ||
-      [ "$from_env" = "$(legacy_db_name_for "$name")" ]; }; then
-    printf '%s' "$from_env"
-    return 0
-  fi
   if [ -n "$from_env" ]; then
-    log ".env の DB 名 $from_env はこの worktree（${name}）の名前から求めたものと違うため使いません"
+    printf '%s' "$from_env"
+  else
+    db_name_for "$name"
   fi
-  db_name_for "$name"
 }
 
 # 他の worktree の .env が同じ DB を指していれば、その worktree のパスを出す。以前の規則で作った
