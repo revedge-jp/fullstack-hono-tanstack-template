@@ -73,6 +73,40 @@ describe("migration-safety", () => {
     expect(findViolations(sql)).toHaveLength(1);
   });
 
+  test("文字列中の -- で文の区切りを失わない", () => {
+    const sql =
+      "ALTER TABLE t ADD COLUMN separator text DEFAULT '--';--> statement-breakpoint\nALTER TABLE t ADD COLUMN required text NOT NULL;";
+    expect(findViolations(sql).map((v) => v.reason)).toEqual([
+      "DEFAULT なしの NOT NULL カラムの追加",
+    ]);
+  });
+
+  test.each([
+    "ALTER TABLE t ADD COLUMN a text DEFAULT 'a;b' NOT NULL;",
+    "ALTER TABLE t ADD COLUMN a text DEFAULT 'drop column';",
+    "ALTER TABLE t ADD COLUMN a text DEFAULT E'it\\'s; drop table x' NOT NULL;",
+    'ALTER TABLE "drop table" ADD COLUMN "a" text;',
+  ])("文字列・識別子の中の語や ; を SQL として数えない: %s", (sql) => {
+    expect(findViolations(sql)).toEqual([]);
+  });
+
+  test('"default" という名前のカラムを DEFAULT 句として数えない', () => {
+    const sql = 'ALTER TABLE "t" ADD COLUMN "default" text NOT NULL;';
+    expect(findViolations(sql)).toHaveLength(1);
+  });
+
+  test("文字列の中の allow の文言では通さない", () => {
+    const sql =
+      "INSERT INTO t VALUES ('-- migration-safety: allow x');\nALTER TABLE t DROP COLUMN c;";
+    expect(findViolations(sql).map((v) => v.reason)).toEqual(["カラムの削除"]);
+  });
+
+  test("ドル引用の中の ; で文を分けず、中の SQL は検査する", () => {
+    const sql =
+      "DO $$ BEGIN PERFORM 1; DROP TABLE x; END $$;\nALTER TABLE t ADD COLUMN c text DEFAULT 'x' NOT NULL;";
+    expect(findViolations(sql).map((v) => v.reason)).toEqual(["テーブルの削除"]);
+  });
+
   // Node 22 は import.meta.main が無く、起動パスで判定する。node -e から import したときは argv[1] が無い
   test("node -e から import しても例外にならない", () => {
     const modulePath = fileURLToPath(new URL("./migration-safety.mjs", import.meta.url));

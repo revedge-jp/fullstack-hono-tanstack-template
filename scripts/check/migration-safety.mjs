@@ -49,34 +49,105 @@ function addColumnWithoutDefault(statement) {
     );
 }
 
-// SQL の行コメントを外してから文ごとに分ける（コメントの中の語で誤検出しない）
-// drizzle の区切り（`--> statement-breakpoint`）は行コメントと同じ `--` で始まるので、先に文の区切りの印へ
-// 置き換えてから行コメントを外し、最後に区切りの印と `;` で分ける。コメントを先に外すと区切りも消えて `;` の無い文が
-// つながり、`;` で先に分けるとコメント中の `;` の後ろ（DEFAULT などの語）が次の文に残る
-const BREAKPOINT = "\u0000";
-function statementsOf(sql) {
-  return sql
-    .replace(/-->\s*statement-breakpoint/g, BREAKPOINT)
-    .split("\n")
-    .map((line) => line.replace(/--.*$/, ""))
-    .join("\n")
-    .split(new RegExp(`${BREAKPOINT}|;`))
-    .map((statement) => statement.trim())
-    .filter(Boolean);
+// SQL を文字列・引用符付きの識別子・ドル引用・コメントを区別しながら文に分ける。正規表現で近似すると、コメント中の `;`、
+// 文字列中の `--`、drizzle の区切り（`--> statement-breakpoint`。`;` が無いこともある）のどれかで文の境界がずれ、
+// 別の文の DEFAULT を見て違反を見逃す（近似を直すたびに別の形で見逃しが出たので、字句を読む形にした）。
+// 照合用の文（normalized）では文字列を '' に、引用符付きの識別子を "x" に置き換える（DEFAULT 'drop column' や
+// "default" という名前のカラムを規則の語として数えない）。ドル引用（DO $$ ... $$）の中身は SQL なので残し、中の `;` で
+// 文を分けないことだけを守る。表示には元の文を使う
+function scanSql(sql) {
+  const statements = [];
+  const comments = [];
+  let raw = "";
+  let normalized = "";
+  let index = 0;
+  const flush = () => {
+    if (normalized.trim()) {
+      statements.push({ raw: raw.trim(), normalized: normalized.trim() });
+    }
+    raw = "";
+    normalized = "";
+  };
+  const endOfQuoted = (quote, from, backslashEscapes) => {
+    let cursor = from + 1;
+    while (cursor < sql.length) {
+      if (backslashEscapes && sql[cursor] === "\\") {
+        cursor += 2;
+      } else if (sql[cursor] === quote && sql[cursor + 1] === quote) {
+        cursor += 2;
+      } else if (sql[cursor] === quote) {
+        return cursor + 1;
+      } else {
+        cursor += 1;
+      }
+    }
+    return sql.length;
+  };
+  while (index < sql.length) {
+    const char = sql[index];
+    const next = sql[index + 1];
+    if (char === "-" && next === "-") {
+      const newline = sql.indexOf("\n", index);
+      const stop = newline === -1 ? sql.length : newline;
+      const comment = sql.slice(index, stop);
+      comments.push(comment);
+      if (/^-->\s*statement-breakpoint/.test(comment)) {
+        flush();
+      }
+      index = stop;
+    } else if (char === "/" && next === "*") {
+      const close = sql.indexOf("*/", index + 2);
+      const stop = close === -1 ? sql.length : close + 2;
+      comments.push(sql.slice(index, stop));
+      raw += " ";
+      normalized += " ";
+      index = stop;
+    } else if (char === "'") {
+      // E'...' だけはバックスラッシュでエスケープする
+      const escapeString = /[eE]$/.test(raw) && !/[\w$][eE]$/.test(raw);
+      const stop = endOfQuoted("'", index, escapeString);
+      raw += sql.slice(index, stop);
+      normalized += "''";
+      index = stop;
+    } else if (char === '"') {
+      const stop = endOfQuoted('"', index, false);
+      raw += sql.slice(index, stop);
+      normalized += '"x"';
+      index = stop;
+    } else if (char === "$" && /^\$(?:[A-Za-z_]\w*)?\$/.test(sql.slice(index))) {
+      const tag = /^\$(?:[A-Za-z_]\w*)?\$/.exec(sql.slice(index))[0];
+      const close = sql.indexOf(tag, index + tag.length);
+      const stop = close === -1 ? sql.length : close + tag.length;
+      raw += sql.slice(index, stop);
+      normalized += sql.slice(index, stop);
+      index = stop;
+    } else if (char === ";") {
+      flush();
+      index += 1;
+    } else {
+      raw += char;
+      normalized += char;
+      index += 1;
+    }
+  }
+  flush();
+  return { statements, comments };
 }
 
 export function findViolations(sql) {
-  if (ALLOW_MARKER.test(sql)) {
+  const { statements, comments } = scanSql(sql);
+  // 文字列の中に印の文言があっても許可にしない（コメントの中だけを見る）
+  if (comments.some((comment) => ALLOW_MARKER.test(comment))) {
     return [];
   }
   const violations = [];
-  for (const statement of statementsOf(sql)) {
-    const summary = statement.replace(/\s+/g, " ").slice(0, 160);
-    if (addColumnWithoutDefault(statement)) {
+  for (const statement of statements) {
+    const summary = statement.raw.replace(/\s+/g, " ").slice(0, 160);
+    if (addColumnWithoutDefault(statement.normalized)) {
       violations.push({ reason: ADD_COLUMN_NOT_NULL_REASON, statement: summary });
     }
     for (const rule of RULES) {
-      if (rule.pattern.test(statement)) {
+      if (rule.pattern.test(statement.normalized)) {
         violations.push({ reason: rule.reason, statement: summary });
       }
     }
