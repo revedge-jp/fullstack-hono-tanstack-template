@@ -110,7 +110,11 @@ module.exports = {
         "UI / actions / ルートの component から import すると、DB や Better Auth がブラウザのバンドルに入るか実行時に落ちる。" +
         "SSR の取得は features/*/queries の createServerFn の中で、ブラウザからは browser-api-client を使う。",
       from: { path: "^apps/client/(components/|features/[^/]+/(ui|actions)/|app/routes/)" },
-      to: { path: "^apps/client/shared/lib/(api-client|hono-app|server-logger)\\.ts$" },
+      // 型だけの import（SessionUser 等）はバンドルに入らないので許す
+      to: {
+        path: "^apps/client/shared/lib/(api-client|hono-app|server-logger)\\.ts$",
+        dependencyTypesNot: ["type-only"],
+      },
     },
     // server: domain 層で DB 直参照禁止
     // @repo/db は tsconfig paths でワークスペース内ファイルに解決されるため、

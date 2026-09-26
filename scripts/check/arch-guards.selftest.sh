@@ -770,7 +770,14 @@ export const selftestDcClientCross = signOut;'
 export const selftestDcShared = advanceTask;'
   mkfix "$CD/ui/__selftest_dc_server_module.tsx" 'import { getApiClient } from "@/shared/lib/api-client";
 export const selftestDcServerModule = getApiClient;'
+  # 型だけの import はバンドルに入らないので許す（UI が SessionUser を使う形は自然に出てくる）
+  mkfix "$CD/ui/__selftest_dc_server_type.tsx" 'import type { SessionUser } from "@/shared/lib/api-client";
+export type SelftestDcServerType = SessionUser;'
   DC_CLIENT_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/client 2>/dev/null || true)
+  if printf '%s' "$DC_CLIENT_OUT" | grep -q "__selftest_dc_server_type"; then
+    echo "❌ dep-cruiser: client-browser-no-server-modules が型だけの import を誤検出しました"
+    FAIL=1
+  fi
   for rule in client-cross-features-tasks client-shared-to-features client-browser-no-server-modules; do
     if printf '%s' "$DC_CLIENT_OUT" | grep -q "$rule"; then
       echo "✅ dep-cruiser: ${rule}（@/ alias 経由）"
@@ -780,7 +787,7 @@ export const selftestDcServerModule = getApiClient;'
     fi
   done
   rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" \
-    "$CD/ui/__selftest_dc_server_module.tsx"
+    "$CD/ui/__selftest_dc_server_module.tsx" "$CD/ui/__selftest_dc_server_type.tsx"
 fi
 
 echo "=== 指示ファイル参照チェック自己テスト ==="

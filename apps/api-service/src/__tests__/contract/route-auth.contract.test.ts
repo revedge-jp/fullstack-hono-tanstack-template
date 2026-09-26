@@ -13,8 +13,25 @@ const PUBLIC_ROUTES: ReadonlyArray<{ path: RegExp; reason: string }> = [
   { path: /^\/api\/health(\/live)?$/, reason: "監視（readiness / liveness）" },
   { path: /^\/api\/client-errors$/, reason: "サインイン前の画面のエラーも通報する" },
   { path: /^\/api\/auth\//, reason: "Better Auth（サインイン・コールバック自体）" },
-  { path: /^\/api\/dev\//, reason: "開発用サインイン（本番では devAuth が無く 404）" },
+  // ルーター全体ではなく /login のハンドラだけが devAuth の有無を見るので、dev ルーターに足した別の経路は守る対象
+  { path: /^\/api\/dev\/login$/, reason: "開発用サインイン（本番では devAuth が無く 404）" },
 ];
+
+const PARAM_CANDIDATES = ["00000000-0000-0000-0000-000000000000", "1", "probe"];
+
+// `:id` と `:id{[0-9]+}` のような制約付きのパラメータを、ルートに当たる値に置き換える。当たらないと 404 になり、
+// 守っている経路を付け忘れと誤って落とす
+function concretePathOf(path: string) {
+  return path
+    .replace(/:\w+(\{([^}]*)\})?\??/g, (_match, _braces, constraint: string | undefined) => {
+      if (constraint === undefined) {
+        return PARAM_CANDIDATES[0];
+      }
+      const pattern = new RegExp(`^(?:${constraint})$`);
+      return PARAM_CANDIDATES.find((candidate) => pattern.test(candidate)) ?? PARAM_CANDIDATES[0];
+    })
+    .replace(/\*$/, "probe");
+}
 
 function concreteRoutes() {
   const app = createFakeApp({ getSession: () => errAsync("Unauthorized" as const) });
@@ -48,9 +65,7 @@ describe("すべての経路が既定で認証を要求する", () => {
   test.each(protectedRoutes.map(({ method, path }) => [method, path] as const))(
     "%s %s はセッションが無ければ 401",
     async (method, path) => {
-      const concretePath = path
-        .replace(/:[A-Za-z]+/g, "00000000-0000-0000-0000-000000000000")
-        .replace(/\*$/, "probe");
+      const concretePath = concretePathOf(path);
       // ALL は app.use（ミドルウェア）と app.all（ハンドラ）の両方で出てくる。区別できないので GET で叩き、
       // ハンドラに届かないとき（ミドルウェアだけ・対応するルートが無い）の 404 は許す。2xx などは付け忘れ
       const requestMethod = method === "ALL" ? "GET" : method;
