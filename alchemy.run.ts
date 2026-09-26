@@ -254,6 +254,8 @@ if (process.env.SKIP_WORKER !== "1") {
       // /api/health が返すビルド情報。CI（deploy.yml / preview.yml）が環境変数で渡す。
       APP_VERSION: process.env.APP_VERSION || "dev",
       GIT_SHA: process.env.GIT_SHA || "dev",
+      // 自動ロールバックはアプリだけを戻し、インフラの定義は今回の commit のものを使う（deploy.yml）
+      INFRA_SHA: process.env.INFRA_SHA || process.env.GIT_SHA || "dev",
       BETTER_AUTH_SECRET: alchemy.secret(requireEnv("BETTER_AUTH_SECRET")),
       GOOGLE_CLIENT_ID: alchemy.secret(requireEnv("GOOGLE_CLIENT_ID")),
       GOOGLE_CLIENT_SECRET: alchemy.secret(requireEnv("GOOGLE_CLIENT_SECRET")),

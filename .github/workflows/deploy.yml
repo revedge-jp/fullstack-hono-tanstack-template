@@ -299,7 +299,9 @@ jobs:
           )
           rm -rf apps/client/dist
           cp -R "$rollback_dir/apps/client/dist" apps/client/dist
-          # /api/health のビルド情報をロールバック先の commit に合わせる
+          # /api/health のビルド情報をロールバック先の commit に合わせる。インフラの定義は今回の commit のままなので、
+          # その commit を infraCommit として残す（手動ロールバックはこの commit に合わせてデプロイする）
+          export INFRA_SHA="$GIT_SHA"
           export GIT_SHA="$good_sha"
           export APP_VERSION="rollback-${good_sha}"
           bunx alchemy deploy --stage "$DEPLOY_TARGET"

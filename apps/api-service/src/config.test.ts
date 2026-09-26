@@ -33,6 +33,7 @@ const devEnv = {
   PORT: undefined,
   APP_VERSION: undefined,
   GIT_SHA: undefined,
+  INFRA_SHA: undefined,
 } satisfies EnvOverride;
 
 describe("loadConfig — production 必須検証", () => {
@@ -117,12 +118,18 @@ describe("loadConfig — 新規フィールドの既定値", () => {
     const config = loadConfig(devEnv);
     expect(config.requestTimeoutMs).toBe(30_000);
     expect(config.rateLimit).toEqual({ windowMs: 60_000, max: 20 });
-    expect(config.version).toEqual({ appVersion: "dev", gitSha: "dev" });
+    expect(config.version).toEqual({ appVersion: "dev", gitSha: "dev", infraSha: "dev" });
   });
 
   test("APP_VERSION / GIT_SHA を注入できる", () => {
     const config = loadConfig({ ...devEnv, APP_VERSION: "1.2.3", GIT_SHA: "abc1234" });
-    expect(config.version).toEqual({ appVersion: "1.2.3", gitSha: "abc1234" });
+    // INFRA_SHA が無ければ GIT_SHA と同じ（通常のデプロイはアプリとインフラが同じ commit）
+    expect(config.version).toEqual({ appVersion: "1.2.3", gitSha: "abc1234", infraSha: "abc1234" });
+  });
+
+  test("INFRA_SHA は GIT_SHA と別に注入できる（自動ロールバック後はアプリだけが古い）", () => {
+    const config = loadConfig({ ...devEnv, GIT_SHA: "aaa", INFRA_SHA: "bbb" });
+    expect(config.version.infraSha).toBe("bbb");
   });
 });
 
@@ -146,7 +153,7 @@ describe("loadConfig — 空文字 env（CI の未設定 GitHub Variable）を�
 
   test("APP_VERSION / GIT_SHA が空文字なら dev にフォールバックする", () => {
     const config = loadConfig({ ...devEnv, APP_VERSION: "", GIT_SHA: "   " });
-    expect(config.version).toEqual({ appVersion: "dev", gitSha: "dev" });
+    expect(config.version).toEqual({ appVersion: "dev", gitSha: "dev", infraSha: "dev" });
   });
 
   test("ポートが空文字なら未設定として扱い、もう片方か 8080 を使う（0 で起動しない）", () => {

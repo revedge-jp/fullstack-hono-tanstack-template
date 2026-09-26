@@ -30,26 +30,27 @@
 ### 手動ロールバック
 
 ```bash
-# 稼働中の版の commit（staging / production それぞれの SMOKE_BASE_URL で読む）
+# 稼働中のインフラの定義の commit（staging / production それぞれの SMOKE_BASE_URL で読む）。自動ロールバックの後は
+# アプリ（commit）だけが古く、インフラ（infraCommit）は失敗したデプロイの commit のままなので、commit ではなくこちらを使う
 git fetch origin --tags
-running_sha=$(curl -fsS "$SMOKE_BASE_URL/api/health/live" | jq -r .commit)
+running_sha=$(curl -fsS "$SMOKE_BASE_URL/api/health/live" | jq -r '.infraCommit // .commit')
 
 # 方法1: 過去の成功した Deploy run を GitHub 上で rerun する（その commit が再デプロイされる）
-# rerun はその commit の alchemy.run.ts でデプロイする。稼働中の版より後にリソースを足していたら削除されるので、
+# rerun はその commit の alchemy.run.ts でデプロイする。稼働中のインフラより後にリソースを足していたら削除されるので、
 # 次のコマンドの出力が空のときだけ使う（空でなければ方法2）
 git diff <good-sha> "$running_sha" -- alchemy.run.ts
 gh run list --workflow Deploy   # 戻りたい run を特定
 gh run rerun <run-id>
 
-# 方法2: 古い commit のアプリを別の worktree でビルドし、稼働中の版のインフラ定義でデプロイする（自動ロールバックと同じ考え方）
-# 手元の作業ツリーの alchemy.run.ts と node_modules でデプロイするので、先に稼働中の commit に合わせる
+# 方法2: 古い commit のアプリを別の worktree でビルドし、稼働中のインフラの定義でデプロイする（自動ロールバックと同じ考え方）
+# 手元の作業ツリーの alchemy.run.ts と node_modules でデプロイするので、先にその commit に合わせる
 # （古い main や作業中のブランチのままだと、その定義でリソースが消える・未リリースのインフラ変更が入る）
 git checkout --detach "$running_sha" && bun install --frozen-lockfile
 git worktree add --detach ../rollback <good-sha>
 (cd ../rollback && bun install --frozen-lockfile && bun run build)
 rm -rf apps/client/dist && cp -R ../rollback/apps/client/dist apps/client/dist
 # infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ
-GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
+GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> INFRA_SHA="$running_sha" bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
 git worktree remove ../rollback
 ```
 
@@ -83,7 +84,7 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 （DEFAULT なし）、型変更。これらは必ず expand → contract の 2 リリースに分割する。
 
 `bun run check:migration-safety`（`arch:check` と pre-push に含まれる）がこれらの文を含むマイグレーションを止める。
-expand 済みのリリースの後の contract なら、そのファイルに `-- migration-safety: allow <理由>` を書く。
+expand 済みのリリースの後の contract なら、そのファイルの先頭（SQL より前）に `-- migration-safety: allow <理由>` を書く。
 このチェックが読むのは drizzle-kit が出す形の SQL だけで、それ以外（`DO $$ ... $$`・ブロックコメント・`COLUMN` を省いた
 `ALTER TABLE` など）は「読めない書き方」として止める。手書きの SQL は別のマイグレーションファイルに分け、同じ印に理由を書く。
 0007 以前はガードより前に適用済みの履歴なので対象外（0007 は backfill と SET NOT NULL を 1 本で行っている）。

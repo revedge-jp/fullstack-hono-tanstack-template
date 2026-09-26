@@ -6,7 +6,7 @@
 // （0007 の SET NOT NULL は、旧コードが issuer 列を入れずに INSERT してサインアップが止まる形）。
 //
 // 止める文を含めてよいのは、expand 済みのリリースの後の contract のマイグレーションだけ。そのときは
-// ファイルに `-- migration-safety: allow <理由>` を書く（理由が PR の差分に出るのでレビューで判断できる）。
+// ファイルの先頭に `-- migration-safety: allow <理由>` を書く（理由が PR の差分に出るのでレビューで判断できる）。
 //
 // 読むのは drizzle-kit が出す形の SQL だけで、それ以外は「読めない書き方」として止める（許可リスト方式）。
 // PostgreSQL の字句をすべて正しく読もうとすると、ブロックコメントの入れ子・ドル引用・E 文字列・CR だけの改行などで
@@ -25,8 +25,11 @@ const DRIZZLE_DIR = join(
 // （0002・0003・0006 の型変更、0004 の DEFAULT なしの NOT NULL、0007 の SET NOT NULL を含む）
 const LEGACY_MAX_INDEX = 7;
 
-// 理由は同じ行に書く（\s だと改行をまたいで次の行の SQL を理由として数える）
-const ALLOW_MARKER = /--[ \t]*migration-safety:[ \t]*allow[ \t]+\S/i;
+// 理由は同じ行に書く（\s だと改行をまたいで次の行の SQL を理由として数える）。印はファイルの先頭の行コメント（SQL より前）
+// だけで認める。途中のコメントまで見ると、読めない書き方（E'...' の中など）で文字列の中身をコメントと取り違えたときに、
+// その文言で検査全体が外れる
+const ALLOW_MARKER = /^--[ \t]*migration-safety:[ \t]*allow[ \t]+\S/i;
+const LEADING_COMMENTS = /^(?:[ \t]*(?:--[^\r\n]*)?\r?\n)*[ \t]*(?:--[^\r\n]*)?/;
 
 const UNREADABLE = "読めない書き方（drizzle-kit が出さない形の SQL）";
 
@@ -35,7 +38,6 @@ const UNREADABLE = "読めない書き方（drizzle-kit が出さない形の SQ
 // "default" という名前のカラムを規則の語として数えない）。表示には元の文を使う
 function scanSql(sql) {
   const statements = [];
-  const comments = [];
   let unreadable = false;
   let raw = "";
   let normalized = "";
@@ -72,7 +74,6 @@ function scanSql(sql) {
       const newline = sql.indexOf("\n", index);
       const stop = newline === -1 ? sql.length : newline;
       const comment = sql.slice(index, stop);
-      comments.push(comment);
       if (/^-->\s*statement-breakpoint/.test(comment)) {
         flush();
       }
@@ -115,7 +116,7 @@ function scanSql(sql) {
     }
   }
   flush();
-  return { statements, comments, unreadable };
+  return { statements, unreadable };
 }
 
 // ALTER TABLE の句の並び（ADD COLUMN a ..., ADD COLUMN b ...）を、括弧の外の `,` で分ける（numeric(10, 2) では分けない）
@@ -225,11 +226,11 @@ function statementViolations(normalized) {
 }
 
 export function findViolations(sql) {
-  const { statements, comments, unreadable } = scanSql(sql);
-  // 文字列の中に印の文言があっても許可にしない（コメントの中だけを見る）
-  if (comments.some((comment) => ALLOW_MARKER.test(comment))) {
+  const leading = LEADING_COMMENTS.exec(sql)?.[0] ?? "";
+  if (leading.split(/\r?\n/).some((line) => ALLOW_MARKER.test(line.trim()))) {
     return [];
   }
+  const { statements, unreadable } = scanSql(sql);
   const violations = [];
   if (unreadable) {
     violations.push({

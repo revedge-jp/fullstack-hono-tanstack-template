@@ -142,6 +142,19 @@ describe("migration-safety", () => {
     );
   });
 
+  test.each([
+    "INSERT INTO t (note) VALUES (E'it\\'s -- migration-safety: allow example\ntext');\nALTER TABLE t DROP COLUMN c;",
+    'ALTER TABLE "t" DROP COLUMN "c";\n-- migration-safety: allow 後ろに書いた印',
+  ])("ファイルの先頭以外の allow の印では通さない: %s", (sql) => {
+    expect(findViolations(sql)).not.toEqual([]);
+  });
+
+  test("先頭の複数行のコメントの中の allow の印で通す", () => {
+    const sql =
+      '-- contract: 0010 で expand 済み\n\n-- migration-safety: allow 0010 で expand 済み\nALTER TABLE "t" DROP COLUMN "c";';
+    expect(findViolations(sql)).toEqual([]);
+  });
+
   test("読めない書き方も allow の印で通せる", () => {
     const sql = "-- migration-safety: allow 手書きのデータ移行\nDO $$ BEGIN PERFORM 1; END $$;";
     expect(findViolations(sql)).toEqual([]);

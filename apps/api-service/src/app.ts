@@ -225,7 +225,11 @@ export function buildApp(
 }
 
 function toHealthInfo(config: BuildConfig) {
-  return { version: config.version.appVersion, commit: config.version.gitSha };
+  return {
+    version: config.version.appVersion,
+    commit: config.version.gitSha,
+    infraCommit: config.version.infraSha,
+  };
 }
 
 export function createApp(env?: Record<string, string | undefined>) {

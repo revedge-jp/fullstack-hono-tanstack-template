@@ -51,6 +51,9 @@ const ConfigSchema = z
     // health エンドポイントで返すビルド識別子。デプロイ時に注入する（未注入なら "dev"）。
     APP_VERSION: z.string().optional(),
     GIT_SHA: z.string().optional(),
+    // インフラの定義（alchemy.run.ts）を適用した commit。自動ロールバックはアプリだけを戻すので GIT_SHA と食い違う。
+    // 手動で戻すときは、この commit の定義でデプロイしないと、その後に足したリソースが削除される
+    INFRA_SHA: z.string().optional(),
   })
   .refine((v) => v.NODE_ENV !== "production" || v.BETTER_AUTH_SECRET.length >= MIN_SECRET_LENGTH, {
     path: ["BETTER_AUTH_SECRET"],
@@ -75,6 +78,7 @@ export type AppConfig = {
   version: {
     appVersion: string;
     gitSha: string;
+    infraSha: string;
   };
   databaseUrl: string;
   auth: {
@@ -137,6 +141,7 @@ export function loadConfig(env?: Record<string, string | undefined>): AppConfig 
       // 未設定とみなして "dev" にフォールバックする。trim で空白のみも同様に扱う。
       appVersion: base.APP_VERSION?.trim() || "dev",
       gitSha: base.GIT_SHA?.trim() || "dev",
+      infraSha: base.INFRA_SHA?.trim() || base.GIT_SHA?.trim() || "dev",
     },
     databaseUrl: base.DATABASE_URL,
     auth: {
