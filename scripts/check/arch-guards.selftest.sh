@@ -714,8 +714,21 @@ export const selftestDcZod = z;'
 export const selftestDcHonoSubpath = createMiddleware;'
   mkfix "$D/application/__selftest_dc_hono_type.ts" 'import type { Context } from "hono";
 export type SelftestDcHonoType = Context;'
+  # application 以外の層からの越境と、domain から integrations への依存（以前は application だけ・typo で空振りしていた）
+  mkfix "$D/infrastructure/__selftest_dc_infra_cross.ts" 'import { reconstituteActivity } from "@app/features/activity/domain/models";
+export const selftestDcInfraCross = reconstituteActivity;'
+  mkfix "$D/domain/__selftest_dc_domain_integrations.ts" 'import { readAuthApiError } from "@app/integrations/external/auth";
+export const selftestDcDomainIntegrations = readAuthApiError;'
   DC_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/api-service/src 2>/dev/null || true)
-  for rule in server-application-cross-features-tasks server-presentation-no-infra-or-domain server-domain-no-db \
+  for fixture in __selftest_dc_infra_cross __selftest_dc_domain_integrations; do
+    if printf '%s' "$DC_OUT" | grep -q "$fixture"; then
+      echo "✅ dep-cruiser: ${fixture#__selftest_dc_} を検出"
+    else
+      echo "❌ dep-cruiser: $fixture の依存を検出しませんでした（feature 間・domain → integrations の規則を確認）"
+      FAIL=1
+    fi
+  done
+  for rule in server-cross-features-tasks server-presentation-no-infra-or-domain server-domain-no-db \
     server-features-no-web-framework server-domain-no-framework-libs; do
     if printf '%s' "$DC_OUT" | grep -q "$rule"; then
       echo "✅ dep-cruiser: $rule"
@@ -755,8 +768,10 @@ export const selftestDcDistribution = reconstituteActivity;'
 export const selftestDcClientCross = signOut;'
   mkfix "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" 'import { advanceTask } from "@/features/tasks/actions/advance-task";
 export const selftestDcShared = advanceTask;'
+  mkfix "$CD/ui/__selftest_dc_server_module.tsx" 'import { getApiClient } from "@/shared/lib/api-client";
+export const selftestDcServerModule = getApiClient;'
   DC_CLIENT_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/client 2>/dev/null || true)
-  for rule in client-cross-features-tasks client-shared-to-features; do
+  for rule in client-cross-features-tasks client-shared-to-features client-browser-no-server-modules; do
     if printf '%s' "$DC_CLIENT_OUT" | grep -q "$rule"; then
       echo "✅ dep-cruiser: ${rule}（@/ alias 経由）"
     else
@@ -764,7 +779,8 @@ export const selftestDcShared = advanceTask;'
       FAIL=1
     fi
   done
-  rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts"
+  rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" \
+    "$CD/ui/__selftest_dc_server_module.tsx"
 fi
 
 echo "=== 指示ファイル参照チェック自己テスト ==="

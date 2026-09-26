@@ -4,6 +4,10 @@ import { appendSetCookieHeaders } from "@app/shared/http/set-cookie";
 import { toHttp } from "@app/shared/http/to-http";
 import { createMiddleware } from "hono/factory";
 
+// feature の presentation はこの型でセッション検証を受け取る（auth feature の usecase を直接参照すると
+// feature 間の依存になる。dependency-cruiser の server-cross-features-*）
+export type GetSession = ReturnType<typeof makeGetSession>;
+
 type Env = {
   Variables: {
     user: AuthUser;
@@ -15,7 +19,7 @@ type Env = {
  * 未認証は 401、検証失敗は 500 を返し、後続のハンドラには到達させない。
  * ハンドラからは `c.get("user")` で参照できる（createAuthedApp と組で使うこと）。
  */
-export function requireAuth(getSession: ReturnType<typeof makeGetSession>) {
+export function requireAuth(getSession: GetSession) {
   return createMiddleware<Env>(async (c, next) => {
     const session = await getSession(c.req.raw);
     if (session.isErr()) {

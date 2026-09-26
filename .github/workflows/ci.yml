@@ -273,6 +273,20 @@ jobs:
       - name: Typecheck alchemy.run.ts
         run: bun run typecheck:infra
 
+      # schema（packages/database/src/schema）を変えてマイグレーションを作り忘れると、本番のテーブルとコードが
+      # 食い違ったままデプロイされる。generate は DB に接続しない（URL はダミーでよい）。差分が出たら作り忘れ
+      - name: Detect schema / migration drift
+        working-directory: packages/database
+        env:
+          DATABASE_URL: postgres://unused:unused@127.0.0.1:1/unused
+        run: |
+          bunx drizzle-kit generate
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            echo "::error::src/schema の変更に対応するマイグレーションがありません。bun run db:generate で作ってコミットしてください"
+            git status --porcelain -- drizzle
+            exit 1
+          fi
+
       - name: Architecture & FSD Checks
         run: |
           echo "Running Architecture & FSD Checks..."

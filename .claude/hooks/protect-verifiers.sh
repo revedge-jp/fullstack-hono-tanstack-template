@@ -18,6 +18,13 @@
 # Review converged ジョブ(PR 本文に理由を要求。判定は base 側の一覧)が同じ一覧で受け止める。
 set -uo pipefail
 
+# jq が無いとツールの入力を読めず、下の判定がすべて空になって .env の読み取りも検証器の編集も通ってしまう。
+# 判定できないときは止める側に倒す（JSON は jq を使わずに出す）
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"jq が見つからないため、検証器・秘密情報かどうかを判定できません。jq を入れてください（brew install jq）"}}'
+  exit 0
+fi
+
 INPUT=$(cat)
 TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 GLOB=$(printf '%s' "$INPUT" | jq -r '.tool_input.glob // ""' 2>/dev/null || echo "")

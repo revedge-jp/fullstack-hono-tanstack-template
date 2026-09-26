@@ -14,5 +14,6 @@
       "@shared/*": ["./src/shared/*"],
       "@repo/db": ["../../packages/database/src/index.ts"]
     }
-  }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

@@ -13,7 +13,7 @@
 | Lint / Typecheck | 整形・型安全 | `bun run lint` / `typecheck` | ✓ | ✓ |
 | Unit / Contract | ロジック・APIスキーマ形状 | `bun run test:unit` / `test:contract` | ✓ | ✓ |
 | Integration（実DB） | Drizzle クエリ・DB制約の実挙動 | `bun run test:integration` | ✓（api-service の `test` が `*.int.test.ts` も含めて実行する。DB 必須） | ✓（別ジョブ） |
-| 依存方向（dependency-cruiser） | 内部レイヤ境界・feature間の直接依存禁止 | `bun run arch:dc` | ✓ | ✓ |
+| 依存方向（dependency-cruiser） | 内部レイヤ境界・feature間の直接依存禁止（全層）・client の画面からサーバー専用モジュールの参照禁止 | `bun run arch:dc` | ✓ | ✓ |
 | 構文/配置ガード（grep） | npm 依存禁止・domain 純粋性・責務の混入 | `bun run arch:guards` | ✓ | ✓ |
 | feature 構造完全性 | 必須の層・co-located テスト・配線の有無 | `bun run check:feature` | ✓（guards 内） | ✓ |
 | UI 文言（textlint） | client の日本語文言に AI が書く文章に出やすい語・誇張・全角ダッシュが無いか | `bun run check:ui-copy` | ✓（guards 内） | ✓ |

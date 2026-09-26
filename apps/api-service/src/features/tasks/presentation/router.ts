@@ -1,6 +1,5 @@
 import { createAuthedApp } from "@app/factory";
-import type { makeGetSession } from "@app/features/auth/application/get-session/usecase";
-import { requireAuth } from "@app/middlewares/require-auth";
+import { type GetSession, requireAuth } from "@app/middlewares/require-auth";
 import { toEmptyHttp, toHttp } from "@app/shared/http/to-http";
 import { zValidator } from "@app/shared/http/z-validator";
 import { z } from "zod";
@@ -26,10 +25,7 @@ const taskIdParam = zValidator("param", TaskIdParamSchema, (result, c) => {
   }
 });
 
-export function createTasksRouter(deps: {
-  tasks: TasksService;
-  getSession: ReturnType<typeof makeGetSession>;
-}) {
+export function createTasksRouter(deps: { tasks: TasksService; getSession: GetSession }) {
   return createAuthedApp()
     .use(requireAuth(deps.getSession))
     .post("/", zValidator("json", CreateTaskRequestSchema), async (c) => {
