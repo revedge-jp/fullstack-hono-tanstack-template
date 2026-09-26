@@ -54,10 +54,18 @@ fi
 
 # 対象ファイルを収集する。追跡中のファイルだけを見ると、ZIP で取得した直後や `.git` を作り直した直後
 # （まだ何もコミットしていない）に 1 件も見つからず、何も置換せずに「初期化済み」で終わってしまう。
-# git リポジトリなら --untracked で未追跡（.gitignore の対象外）も含め、そうでなければ grep で探す
+# このディレクトリ自体が git リポジトリのルートなら --untracked で未追跡（.gitignore の対象外）も含め、
+# そうでなければ grep で探す。親ディレクトリの別リポジトリ（ホームを管理する dotfiles 等）の配下では、
+# その .gitignore が効いて 0 件になるので git を使わない。--show-prefix は macOS の /var と /private/var の
+# 違いに左右されない（--show-toplevel と $ROOT の文字列比較だと食い違う）
+is_own_repo() {
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 && [ -z "$(git rev-parse --show-prefix 2>/dev/null)" ]
+}
 list_targets() {
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git grep --untracked -l -F "$PLACEHOLDER"
+  if is_own_repo; then
+    # -z: 日本語や " を含むファイル名は、既定だと引用符付き（"docs/\346…"）で出て perl が開けずに置換が漏れる。
+    # NUL 区切り（引用しない）で受けて改行に直す（core.quotePath=false だけでは " の引用は止まらない）
+    git grep -z --untracked -l -F "$PLACEHOLDER" | tr '\0' '\n'
   else
     grep -rlF "$PLACEHOLDER" . \
       --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=.turbo \
@@ -65,12 +73,15 @@ list_targets() {
   fi
 }
 # 一致なし（終了コード 1）と失敗（2 以上）を分ける。失敗を「0 件」として扱うと初期化済みと誤って案内する
+SEARCH_ERR="$(mktemp)"
+trap 'rm -f "$SEARCH_ERR"' EXIT
 set +e
-FOUND="$(list_targets 2>/dev/null)"
+FOUND="$(list_targets 2>"$SEARCH_ERR")"
 FOUND_RC=$?
 set -e
 if [ "$FOUND_RC" -gt 1 ]; then
-  echo "エラー: 置換対象の検索に失敗しました（終了コード $FOUND_RC）" >&2
+  echo "エラー: 置換対象の検索に失敗しました（終了コード $FOUND_RC）:" >&2
+  sed 's/^/  /' "$SEARCH_ERR" >&2
   exit 1
 fi
 
@@ -148,8 +159,9 @@ if [ -n "$STALE" ]; then
 fi
 echo ""
 echo "次のステップ:"
-if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "  0. git init する（bun install の prepare が lefthook を入れるのに git リポジトリが要る）"
+if ! is_own_repo; then
+  echo "  0. git init する（bun install の prepare が lefthook を入れるのに git リポジトリが要る。"
+  echo "     親ディレクトリの別リポジトリの中なら、そこにコミットしないよう、このディレクトリで git init する）"
 fi
 echo "  1. bun install で依存を入れる"
 echo "  2. 変更内容を確認してコミット: git diff && git add -A && git commit -m 'chore: initialize template as $APP_NAME'"

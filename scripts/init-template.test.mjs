@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -30,11 +30,22 @@ afterEach(() => {
 function extractTemplate() {
   const dir = mkdtempSync(join(tmpdir(), "init-template-"));
   dirs.push(dir);
-  const files = execFileSync("git", ["ls-files", "-z", "-co", "--exclude-standard"], {
+  // 末尾が / の行は入れ子のリポジトリ（.claude/worktrees/<name>/ 等）。tar が中身（node_modules まで）を
+  // たどってバッファを超えるので除く
+  const listed = execFileSync("git", ["ls-files", "-z", "-co", "--exclude-standard"], {
     cwd: ROOT,
     env: CLEAN_ENV,
     maxBuffer: 64 * 1024 * 1024,
   });
+  const files = Buffer.from(
+    listed
+      .toString("utf8")
+      .split("\0")
+      .filter((path) => path !== "" && !path.endsWith("/"))
+      .map((path) => `${path}\0`)
+      .join(""),
+    "utf8",
+  );
   const archive = execFileSync("tar", ["--null", "-T", "-", "-cf", "-"], {
     cwd: ROOT,
     input: files,
@@ -65,7 +76,12 @@ function git(dir, ...args) {
   execFileSync("git", args, { cwd: dir, env: CLEAN_ENV, stdio: "ignore" });
 }
 
-describe("init-template.sh", () => {
+// 初期化済みの派生プロジェクトでは、複製する作業ツリーにプレースホルダーが無く、テストが必ず失敗して
+// pre-push が通らなくなる。作業ツリーがテンプレートのまま（wrangler.jsonc にプレースホルダーがある）ときだけ走らせる
+const WRANGLER = join(ROOT, "apps/client/wrangler.jsonc");
+const IS_TEMPLATE = existsSync(WRANGLER) && readFileSync(WRANGLER, "utf8").includes(PLACEHOLDER);
+
+describe.skipIf(!IS_TEMPLATE)("init-template.sh", () => {
   test.each([
     ["git リポジトリではない（ZIP で取得した直後）", (_dir) => {}],
     [

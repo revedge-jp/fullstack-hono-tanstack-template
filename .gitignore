@@ -108,3 +108,7 @@ audit-output.txt
 
 # evals の実行中スクラッチ(中断時に残りうる)
 evals/results/.tmp-*
+
+# git worktree の置き場（Claude Code の EnterWorktree / .claude/rules/worktree.md）。中身は別ブランチの
+# チェックアウト一式。無視しないと main の git status に出て sync-main / start-from-main の未追跡チェックで止まる
+.claude/worktrees/
