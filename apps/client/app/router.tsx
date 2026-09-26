@@ -5,8 +5,8 @@ import { createIsomorphicFn } from "@tanstack/react-start";
 
 import { DefaultNotFoundComponent } from "@/components/patterns/default-not-found";
 import { FullScreenError } from "@/components/patterns/full-screen-error";
-import { getCspNonce } from "@/shared/lib/csp-nonce";
 
+import { getCspNonce } from "./csp-nonce";
 import { routeTree } from "./routeTree.gen";
 
 // サーバーでは server.ts が決めたリクエストごとの nonce を使う。ブラウザでは、SSR が付けた nonce を

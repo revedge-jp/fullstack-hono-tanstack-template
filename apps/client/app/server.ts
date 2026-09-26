@@ -2,9 +2,10 @@ import { readCauseCode, stringifyErrorSafe, stripBindParamsFromStack } from "@re
 import { createStartHandler, defaultRenderHandler } from "@tanstack/react-start/server";
 
 import { createInProcessApiClient, runWithApiClient } from "@/shared/lib/api-client";
-import { createCspNonce, runWithCspNonce } from "@/shared/lib/csp-nonce";
 import { initHonoApp } from "@/shared/lib/hono-app";
 import { serverLogger } from "@/shared/lib/server-logger";
+
+import { createCspNonce, runWithCspNonce } from "./csp-nonce";
 
 const handler = createStartHandler(defaultRenderHandler);
 
@@ -68,7 +69,7 @@ export function withSecurityHeaders(
     "default-src 'self'",
     // ビルド済みの Worker はリクエストごとの nonce を付けたインラインスクリプト（ハイドレーションデータ・
     // __root.tsx の head）だけを許す。nonce は router の ssr.nonce 経由ですべてのスクリプトに付く
-    // （shared/lib/csp-nonce.ts）。nonce の無い応答（SSR の失敗時の 500 等）はインラインスクリプトを含まないので
+    // （app/csp-nonce.ts）。nonce の無い応答（SSR の失敗時の 500 等）はインラインスクリプトを含まないので
     // 'self' だけでよい。vite の dev サーバー（nonce を渡さない）はスクリプトを差し込み eval も使うので緩める
     nonce
       ? `script-src 'self' 'nonce-${nonce}'`
