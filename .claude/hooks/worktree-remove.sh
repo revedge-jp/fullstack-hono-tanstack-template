@@ -29,8 +29,7 @@ esac
 name="$(basename "$WT_PATH")"
 # .env は下の git worktree remove で消えるので、ここで読む。読めなければ命名規則から求める
 DB_NAME="$(db_name_for_worktree "$WT_PATH" "$name")"
-HAS_ENV_DB_NAME=0
-[ -n "$(db_name_from_env "$WT_PATH")" ] && HAS_ENV_DB_NAME=1
+ENV_DB_NAME="$(db_name_from_env "$WT_PATH")"
 
 echo "=== worktree 削除: $name ===" >&2
 
@@ -89,12 +88,15 @@ fi
 
 # 2. 専用データベースを削除（共有コンテナ自体には触らない）。Docker 停止中は諦める。
 #    他の worktree の .env が同じ DB を指していれば消さない（以前の規則で作った worktree と名前が重なりうる）
+if [ -n "$ENV_DB_NAME" ] && [ "$ENV_DB_NAME" != "$DB_NAME" ]; then
+  log ".env の DB $ENV_DB_NAME はこの worktree の名前から求める DB ではないため消しません（不要なら手動で DROP DATABASE）"
+fi
 if other="$(worktree_using_db "$DB_NAME" "$WT_PATH")"; then
   log "DB $DB_NAME は $other も使っているため削除しません"
 elif docker info >/dev/null 2>&1; then
   drop_worktree_databases "$DB_NAME"
   legacy="$(legacy_db_name_for "$name")"
-  if [ "$HAS_ENV_DB_NAME" = 0 ] && [ "$legacy" != "$DB_NAME" ] && ! worktree_using_db "$legacy" "$WT_PATH" >/dev/null; then
+  if [ -z "$ENV_DB_NAME" ] && [ "$legacy" != "$DB_NAME" ] && ! worktree_using_db "$legacy" "$WT_PATH" >/dev/null; then
     log ".env が無かったため、以前の規則の DB 名 $legacy は確かめていません（残っていれば手動で DROP DATABASE）"
   fi
 else

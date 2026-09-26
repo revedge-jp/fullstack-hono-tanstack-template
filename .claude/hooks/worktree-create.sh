@@ -38,10 +38,18 @@ BRANCH="claude/$name"
 # 再実行（agent-worktree-setup.sh）では .env にある名前を使い続ける。命名規則を変える前に作った
 # worktree で名前を計算し直すと、空の DB を新しく作って .env をそちらに向けてしまう
 DB_NAME="$(db_name_for_worktree "$WT_PATH" "$name")"
+ENV_DB_NAME="$(db_name_from_env "$WT_PATH")"
+# .env がこの worktree の名前から求めうる DB を指していない（別の worktree の .env をコピーした・改名した）。
+# 黙って空の DB に切り替えたり、他の worktree の DB にマイグレーションを当てたりしないよう止める
+if [ -n "$ENV_DB_NAME" ] && [ "$ENV_DB_NAME" != "$DB_NAME" ]; then
+  die ".env の DATABASE_URL の DB（${ENV_DB_NAME}）は、この worktree の名前（${name}）から求める DB ではありません
+  （別の worktree の .env をコピーした・git worktree move で改名した等。改名は非対応です）。
+  $WT_PATH/.env の DATABASE_URL / TEST_DATABASE_URL の DB 名を $DB_NAME に直してから再実行してください（データは移りません）"
+fi
 if other="$(worktree_using_db "$DB_NAME" "$WT_PATH")"; then
-  if [ "$DB_NAME" = "$(db_name_from_env "$WT_PATH")" ]; then
-    # 以前から共有している（どちらも変更前の規則で作った・.env をコピーした）。名前を変えると空の DB に
-    # 切り替わるのでそのまま使い、知らせるだけにする
+  if [ "$DB_NAME" = "$ENV_DB_NAME" ]; then
+    # 以前から共有している（どちらも変更前の規則で作った）。名前を変えると空の DB に切り替わるので
+    # そのまま使い、知らせるだけにする
     log "警告: DB $DB_NAME は $other と共有しています。片方を削除してももう片方の DB は消しません"
   else
     DB_NAME="$(hashed_db_name_for "$name")"

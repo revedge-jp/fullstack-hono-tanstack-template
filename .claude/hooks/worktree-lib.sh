@@ -59,32 +59,55 @@ legacy_db_name_for() {
   printf 'wt_%s' "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g')" | cut -c1-63
 }
 
-# worktree が使う DB 名。.env にあればそれを使う（命名規則が変わった・git worktree move で改名したときも、
-# 作ったときの DB を指し続ける）。別の worktree の .env をコピーしたときにその DB を消さないための判定は、
-# 呼び出し側が worktree_using_db で行う
+# worktree が使う DB 名。DB 名もポート割り当ても worktree の名前で管理する（git worktree move での改名は
+# 非対応）。.env の名前は、この worktree の名前から求めうるもの（今の規則・名前が重なったときのハッシュ付き・
+# 以前の規則）のときだけ使う。別の worktree の .env をコピーした・手で別の DB に向けたときに、その DB を
+# 自分のものとして DROP しない
 db_name_for_worktree() {
   local wt_path="$1" name="$2" from_env
   from_env="$(db_name_from_env "$wt_path")"
-  if [ -n "$from_env" ]; then
+  if [ -n "$from_env" ] &&
+    { [ "$from_env" = "$(db_name_for "$name")" ] || [ "$from_env" = "$(hashed_db_name_for "$name")" ] ||
+      [ "$from_env" = "$(legacy_db_name_for "$name")" ]; }; then
     printf '%s' "$from_env"
   else
     db_name_for "$name"
   fi
 }
 
-# 他の worktree の .env が同じ DB を指していれば、その worktree のパスを出す。以前の規則で作った
-# worktree（feat-x → wt_feat_x）と今の規則の名前（feat_x → wt_feat_x）は同じ名前になりうる
-worktree_using_db() {
-  local db="$1" self="$2" dir
+physical_path() {
+  if [ -d "$1" ]; then (cd "$1" && pwd -P); else printf '%s' "${1%/}"; fi
+}
+
+# git に登録された worktree と .claude/worktrees/ の下のディレクトリ（登録が外れた残り）。
+# git は GIT_* を外して呼ぶ（git フックから起動されたとき GIT_DIR を引き継ぎ、別のリポジトリを答えるため）
+list_worktree_dirs() {
+  (
+    for var in $(compgen -e | grep '^GIT_' || true); do unset "$var"; done
+    git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p'
+  )
+  local dir
   for dir in "$MAIN_ROOT"/.claude/worktrees/*/; do
-    dir="${dir%/}"
-    [ "$dir" = "${self%/}" ] && continue
+    [ -d "$dir" ] && printf '%s\n' "${dir%/}"
+  done
+  return 0
+}
+
+# 他の worktree の .env が同じ DB を指していれば、その worktree のパスを出す。以前の規則で作った
+# worktree（feat-x → wt_feat_x）と今の規則の名前（feat_x → wt_feat_x）は同じ名前になりうる。
+# .claude/worktrees/ の外に置いた worktree も見る
+worktree_using_db() {
+  local db="$1" self dir
+  self="$(physical_path "$2")"
+  while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
     [ -f "$dir/.env" ] || continue
+    [ "$(physical_path "$dir")" = "$self" ] && continue
     if [ "$(db_name_from_env "$dir")" = "$db" ]; then
       printf '%s' "$dir"
       return 0
     fi
-  done
+  done < <(list_worktree_dirs)
   return 1
 }
 
