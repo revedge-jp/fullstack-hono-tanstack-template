@@ -52,7 +52,28 @@ if [ "${#APP_NAME}" -gt 54 ]; then
   exit 1
 fi
 
-# 対象ファイルを収集（git 追跡ファイルのみ = node_modules 等は自動的に対象外）
+# 対象ファイルを収集する。追跡中のファイルだけを見ると、ZIP で取得した直後や `.git` を作り直した直後
+# （まだ何もコミットしていない）に 1 件も見つからず、何も置換せずに「初期化済み」で終わってしまう。
+# git リポジトリなら --untracked で未追跡（.gitignore の対象外）も含め、そうでなければ grep で探す
+list_targets() {
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git grep --untracked -l -F "$PLACEHOLDER"
+  else
+    grep -rlF "$PLACEHOLDER" . \
+      --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=.turbo \
+      --exclude-dir=.output --exclude-dir=coverage | sed 's#^\./##'
+  fi
+}
+# 一致なし（終了コード 1）と失敗（2 以上）を分ける。失敗を「0 件」として扱うと初期化済みと誤って案内する
+set +e
+FOUND="$(list_targets 2>/dev/null)"
+FOUND_RC=$?
+set -e
+if [ "$FOUND_RC" -gt 1 ]; then
+  echo "エラー: 置換対象の検索に失敗しました（終了コード $FOUND_RC）" >&2
+  exit 1
+fi
+
 # ※ mapfile は macOS 標準の bash 3.2 に無いため while-read で組む
 TARGETS=()
 while IFS= read -r f; do
@@ -65,7 +86,9 @@ while IFS= read -r f; do
     fi
   done
   [ "$skip" = "0" ] && TARGETS+=("$f")
-done < <(git grep -l "$PLACEHOLDER" 2>/dev/null || true)
+done <<EOF
+$FOUND
+EOF
 
 if [ "${#TARGETS[@]}" -eq 0 ]; then
   echo "✅ 置換対象が見つかりません。すでに初期化済みのようです。"
@@ -114,23 +137,21 @@ fi
 echo ""
 echo "✅ 初期化が完了しました。"
 
-# 旧プロジェクト名の残存チェック（安全網）。
-# ※ このスクリプト自身は grep パターン文字列を含むため除外。
-# ※ bun.lock はルート名を旧名でキャッシュしている場合があるが、次回 `bun install` で
-#    package.json の name に追従して自動更新されるため除外する。
-echo ""
-echo "🔍 旧プロジェクト名（ax_saas / ax-saas / kikagaku）の残存チェック..."
-STALE="$(git grep -n -i -e ax_saas -e ax-saas -e kikagaku -- \
-  ':(exclude)scripts/init-template.sh' ':(exclude)bun.lock' 2>/dev/null || true)"
+# テンプレート名の残りを案内する（README の見出しなど、プロジェクトに合わせて書き換えるもの）。
+# bun.lock のルート名はワークスペースの解決に使われないので残っていてよい（bun install では更新されない）
+TEMPLATE_NAME="fullstack-hono-tanstack-template"
+STALE="$(grep -rnF "$TEMPLATE_NAME" . --include='*.md' --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null || true)"
 if [ -n "$STALE" ]; then
-  echo "⚠️  旧プロジェクト名の参照が残っています。手動で確認してください:" >&2
-  echo "$STALE" >&2
-else
-  echo "✅ 旧プロジェクト名の残存はありません。"
+  echo ""
+  echo "📝 テンプレート名（$TEMPLATE_NAME）が残っている文書です。プロジェクトに合わせて書き換えてください:"
+  printf '%s\n' "$STALE" | sed 's/^/  /'
 fi
 echo ""
 echo "次のステップ:"
-echo "  1. bun install で依存を入れる（bun.lock のルート名も $APP_NAME に更新される）"
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "  0. git init する（bun install の prepare が lefthook を入れるのに git リポジトリが要る）"
+fi
+echo "  1. bun install で依存を入れる"
 echo "  2. 変更内容を確認してコミット: git diff && git add -A && git commit -m 'chore: initialize template as $APP_NAME'"
 echo "  3. README.md のタイトル・説明を自分のプロジェクト用に書き換える"
 echo "  4. .env を作成する: cp .env.example .env（README のクイックスタート参照）"

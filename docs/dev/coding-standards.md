@@ -1,6 +1,6 @@
 # コーディング規約
 
-fullstack-hono-tanstack-template のコーディング規約です。
+このリポジトリのコーディング規約です。
 
 ## 基本方針
 
