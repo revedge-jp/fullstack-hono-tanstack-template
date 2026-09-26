@@ -21,10 +21,6 @@ function concreteRoutes() {
   const seen = new Set<string>();
   const routes: Array<{ method: string; path: string }> = [];
   for (const route of app.routes) {
-    // ALL はミドルウェアの登録（app.use）。実際のハンドラは同じパスの GET / POST 等で出てくる
-    if (route.method === "ALL") {
-      continue;
-    }
     const key = `${route.method} ${route.path}`;
     if (seen.has(key)) {
       continue;
@@ -52,13 +48,22 @@ describe("すべての経路が既定で認証を要求する", () => {
   test.each(protectedRoutes.map(({ method, path }) => [method, path] as const))(
     "%s %s はセッションが無ければ 401",
     async (method, path) => {
-      const url = `http://localhost${path.replace(/:[A-Za-z]+/g, "00000000-0000-0000-0000-000000000000")}`;
-      const res = await app.request(url, {
-        method,
+      const concretePath = path
+        .replace(/:[A-Za-z]+/g, "00000000-0000-0000-0000-000000000000")
+        .replace(/\*$/, "probe");
+      // ALL は app.use（ミドルウェア）と app.all（ハンドラ）の両方で出てくる。区別できないので GET で叩き、
+      // ハンドラに届かないとき（ミドルウェアだけ・対応するルートが無い）の 404 は許す。2xx などは付け忘れ
+      const requestMethod = method === "ALL" ? "GET" : method;
+      const res = await app.request(`http://localhost${concretePath}`, {
+        method: requestMethod,
         headers: { "content-type": "application/json", origin: "http://localhost:3000" },
-        body: method === "GET" || method === "HEAD" ? undefined : "{}",
+        body: requestMethod === "GET" || requestMethod === "HEAD" ? undefined : "{}",
       });
-      expect(res.status).toBe(401);
+      if (method === "ALL") {
+        expect([401, 404]).toContain(res.status);
+      } else {
+        expect(res.status).toBe(401);
+      }
     },
   );
 });
