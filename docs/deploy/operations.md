@@ -45,13 +45,15 @@ gh run rerun <run-id>
 # 方法2: 古い commit のアプリを別の worktree でビルドし、稼働中のインフラの定義でデプロイする（自動ロールバックと同じ考え方）
 # 手元の作業ツリーの alchemy.run.ts と node_modules でデプロイするので、先にその commit に合わせる
 # （古い main や作業中のブランチのままだと、その定義でリソースが消える・未リリースのインフラ変更が入る）
-git checkout --detach "$running_sha" && bun install --frozen-lockfile
+# （コミットしていない変更は checkout で持ち越されるので、作業ツリーが空のときだけ進める）
+test -z "$(git status --porcelain)" && git checkout --detach "$running_sha" && bun install --frozen-lockfile
 git worktree add --detach ../rollback <good-sha>
 (cd ../rollback && bun install --frozen-lockfile && bun run build)
 rm -rf apps/client/dist && cp -R ../rollback/apps/client/dist apps/client/dist
 # infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ
 GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> INFRA_SHA="$running_sha" bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
 git worktree remove ../rollback
+git checkout -    # 元のブランチに戻る（apps/client/dist は古い版のままなので、次の作業の前にビルドし直す）
 ```
 
 稼働中の版より古い commit を**新しく**デプロイしようとすると（main 上の古い commit に `vX.Y.Z` タグを打つ等）、
@@ -85,8 +87,8 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 
 `bun run check:migration-safety`（`arch:check` と pre-push に含まれる）がこれらの文を含むマイグレーションを止める。
 expand 済みのリリースの後の contract なら、そのファイルの先頭（SQL より前）に `-- migration-safety: allow <理由>` を書く。
-このチェックが読むのは drizzle-kit が出す形の SQL だけで、それ以外（`DO $$ ... $$`・ブロックコメント・`COLUMN` を省いた
-`ALTER TABLE` など）は「読めない書き方」として止める。手書きの SQL は別のマイグレーションファイルに分け、同じ印に理由を書く。
+このチェックが読むのは drizzle-kit が出すテーブル・カラム・制約・index・enum の変更の形だけで、それ以外（`DO $$ ... $$`・
+ブロックコメント・`COLUMN` を省いた `ALTER TABLE`・sequence / policy / role の変更・関数の作成など）は「読まない書き方」として止める。手書きの SQL は別のマイグレーションファイルに分け、同じ印に理由を書く。
 0007 以前はガードより前に適用済みの履歴なので対象外（0007 は backfill と SET NOT NULL を 1 本で行っている）。
 
 ## 障害通知

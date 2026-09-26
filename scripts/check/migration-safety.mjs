@@ -8,7 +8,7 @@
 // 止める文を含めてよいのは、expand 済みのリリースの後の contract のマイグレーションだけ。そのときは
 // ファイルの先頭に `-- migration-safety: allow <理由>` を書く（理由が PR の差分に出るのでレビューで判断できる）。
 //
-// 読むのは drizzle-kit が出す形の SQL だけで、それ以外は「読めない書き方」として止める（許可リスト方式）。
+// 読むのは drizzle-kit が出す形のうちテーブル・カラム・制約・index・enum の変更だけで、それ以外は止める（許可リスト方式）。
 // PostgreSQL の字句をすべて正しく読もうとすると、ブロックコメントの入れ子・ドル引用・E 文字列・CR だけの改行などで
 // 文の境界がずれて違反を見逃す形が次々に見つかったため。手書きの SQL（DO ブロック・関数・データの移行など）は
 // 別のマイグレーションファイルに分け、allow の印と理由を付ける。
@@ -26,12 +26,12 @@ const DRIZZLE_DIR = join(
 const LEGACY_MAX_INDEX = 7;
 
 // 理由は同じ行に書く（\s だと改行をまたいで次の行の SQL を理由として数える）。印はファイルの先頭の行コメント（SQL より前）
-// だけで認める。途中のコメントまで見ると、読めない書き方（E'...' の中など）で文字列の中身をコメントと取り違えたときに、
+// だけで認める。途中のコメントまで見ると、読まない書き方（E'...' の中など）で文字列の中身をコメントと取り違えたときに、
 // その文言で検査全体が外れる
 const ALLOW_MARKER = /^--[ \t]*migration-safety:[ \t]*allow[ \t]+\S/i;
 const LEADING_COMMENTS = /^(?:[ \t]*(?:--[^\r\n]*)?\r?\n)*[ \t]*(?:--[^\r\n]*)?/;
 
-const UNREADABLE = "読めない書き方（drizzle-kit が出さない形の SQL）";
+const UNREADABLE = "このチェックが読まない書き方（手書きの SQL か、ここで扱わない種類の変更）";
 
 // 文字列（'...'）・引用符付きの識別子（"..."）・行コメント・drizzle の区切り（`--> statement-breakpoint`）・`;` だけを
 // 読み、文に分ける。照合用の文（normalized）では文字列を '' に、識別子を "x" に置き換える（DEFAULT 'drop column' や
@@ -153,6 +153,10 @@ const SAFE_COLUMN_ACTIONS =
   /^(?:set\s+default\b|drop\s+not\s+null$|drop\s+expression$|add\s+generated\b|set\s+(?:generated|increment|start|maxvalue|minvalue|cache|cycle|no\s+cycle)\b)/i;
 
 function columnActionViolation(action) {
+  // 値を明示して INSERT する旧コードが失敗する
+  if (/^(?:add|set)\s+generated\s+always\b/i.test(action)) {
+    return "GENERATED ALWAYS への変更";
+  }
   if (/^(?:set\s+data\s+)?type\b/i.test(action)) {
     return "型の変更";
   }
@@ -162,7 +166,7 @@ function columnActionViolation(action) {
   // NOT NULL の列から DEFAULT を外すと、列を省いて INSERT する旧コードが「DEFAULT なしの NOT NULL」と同じく失敗する。
   // NULL 可かどうかは文から分からないので NULL 可の列でも止める（旧コードが列を省いたときの値が DEFAULT から NULL に変わる）。
   // IDENTITY を外すのも、旧コードが id を省いて INSERT する形を壊すので同じ扱い
-  if (/^drop\s+(?:default|identity)\b/i.test(action)) {
+  if (/^drop\s+(?:default|identity)\b|^set\s+default\s+null$/i.test(action)) {
     return "DEFAULT の削除";
   }
   return SAFE_COLUMN_ACTIONS.test(action) ? undefined : UNREADABLE;
@@ -170,12 +174,16 @@ function columnActionViolation(action) {
 
 function clauseViolation(clause) {
   if (/^add\s+column\b/i.test(clause)) {
-    // PRIMARY KEY も NOT NULL を含む。GENERATED（IDENTITY・生成列）は値を DB が埋める
+    // PRIMARY KEY も NOT NULL を含む。GENERATED（IDENTITY・生成列）と serial は値を DB が埋める
     const notNull = /\bnot\s+null\b|\bprimary\s+key\b/i.test(clause);
-    const filled = /\bdefault\s+(?!null\b)|\bgenerated\b/i.test(clause);
+    const filled = /\bdefault\s+(?!null\b)|\bgenerated\b|\b(?:small|big)?serial\b/i.test(clause);
     return notNull && !filled ? "DEFAULT なしの NOT NULL カラムの追加" : undefined;
   }
-  if (/^add\s+(?:constraint|primary\s+key|unique|foreign\s+key|check)\b/i.test(clause)) {
+  // 主キーは対象の列を暗黙に NOT NULL にする（NULL 可の既存の列なら SET NOT NULL と同じ）
+  if (/^add\s+(?:constraint\s+\S+\s+)?primary\s+key\b/i.test(clause)) {
+    return "既存カラムへの NOT NULL の追加";
+  }
+  if (/^add\s+(?:constraint|unique|foreign\s+key|check)\b/i.test(clause)) {
     return undefined;
   }
   if (/^drop\s+column\b/i.test(clause)) {
@@ -219,7 +227,13 @@ function statementViolations(normalized) {
     return [/\badd\s+value\b/i.test(text) ? undefined : UNREADABLE];
   }
   // 追加（CREATE）とデータの移行（INSERT / UPDATE / DELETE）は旧コードを壊さない
-  if (/^(?:create|insert|update|delete)\b/i.test(text)) {
+  // CREATE FUNCTION / RULE / TRIGGER は中身を読まないので含めない
+  if (
+    /^create\s+(?:unique\s+)?(?:table|index|type|schema|sequence|view|materialized\s+view|policy|role)\b/i.test(
+      text,
+    ) ||
+    /^(?:insert|update|delete)\b/i.test(text)
+  ) {
     return [];
   }
   return [UNREADABLE];
