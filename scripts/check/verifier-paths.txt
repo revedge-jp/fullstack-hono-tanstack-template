@@ -15,6 +15,7 @@ packages/*/package.json
 # 型チェックの厳しさ(strict 等)と、E2E・整形の設定
 apps/*/tsconfig*.json
 packages/*/tsconfig*.json
+tsconfig.infra.json
 packages/typescript-config/*
 scripts/test/*
 apps/client/playwright.config.ts

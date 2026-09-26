@@ -1,7 +1,7 @@
 /**
  * 他 feature からの通知を蓄積する活動ログのドメインモデル。
  */
-export type ActivityId = string & { readonly _brand: "ActivityId" };
+type ActivityId = string & { readonly _brand: "ActivityId" };
 
 export type Activity = {
   readonly id: ActivityId;

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { decodeTaskCursor, type TaskCursor } from "./cursor";
 
 export const DEFAULT_TASKS_PAGE_SIZE = 20;
-export const MAX_TASKS_PAGE_SIZE = 100;
+const MAX_TASKS_PAGE_SIZE = 100;
 
 export type ListTasksInput = { ownerId: string; cursor?: string; limit?: number };
 export type ListTasksValidated = { ownerId: string; limit: number; after?: TaskCursor };

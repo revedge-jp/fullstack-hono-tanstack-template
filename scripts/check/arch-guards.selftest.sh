@@ -611,6 +611,13 @@ else
   FAIL=1
 fi
 
+# client の actions / queries もテストが無いファイルを検出する（カバレッジは import されないファイルを数えない）
+expect_guard "feature 構造（client の actions のテスト欠落）" \
+  guard_feature_structure \
+  "apps/client/features/tasks/actions/__selftest-untested.ts" \
+  'export const selftestUntested = 1;' \
+  "actions/__selftest-untested.ts に co-located テスト"
+
 # **本体（arch-guards.sh）が全検査を実際に呼ぶことの検証。** 上の各ケースは検査関数を直接呼ぶので、
 # 本体から検査が抜ける・並べ忘れる・ループが失敗を握りつぶす、を捕まえられない。
 # (1) 定義済みの guard_* 関数の集合と ARCH_GUARDS の集合が一致すること（件数ではなく集合で比べる。

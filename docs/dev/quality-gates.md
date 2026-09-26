@@ -43,7 +43,8 @@
   api-service が対象に入るとその `test` が integration も実行するので、DB が無いと push できない。
 - **重め・専門的なゲート（knip・jscpd・自己テスト・指示ファイル・カバレッジ・ミューテーション）は CI 主体**。pre-push を軽く保つため。
   依存脆弱性は PR ではなく週次で見る（advisory は自分の変更と無関係に増えるので、ゲートにすると無関係な PR が止まる）。
-- **CI の `ci` ジョブ（lint/type と arch:check 一式。テスト・カバレッジ・ミューテーションは apps/packages の変更時だけ）は、
+- **CI の `ci` ジョブ（lint/type・`alchemy.run.ts` の型と arch:check 一式。unit / contract テストとビルドは apps/packages か
+  依存（package.json / bun.lock）の変更時、カバレッジ・ミューテーションは apps/packages の変更時だけ）は、
   コード・`scripts/`・ゲートの設定ファイル・依存のどれかに触れる PR で必ず実行される**。
   `ci.yml` の `changes` ジョブが paths-filter で判定し、どのフィルタにも当たらないコード変更も受け皿（`catchall`）で拾う。
   ワークフロー・フック・`.claude/settings.json`（ガードのチェック対象と検証器）も含む。

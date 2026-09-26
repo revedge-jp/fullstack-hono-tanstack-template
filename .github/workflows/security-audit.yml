@@ -62,6 +62,8 @@ jobs:
           # JSON は機械判定用。人が読む用の audit-output.txt とは別に取る
           # （--json は依存経路を持たないため、issue 本文には両方載せる）。
           bun audit --json > audit-output.json 2>/dev/null
+          # 終了コードも判定に渡す（0 以外なのに検出 0 件は、検出ではなく失敗。triage が「判定できない」にする）
+          echo "json_exit_code=$?" >> "$GITHUB_OUTPUT"
           set -e
 
       # 検出された advisory を .github/security-audit-allowlist.json と突き合わせ、
@@ -71,6 +73,8 @@ jobs:
       # CORS ReDoS が同じ出力に混ざっていた実例がある）。
       - name: Triage against allowlist
         id: triage
+        env:
+          AUDIT_EXIT_CODE: ${{ steps.audit.outputs.json_exit_code }}
         run: node scripts/check/security-audit-triage.mjs audit-output.json
 
       - name: Upload audit report

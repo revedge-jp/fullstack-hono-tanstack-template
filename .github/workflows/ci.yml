@@ -81,6 +81,7 @@ jobs:
               - '.claude/settings.json'
               - 'dependency-cruiser.config.cjs'
               - 'tsconfig.depcruise.json'
+              - 'tsconfig.infra.json'
               - 'knip.json'
               - 'turbo.json'
               - 'steiger.config.mjs'
@@ -246,8 +247,11 @@ jobs:
             echo "Skip unit tests (api-service unchanged)"
           fi
 
+      # deps（package.json / bun.lock だけの変更）でも走らせる。Renovate の lockFileMaintenance は自動マージで、
+      # 範囲内の本番依存（hono・zod・neverthrow）の更新も含む。merge queue の無い構成では、ここで走らないと
+      # unit テストを通らずに main に入る
       - name: Run contract / scenario / client unit tests
-        if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true'
+        if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.deps == 'true'
         env:
           CI: true
         run: bunx turbo run test:unit test:contract --concurrency=4 --cache-dir=.turbo --continue
@@ -263,6 +267,11 @@ jobs:
       - name: Client coverage threshold (actions/queries)
         if: needs.changes.outputs.client == 'true'
         run: bun run coverage:check:client
+
+      # alchemy.run.ts（デプロイ定義）はどのワークスペースにも属さず turbo の typecheck が見ない。
+      # alchemy の更新で壊れても main マージ後の staging デプロイで初めて表に出るので、ここで確かめる
+      - name: Typecheck alchemy.run.ts
+        run: bun run typecheck:infra
 
       - name: Architecture & FSD Checks
         run: |
@@ -377,6 +386,10 @@ jobs:
           fi
           if [[ "${{ needs.changes.outputs.api-service }}" == "true" ]]; then
             FILTERS="$FILTERS --filter=api-service"
+          fi
+          # 依存だけの変更（lockFileMaintenance 等）もビルドを確かめる（本番バンドルを作るツールの更新を含む）
+          if [[ "${{ needs.changes.outputs.deps }}" == "true" ]]; then
+            FILTERS="--filter=client --filter=api-service"
           fi
           if [[ -z "$FILTERS" ]]; then
             echo "No changes detected, skip build"
