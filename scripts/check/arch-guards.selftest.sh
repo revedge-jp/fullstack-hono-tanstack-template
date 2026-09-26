@@ -788,6 +788,19 @@ export type SelftestDcServerType = SessionUser;'
   done
   rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" \
     "$CD/ui/__selftest_dc_server_module.tsx" "$CD/ui/__selftest_dc_server_type.tsx"
+
+  # import { type X } の形は dependency-cruiser では型だけの import になり上のルールを通るが、verbatimModuleSyntax では
+  # 副作用の import として残ってバンドルに入る。oxlint の no-import-type-side-effects で止めていること
+  mkfix "$CD/ui/__selftest_inline_type_import.tsx" 'import { type SessionUser } from "@/shared/lib/api-client";
+export type SelftestInlineTypeImport = SessionUser;'
+  INLINE_OUT=$(bunx oxlint "$CD/ui/__selftest_inline_type_import.tsx" 2>&1 || true)
+  rm -f "$CD/ui/__selftest_inline_type_import.tsx"
+  if printf '%s' "$INLINE_OUT" | grep -q "no-import-type-side-effects"; then
+    echo "✅ oxlint: no-import-type-side-effects（型の指定子だけの import）"
+  else
+    echo "❌ oxlint: import { type X } の形を検出しませんでした（.oxlintrc.json の no-import-type-side-effects を確認）"
+    FAIL=1
+  fi
 fi
 
 echo "=== 指示ファイル参照チェック自己テスト ==="

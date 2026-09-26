@@ -110,7 +110,8 @@ module.exports = {
         "UI / actions / ルートの component から import すると、DB や Better Auth がブラウザのバンドルに入るか実行時に落ちる。" +
         "SSR の取得は features/*/queries の createServerFn の中で、ブラウザからは browser-api-client を使う。",
       from: { path: "^apps/client/(components/|features/[^/]+/(ui|actions)/|app/routes/)" },
-      // 型だけの import（SessionUser 等）はバンドルに入らないので許す
+      // import type（SessionUser 等）はバンドルに入らないので許す。import { type X } の形は型だけでも副作用の import が
+      // 残るが、ここでは区別できない（どちらも type-only）ので oxlint の no-import-type-side-effects で止めている
       to: {
         path: "^apps/client/shared/lib/(api-client|hono-app|server-logger)\\.ts$",
         dependencyTypesNot: ["type-only"],
