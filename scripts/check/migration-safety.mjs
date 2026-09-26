@@ -48,18 +48,18 @@ function addColumnWithoutDefault(statement) {
 }
 
 // SQL の行コメントを外してから文ごとに分ける（コメントの中の語で誤検出しない）
-// 先に drizzle の区切り（`--> statement-breakpoint`）と `;` で分けてから行コメントを外す。先にコメントを外すと
-// 区切り自体も消え、`;` の無い文（手書きのマイグレーション）が 1 つにつながって、次の文の DEFAULT で見逃す
+// drizzle の区切り（`--> statement-breakpoint`）は行コメントと同じ `--` で始まるので、先に文の区切りの印へ
+// 置き換えてから行コメントを外し、最後に区切りの印と `;` で分ける。コメントを先に外すと区切りも消えて `;` の無い文が
+// つながり、`;` で先に分けるとコメント中の `;` の後ろ（DEFAULT などの語）が次の文に残る
+const BREAKPOINT = "\u0000";
 function statementsOf(sql) {
   return sql
-    .split(/-->\s*statement-breakpoint|;/)
-    .map((statement) =>
-      statement
-        .split("\n")
-        .map((line) => line.replace(/--.*$/, ""))
-        .join("\n")
-        .trim(),
-    )
+    .replace(/-->\s*statement-breakpoint/g, BREAKPOINT)
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n")
+    .split(new RegExp(`${BREAKPOINT}|;`))
+    .map((statement) => statement.trim())
     .filter(Boolean);
 }
 

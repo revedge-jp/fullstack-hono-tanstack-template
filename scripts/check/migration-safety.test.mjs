@@ -42,6 +42,14 @@ describe("migration-safety", () => {
     expect(findViolations(two)).toHaveLength(2);
   });
 
+  test("コメント中の ; の後ろの語（DEFAULT 等）を次の文として数えない", () => {
+    const sql =
+      "-- phase 1; DEFAULT will be added later\nALTER TABLE t ADD COLUMN c text NOT NULL;";
+    expect(findViolations(sql).map((v) => v.reason)).toContain(
+      "DEFAULT なしの NOT NULL カラムの追加",
+    );
+  });
+
   test("DEFAULT の削除を止める", () => {
     const sql = 'ALTER TABLE "tasks" ALTER COLUMN "status" DROP DEFAULT;';
     expect(findViolations(sql).map((v) => v.reason)).toContain("DEFAULT の削除");
