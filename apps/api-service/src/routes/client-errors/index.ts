@@ -20,7 +20,7 @@ const ClientErrorReportSchema = z.object({
   stack: z.string().max(MAX_STACK_LENGTH).optional(),
   // クエリ文字列・UUID を除去済みのパス(呼び出し元でスクラブ)。
   path: z.string().max(MAX_PATH_LENGTH).optional(),
-  // このタブが最初に観測したアプリのバージョン(git SHA、x-app-version 由来)。
+  // このタブの基準のバージョン(git SHA。SSR の Server-Timing、なければ最初の x-app-version)。
   appVersion: z.string().max(MAX_SHORT_FIELD_LENGTH).optional(),
 });
 

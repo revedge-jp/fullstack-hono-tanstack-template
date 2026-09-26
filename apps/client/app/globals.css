@@ -26,12 +26,13 @@
   --muted-foreground: oklch(0.552 0.016 285.938);
   --accent: oklch(0.967 0.001 286.375);
   --accent-foreground: oklch(0.21 0.006 285.885);
-  /* 文字色として使う（variant="destructive" は destructive/10 の背景に destructive の文字）。その組み合わせで
-     4.8:1（AA の 4.5:1 以上）。明るくすると AA を割る */
-  --destructive: oklch(0.53 0.22 27.325);
+  /* 文字色として使う（variant="destructive" は destructive/10 の背景、ホバーで destructive/20 の背景に
+     destructive の文字）。/10 で 5.5:1、/20 で 4.5:1（AA の下限）。明るくするとホバー中に AA を割る */
+  --destructive: oklch(0.485 0.22 27.325);
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
-  /* フォーカス時の枠線（border-ring、白背景で 11:1）と外側の ring/50。明るい色にすると白背景で見えなくなる */
+  /* フォーカス時の枠線（border-ring）とリンク等の既定の outline（shared-styles.css）。白背景で 11:1。
+     明るい色にすると白背景で見えなくなる */
   --ring: oklch(0.35 0.09 131);
   --chart-1: oklch(0.871 0.15 154.449);
   --chart-2: oklch(0.723 0.219 149.579);
