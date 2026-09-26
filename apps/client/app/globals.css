@@ -4,6 +4,9 @@
 
 @theme {
   --font-sans: "LINE Seed JP", sans-serif;
+  /* LINE Seed JP には 500 のフェイスが無く（100 / 400 / 700 / 800）、font-medium はブラウザが 400 で描く。
+     見た目どおり 400 と明示する。強調したいときは font-bold（700）を使う */
+  --font-weight-medium: 400;
 }
 
 :root {
@@ -23,10 +26,13 @@
   --muted-foreground: oklch(0.552 0.016 285.938);
   --accent: oklch(0.967 0.001 286.375);
   --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* 文字色として使う（variant="destructive" は destructive/10 の背景に destructive の文字）。その組み合わせで
+     4.8:1（AA の 4.5:1 以上）。明るくすると AA を割る */
+  --destructive: oklch(0.53 0.22 27.325);
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.841 0.238 128.85);
+  /* フォーカス時の枠線（border-ring、白背景で 11:1）と外側の ring/50。明るい色にすると白背景で見えなくなる */
+  --ring: oklch(0.35 0.09 131);
   --chart-1: oklch(0.871 0.15 154.449);
   --chart-2: oklch(0.723 0.219 149.579);
   --chart-3: oklch(0.627 0.194 149.214);
@@ -39,7 +45,7 @@
   --sidebar-accent: oklch(0.967 0.001 286.375);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.841 0.238 128.85);
+  --sidebar-ring: oklch(0.35 0.09 131);
 }
 
 .dark {
@@ -61,7 +67,8 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.405 0.101 131.063);
+  /* 暗い背景では明るい ring（枠線 13:1、ring/50 でも 3.8:1） */
+  --ring: oklch(0.841 0.238 128.85);
   --chart-1: oklch(0.871 0.15 154.449);
   --chart-2: oklch(0.723 0.219 149.579);
   --chart-3: oklch(0.627 0.194 149.214);
@@ -74,5 +81,5 @@
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.405 0.101 131.063);
+  --sidebar-ring: oklch(0.841 0.238 128.85);
 }

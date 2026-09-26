@@ -1,6 +1,4 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark" | "system";
 
@@ -20,16 +18,59 @@ function applyTheme(theme: Theme) {
   el.style.colorScheme = isDark ? "dark" : "light";
 }
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("system");
-  // SSR では localStorage を読めないため、マウント後に実際の設定へ同期する（ハイドレーション不一致回避）。
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
+// localStorage はプライベートブラウズやストレージを無効にした設定で例外を投げる。保存できなくても
+// 切り替え自体は効かせる（選んだテーマはこのタブの間だけ下の変数に残り、次に開いたときに system に戻る）
+function readStoredTheme(): Theme {
+  try {
     const stored = localStorage.getItem("theme");
-    setTheme(stored === "light" || stored === "dark" ? stored : "system");
-    setMounted(true);
-  }, []);
+    return stored === "light" || stored === "dark" ? stored : "system";
+  } catch {
+    return "system";
+  }
+}
+
+function storeTheme(theme: Theme) {
+  try {
+    if (theme === "system") {
+      localStorage.removeItem("theme");
+    } else {
+      localStorage.setItem("theme", theme);
+    }
+  } catch {
+    // 保存できなくても表示の切り替えは続ける
+  }
+}
+
+let preferredTheme: Theme | null = null;
+const listeners = new Set<() => void>();
+
+function getPreferredTheme(): Theme {
+  if (preferredTheme === null) {
+    preferredTheme = readStoredTheme();
+  }
+  return preferredTheme;
+}
+
+function subscribePreferredTheme(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function setPreferredTheme(theme: Theme) {
+  preferredTheme = theme;
+  storeTheme(theme);
+  applyTheme(theme);
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+export function ThemeToggle() {
+  // SSR では localStorage を読めないので system として描き、ハイドレーション後に保存済みの設定へ切り替わる
+  // （useSyncExternalStore の第3引数。effect で setState すると描画が二重になる）
+  const theme = useSyncExternalStore(subscribePreferredTheme, getPreferredTheme, () => "system");
 
   // system 選択時は OS のテーマ変更に追従する。
   useEffect(() => {
@@ -42,16 +83,6 @@ export function ThemeToggle() {
     return () => mq.removeEventListener("change", handler);
   }, [theme]);
 
-  function handleChange(next: Theme) {
-    setTheme(next);
-    if (next === "system") {
-      localStorage.removeItem("theme");
-    } else {
-      localStorage.setItem("theme", next);
-    }
-    applyTheme(next);
-  }
-
   return (
     <div className="flex items-center gap-2">
       <label htmlFor="theme-select" className="text-sm text-muted-foreground">
@@ -59,10 +90,10 @@ export function ThemeToggle() {
       </label>
       <select
         id="theme-select"
-        value={mounted ? theme : "system"}
+        value={theme}
         onChange={(e) => {
           if (isTheme(e.target.value)) {
-            handleChange(e.target.value);
+            setPreferredTheme(e.target.value);
           }
         }}
         className="h-9 rounded-md border border-border bg-background px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"

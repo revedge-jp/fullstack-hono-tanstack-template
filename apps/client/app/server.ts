@@ -96,6 +96,28 @@ export function withSecurityHeaders(
   });
 }
 
+// 古いタブ検知（shared/lib/app-version.ts）の基準にする、この HTML を返した時点のバージョン。
+// レスポンスヘッダーは JS から読めないが、Server-Timing はブラウザが performance の navigation エントリで見せる。
+// 値の決め方は api-service の x-app-version（config.ts の gitSha）と揃える。揃えないと開いた直後に stale になる
+export function appVersionFromEnv(env: { GIT_SHA?: unknown } | undefined): string {
+  const sha = env?.GIT_SHA;
+  return typeof sha === "string" && sha.trim() ? sha.trim() : "dev";
+}
+
+export function withAppVersionTiming(response: Response, version: string): Response {
+  // desc は引用符で囲むので、引用符やカンマを含む値は付けない（git SHA / "dev" は該当しない）
+  if (!/^[\w.-]+$/.test(version)) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  headers.append("Server-Timing", `app;desc="${version}"`);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // Set-Cookie は 1 つずつ別のヘッダーとして足す（カンマで結合すると Expires の日付と区別できない）
 export function withForwardedSetCookies(
   response: Response,
@@ -227,7 +249,10 @@ export default {
 
       const response = await renderWithInProcessApi(handler, honoApp, request, requestId);
       return releaseAfterResponse(
-        withSecurityHeaders(response, isProd, requestId),
+        withAppVersionTiming(
+          withSecurityHeaders(response, isProd, requestId),
+          appVersionFromEnv(env),
+        ),
         cleanup,
         waitUntil,
       );

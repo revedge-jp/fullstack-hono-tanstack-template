@@ -37,7 +37,7 @@ export function ErrorFallbackContent(props: { error: Error; description?: string
           {/* 生のエラーメッセージは内部情報を含みうるため開発時のみ表示する。
               サーバー側には requestId 付きの構造化ログが残る(app/server.ts / requestLogger) */}
           {import.meta.env.DEV ? (
-            <p className="text-sm text-destructive opacity-70">{props.error.message}</p>
+            <p className="text-sm text-muted-foreground">{props.error.message}</p>
           ) : null}
         </div>
       }
