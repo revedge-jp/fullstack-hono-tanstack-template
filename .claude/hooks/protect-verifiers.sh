@@ -45,8 +45,15 @@ fi
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""' 2>/dev/null || echo "")
 [ -z "$FILE" ] && exit 0
 
+# `./`・`..`・シンボリックリンクを解決してから判定する。文字列の前方一致だけだと apps/../scripts/check/x.sh の
+# ような書き方で検証器・秘密情報の判定を避けられる。存在しないパス（Write の新規作成）も解決できるところまで解決する
+resolve_path() {
+  python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1" 2>/dev/null || printf '%s' "$1"
+}
+FILE=$(resolve_path "$FILE")
+
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+ROOT=$(resolve_path "${CLAUDE_PROJECT_DIR:-$PWD}")
 REL="${FILE#"$ROOT"/}"
 # CLAUDE_PROJECT_DIR はセッション起動時のメイン checkout のままで、worktree 作業中も変わらない。
 # 別 checkout 配下のパスは git に root を聞き、worktree の接頭辞も落として root 相対に正規化する。
@@ -62,7 +69,9 @@ emit() { # $1 decision, $2 reason
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}'
 }
 
-case "$BASE" in
+# 大文字小文字は区別しない（macOS の既定のファイルシステムでは .ENV も .env と同じファイル）
+BASE_LOWER=$(printf '%s' "$BASE" | tr '[:upper:]' '[:lower:]')
+case "$BASE_LOWER" in
   .env.example) ;;
   .env|.env.*|.dev.vars|.dev.vars.*)
     emit deny "$REL は秘密情報を含みうるため読み書きしません。設定項目は .env.example と docs/dev/environment-variables.md を参照してください"

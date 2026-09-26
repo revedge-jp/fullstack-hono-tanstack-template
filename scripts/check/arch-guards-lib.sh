@@ -247,7 +247,8 @@ guard_no_legacy_integration_alias() {
 
 guard_server_fn_placement() {
   echo "[guard] createServerFn の配置（features/**/queries/** のみ許容）"
-  SA_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/queries/*' ! -name '*.test.ts' -print0 2>/dev/null |
+  # features/ だけでなく app/・shared/・components/ も見る（そこに置かれると features の外なので素通りしていた）
+  SA_VIOL=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/features/*/queries/*' ! -name '*.test.ts' -print0 2>/dev/null |
     xargs -0 grep -nE "\bcreateServerFn\(" || true)
   if [ -z "$SA_VIOL" ]; then
     echo "OK"
@@ -323,7 +324,8 @@ guard_client_features_no_process_env() {
   echo "[guard] client features 配下での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
   # process.env.X だけでなく process.env["X"]・process["env"]・分割代入（const { env } = process も）・
   # node:process / cloudflare:workers から env を取り出す import・Bun.env も拾う（import.meta.env.DEV は許可）
-  CLIENT_ENV_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
+  # app/server.ts は Worker の env（bindings）を引数で受け取るので process.env を使わない。features 以外も同じく見る
+  CLIENT_ENV_VIOL=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
     xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env" -- || true)
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"
