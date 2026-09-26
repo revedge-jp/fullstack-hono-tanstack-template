@@ -81,6 +81,7 @@ action は `okAsync(input).andThen(step)` だけになる（`get` / `delete`）�
 - **DTOs** (`XxxInput`) defined in Application layer (`validators.ts`), not Domain
 - **`process.env` forbidden** in features and integrations; use `src/config.ts` → DI via container
 - **DI**: `src/container.ts` assembles all deps; `src/app.ts` mounts routers
+- **`src/routes/`** holds endpoints that are not features (`health`, `dev-auth`, `client-errors`): no domain / application layers, mounted directly in `src/app.ts`. Anything with business rules or DB writes goes in `src/features/` instead
 - **Error types** defined at top of `usecase.ts`, non-exported
 - **Request-scoped logging**: the `requestLogger` middleware puts a requestId-bound pino child logger
   on the context — use `c.get("logger")` in presentation handlers instead of `console.*`. Access logs

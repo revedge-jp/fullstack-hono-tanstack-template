@@ -9,6 +9,9 @@
 ```bash
 gh pr view --comments
 gh pr view
+# 行に付いたコメント（ファイル・行番号つき）は上の 2 つには出ない
+gh api --paginate "repos/{owner}/{repo}/pulls/$(gh pr view --json number -q .number)/comments?per_page=100" \
+  --jq '.[] | "\(.user.login) \(.path):\(.line // .original_line)\n\(.body)\n"'
 ```
 
 ### 2. 指摘事項の整理

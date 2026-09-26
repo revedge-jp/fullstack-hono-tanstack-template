@@ -37,7 +37,7 @@ Claude Code の worktree（`.claude/worktrees/<name>`）は `EnterWorktree` 時�
 
 1. まだ worktree に入っていなければ `EnterWorktree` を `name: <kebab-case-slug>` で実行
    （`.claude/worktrees/<slug>` が作られ、ブランチは `claude/<slug>`）
-2. 規約（`feat/`|`fix/`|`refactor/`|`chore/` + kebab-case）に合わせて `git branch -m <branch-name>` でリネーム
+2. 規約（`feat/`|`fix/`|`docs/`|`refactor/`|`chore/` + kebab-case）に合わせて `git branch -m <branch-name>` でリネーム
 3. **フックが済ませた作業を検証する**（フックが発火しないことがある。不足があれば復旧する）:
    ```bash
    test -f .env && echo ".env: OK" || echo ".env: MISSING"

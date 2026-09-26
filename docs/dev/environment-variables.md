@@ -42,7 +42,15 @@
 | `LOG_PRETTY` | ログ整形出力のつもりで置いた変数。現状は `config.ts` が読むだけで、ロガーには渡しておらず出力は変わらない | （未設定） |
 | `LOG_LEVEL` | ログレベル（fatal/error/warn/info/debug/trace/silent） | 未設定時は環境別デフォルト（開発: debug、本番: info） |
 | `BETTER_AUTH_URL` | Better Auth のベース URL。OAuth のコールバック URL の基準になる。dev は client のオリジン（`http://localhost:3000`）にする | （未設定） |
-| `BETTER_AUTH_TRUSTED_ORIGINS` | Better Auth の信頼オリジン（カンマ区切り） | （空） |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | Better Auth の信頼オリジン（カンマ区切り）。本番で未設定なら `BETTER_AUTH_URL` から導出する | （空） |
+| `REQUEST_TIMEOUT_MS` | リクエストのタイムアウト（ms） | `30000` |
+| `RATE_LIMIT_WINDOW_MS` | `/api/auth/*`・`/api/client-errors/*` のレート制限のウィンドウ長（ms。パスごとに別に数える） | `60000` |
+| `RATE_LIMIT_MAX` | 上のウィンドウあたりの最大リクエスト数 | `20` |
+| `APP_VERSION` / `GIT_SHA` | `/api/health` が返すビルド情報。CI が注入する | `dev` |
+
+**本番（`NODE_ENV=production`）で必須になるもの**（無いと起動時の設定検証で失敗する）: `CORS_ORIGIN`、`BETTER_AUTH_URL`、
+`BETTER_AUTH_SECRET` の 32 文字以上、`BETTER_AUTH_TRUSTED_ORIGINS`（または `BETTER_AUTH_URL` からの導出）。
+デプロイ（`alchemy.run.ts`）は公開 URL からこれらを注入する。
 
 ### Client（apps/client）
 
