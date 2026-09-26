@@ -46,6 +46,10 @@ if [ -n "$ENV_DB_NAME" ] && [ "$ENV_DB_NAME" != "$DB_NAME" ]; then
   suggested="$DB_NAME"
   if worktree_using_db "$suggested" "$WT_PATH" >/dev/null; then
     suggested="$(hashed_db_name_for "$name")"
+    if other="$(worktree_using_db "$suggested" "$WT_PATH")"; then
+      die ".env の DATABASE_URL の DB（${ENV_DB_NAME}）は、この worktree の名前（${name}）から求める DB ではなく、
+  求められる DB 名（${suggested}）も $other が使っています。別の worktree 名で作り直してください"
+    fi
   fi
   die ".env の DATABASE_URL の DB（${ENV_DB_NAME}）は、この worktree の名前（${name}）から求める DB ではありません
   （別の worktree の .env をコピーした・git worktree move で改名した等。改名は非対応です）。
