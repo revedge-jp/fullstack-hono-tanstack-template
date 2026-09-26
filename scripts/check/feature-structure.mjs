@@ -14,6 +14,7 @@
 //  - __tests__/contract/{feature}.contract.test.ts（apps/api-service/AGENTS.md の必須テスト）
 //  - 各 usecase.ts の co-located usecase.test.ts
 //  - 配線: container.ts への登録 / app.ts への router マウント
+//  - client: features/*/actions・queries の各ファイルの co-located テスト（schemas.ts / index.ts は除く）
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
