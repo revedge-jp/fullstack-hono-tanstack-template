@@ -112,6 +112,7 @@ module.exports = {
       from: { path: "^apps/client/(components/|features/[^/]+/(ui|actions)/|app/routes/)" },
       // import type（SessionUser 等）はバンドルに入らないので許す。import { type X } の形は型だけでも副作用の import が
       // 残るが、ここでは区別できない（どちらも type-only）ので oxlint の no-import-type-side-effects で止めている
+      // （components/ui は shadcn の生成物で oxlint の対象外。手で書き換えない前提）
       to: {
         path: "^apps/client/shared/lib/(api-client|hono-app|server-logger)\\.ts$",
         dependencyTypesNot: ["type-only"],
