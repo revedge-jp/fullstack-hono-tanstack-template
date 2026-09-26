@@ -22,7 +22,6 @@
     "apps/api-service/src/app.ts": ["types"]
   },
   "ignoreDependencies": [
-    "@tailwindcss/postcss",
     "tailwindcss",
     "@repo/tailwind-config",
     "tw-animate-css",

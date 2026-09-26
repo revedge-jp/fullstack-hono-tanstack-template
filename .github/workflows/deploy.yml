@@ -178,6 +178,7 @@ jobs:
         env:
           SMOKE_BASE_URL: ${{ vars.SMOKE_BASE_URL }}
           GH_TOKEN: ${{ github.token }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           sha=""
           for attempt in 1 2 3; do
@@ -199,6 +200,13 @@ jobs:
           done
           case "$status" in
             identical|ahead)
+              # 稼働中より古い commit を新しく出さない（main 上の古い commit にタグを打つと production が戻る）。
+              # 意図した巻き戻しは過去の Deploy run の rerun（run_attempt が 2 以上）で行うので、それは止めない。
+              # 比べられないとき（compare の失敗）は、デプロイ自体は止めずに進める
+              if [ "$RUN_ATTEMPT" = "1" ] && order=$(gh api "repos/$GITHUB_REPOSITORY/compare/$sha...$GIT_SHA" --jq .status 2>/dev/null) && [ "$order" = "behind" ]; then
+                echo "::error::デプロイしようとしている $GIT_SHA は稼働中の $sha より古い commit です。巻き戻すなら、戻りたい版の Deploy run を rerun してください（docs/deploy/operations.md の「手動ロールバック」）"
+                exit 1
+              fi
               echo "sha=$sha" >> "$GITHUB_OUTPUT"
               echo "smoke 失敗時の戻り先: $sha" ;;
             "") echo "::warning::稼働中の $sha が main に含まれるかを確かめられませんでした（compare API の失敗）。このデプロイの smoke が失敗しても自動ロールバックはできません" ;;

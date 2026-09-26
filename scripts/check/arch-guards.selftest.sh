@@ -231,6 +231,20 @@ expect_guard "client features process.env 直接参照禁止（ブラケット�
   'export const selftestEnv = process.env["SELFTEST"];' \
   "で process.env を直接参照できません"
 
+# features/ の外（app/・shared/・components/）も見ていることを確かめる。検査範囲を features に戻すと落ちる
+expect_guard "client process.env 直接参照禁止（app/ 配下）" \
+  guard_client_features_no_process_env \
+  "apps/client/app/__selftest_env.ts" \
+  'export const selftestEnv = process.env.SELFTEST;' \
+  "で process.env を直接参照できません"
+
+expect_guard "createServerFn の配置（shared/ 配下）" \
+  guard_server_fn_placement \
+  "apps/client/shared/lib/__selftest_server_fn.ts" \
+  'import { createServerFn } from "@tanstack/react-start";
+export const selftestFn = createServerFn().handler(() => null);' \
+  "createServerFn は features/**/queries/**"
+
 # api-process-env.sh（features 以外の integrations / routes / middlewares / shared も見る）
 mkfix "apps/api-service/src/shared/__selftest_env.ts" 'export const selftestEnv = process.env["SELFTEST"];'
 API_ENV_OUT=$(bash scripts/check/api-process-env.sh 2>&1)
