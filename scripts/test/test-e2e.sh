@@ -101,20 +101,29 @@ fi
 # E2E 専用ポートに前回実行の孤児プロセスが残っていると reuseExistingServer: false でも
 # 起動に失敗する（bunx 経由の子プロセスが Playwright の kill を生き残ることがある）。
 # ポート番号だけでは持ち主を断定できない（別の worktree で実行中の E2E や、無関係のプロセスが
-# 同じポートを使っていることがある）ので、作業ディレクトリがこのチェックアウトの配下にあるものだけ止める。
-# lsof の cwd はシンボリックリンクを解決した実パスなので、比べる側も実パスにする。
+# 同じポートを使っていることがある）ので、作業ディレクトリが同じチェックアウトにあるものだけ止める。
+# パスの前方一致では判定しない — worktree は main の .claude/worktrees/ の下にあるので、main から実行すると
+# worktree の E2E サーバーまで一致する。作業ディレクトリの git のトップレベルを実パスで比べる。
+# git は GIT_* を外して呼ぶ（git フックから起動されたとき GIT_DIR を引き継ぎ、どのディレクトリでも
+# 同じリポジトリを答えてしまうため）
+toplevel_of() {
+  (
+    for var in $(compgen -e | grep '^GIT_' || true); do unset "$var"; done
+    top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || exit 0
+    cd "$top" && pwd -P
+  )
+}
 ORPHAN_PIDS=$(lsof -ti "tcp:$E2E_PORT" -sTCP:LISTEN 2>/dev/null || true)
-ROOT_DIR_PHYSICAL="$(cd "$ROOT_DIR" && pwd -P)"
+ROOT_DIR_TOPLEVEL="$(toplevel_of "$ROOT_DIR")"
 FOREIGN_PIDS=""
 for pid in $ORPHAN_PIDS; do
   pid_cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1)"
-  case "$pid_cwd" in
-    "$ROOT_DIR_PHYSICAL" | "$ROOT_DIR_PHYSICAL"/*)
-      echo "==> Killing orphaned E2E server on port $E2E_PORT (pid: $pid)..."
-      kill "$pid" 2>/dev/null || true
-      ;;
-    *) FOREIGN_PIDS="$FOREIGN_PIDS $pid" ;;
-  esac
+  if [ -n "$pid_cwd" ] && [ -n "$ROOT_DIR_TOPLEVEL" ] && [ "$(toplevel_of "$pid_cwd")" = "$ROOT_DIR_TOPLEVEL" ]; then
+    echo "==> Killing orphaned E2E server on port $E2E_PORT (pid: $pid)..."
+    kill "$pid" 2>/dev/null || true
+  else
+    FOREIGN_PIDS="$FOREIGN_PIDS $pid"
+  fi
 done
 if [ -n "$FOREIGN_PIDS" ]; then
   echo "❌ port $E2E_PORT is used by a process outside this checkout (pid:$FOREIGN_PIDS). Stop it and re-run." >&2
