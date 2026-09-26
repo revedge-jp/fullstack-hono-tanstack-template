@@ -27,7 +27,9 @@ case "$WT_PATH" in
 esac
 
 name="$(basename "$WT_PATH")"
-DB_NAME="$(db_name_for "$name")"
+# .env は下の git worktree remove で消えるので、ここで読む。読めなければ命名規則から求める
+DB_NAME="$(db_name_from_env "$WT_PATH")"
+DB_NAME="${DB_NAME:-$(db_name_for "$name")}"
 
 echo "=== worktree 削除: $name ===" >&2
 

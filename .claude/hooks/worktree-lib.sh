@@ -32,11 +32,30 @@ API_PORT_BASE=8082
 log() { printf '  %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-# worktree 名 → PostgreSQL のデータベース名（英小文字/数字/アンダースコア、63バイト上限）
+# worktree 名 → PostgreSQL のデータベース名（英小文字/数字/アンダースコア、63バイト上限）。
+# 大文字小文字・記号を丸めたときや長さで切ったときは、元の名前の短いハッシュを付けて一意にする。
+# 丸めるだけだと feat-x と feat_x が同じ wt_feat_x になり、片方の worktree を消すともう片方の DB が
+# DROP されていた（作成側も「既に存在します」で黙って同じ DB を共有する）
 db_name_for() {
   local raw="$1" s
   s="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g')"
-  printf 'wt_%s' "$s" | cut -c1-63
+  if [ "$s" = "$raw" ] && [ "${#s}" -le 60 ]; then
+    printf 'wt_%s' "$s"
+  else
+    printf 'wt_%s_%s' "$(printf '%s' "$s" | cut -c1-53)" "$(printf '%s' "$raw" | git hash-object --stdin | cut -c1-6)"
+  fi
+}
+
+# worktree の .env の DATABASE_URL から、その worktree が作った DB の名前を読む（wt_ で始まるものだけ）。
+# 削除は作ったときの名前をそのまま使う（命名規則が変わっても、以前に作った worktree の DB を取り違えない）
+db_name_from_env() {
+  local url db
+  url="$(env_file_value "$1/.env" DATABASE_URL)"
+  db="${url##*/}"
+  db="${db%%\?*}"
+  if [[ "$db" =~ ^wt_[a-z0-9_]+$ ]]; then
+    printf '%s' "$db"
+  fi
 }
 
 # .env から値を1つ取り出す（無ければ既定値）

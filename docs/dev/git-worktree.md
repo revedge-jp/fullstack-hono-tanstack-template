@@ -12,7 +12,10 @@
 - **WorktreeCreate**（`.claude/hooks/worktree-create.sh`）: `origin/main` から `claude/<name>` を
   分岐 → CLIENT/API ポートの割り当て → main の共有 Postgres（postgres / postgres-test）内に
   `wt_<name>` DB を作成 → main の `.env` をコピーして worktree 固有の値に書き換え → `bun install` →
-  マイグレーション（dev/test）。DB まで用意できたときだけ `.env` に `WORKTREE_DB_READY=1` を書く
+  マイグレーション（dev/test）。DB まで用意できたときだけ `.env` に `WORKTREE_DB_READY=1` を書く。
+  DB 名は name が英小文字・数字・`_` だけならそのまま `wt_<name>`、`-` などを含む・長いときは
+  `wt_<変換した name>_<ハッシュ 6 桁>` になる（`feat-x` と `feat_x` が同じ DB を指さないようにするため）。
+  実際の名前は worktree の `.env` の `DATABASE_URL` にある
 - **WorktreeRemove**（`.claude/hooks/worktree-remove.sh`）: `git worktree remove` → `wt_<name>` DB の
   DROP → ポート割り当ての解放。ブランチは消さない（未 push の作業を守るため）
 
@@ -36,7 +39,7 @@ volume が積み上がる。共有コンテナ内に DB を1つ切る方式な�
 - worktree から `db:up` / `db:down` を実行しない（compose プロジェクトが別になりポートを奪い合う）。
   `.env` のコンテナ名・volume 名は一意なダミーに書き換えてあるので、誤って実行しても main の
   volume は巻き込まない
-- **main で `db:down` すると全 worktree の `wt_*` DB が消える**。worktree のルートで
+- **main で `db:reset` すると全 worktree の `wt_*` DB が消える**（`db:down` は volume を残す）。worktree のルートで
   `bash scripts/agent-worktree-setup.sh` を実行すれば作り直せる
 - main の `.env` のコンテナ名・volume 名が、このテンプレートから作った他プロジェクトと同じ既定値
   （`app_postgres` / `app-postgres-data` 等）だと衝突する。フックは既存のコンテナ・volume が別の compose

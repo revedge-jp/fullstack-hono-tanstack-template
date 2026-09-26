@@ -35,7 +35,10 @@ name="$(printf '%s' "$payload" | jq -r '.name // empty')"
 
 WT_PATH="$MAIN_ROOT/.claude/worktrees/$name"
 BRANCH="claude/$name"
-DB_NAME="$(db_name_for "$name")"
+# 再実行（agent-worktree-setup.sh）では .env にある名前を使い続ける。命名規則を変える前に作った
+# worktree で名前を計算し直すと、空の DB を新しく作って .env をそちらに向けてしまう
+DB_NAME="$(db_name_from_env "$WT_PATH")"
+DB_NAME="${DB_NAME:-$(db_name_for "$name")}"
 PROJECT_NAME="$(basename "$MAIN_ROOT")"
 
 echo "=== worktree セットアップ: $name ===" >&2
@@ -129,7 +132,9 @@ if [ "$ENV_MISSING" -eq 0 ]; then
   log ".env にこの worktree 固有の値を反映"
   set_env_var CLIENT_PORT "$WT_CLIENT_PORT"
   set_env_var API_PORT "$WT_API_PORT"
-  set_env_var BETTER_AUTH_URL "http://localhost:$WT_API_PORT"
+  # ブラウザは client のポートの /api/auth を開く（API は client の Worker が同じポートで返す）。
+  # API_PORT にすると OAuth のコールバック URL が client と食い違う
+  set_env_var BETTER_AUTH_URL "http://localhost:$WT_CLIENT_PORT"
   set_env_var BETTER_AUTH_TRUSTED_ORIGINS "http://localhost:$WT_CLIENT_PORT"
   set_env_var CORS_ORIGIN "http://localhost:$WT_CLIENT_PORT"
   set_env_var DATABASE_PORT "$DB_PORT"
@@ -137,8 +142,8 @@ if [ "$ENV_MISSING" -eq 0 ]; then
   set_env_var DATABASE_URL "$DB_URL"
   set_env_var TEST_DATABASE_URL "$TEST_DB_URL"
   # コンテナ名・volume 名は main のものを**継承しない**。compose の named volume はプロジェクトを
-  # 跨いだグローバルな名前解決なので、main の名前のままだとこの worktree で誤って db:down
-  # （compose down -v）した際に main の volume を巻き込む。一意なダミーにしておけば db:down は
+  # 跨いだグローバルな名前解決なので、main の名前のままだとこの worktree で誤って db:reset
+  # （compose down -v）した際に main の volume を巻き込む。一意なダミーにしておけば db:down / db:reset は
   # 何もせず、db:up はポート衝突で失敗する。
   set_env_var POSTGRES_CONTAINER_NAME "${PROJECT_NAME}_postgres_wt_${name}"
   set_env_var POSTGRES_TEST_CONTAINER_NAME "${PROJECT_NAME}_postgres_test_wt_${name}"

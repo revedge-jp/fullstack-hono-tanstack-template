@@ -33,14 +33,14 @@ Error: connect ECONNREFUSED 127.0.0.1:5432
 # 1. DBが起動しているか確認
 docker ps
 
-# 2. DBを再起動
-bun run db:down && bun run db:up:all
+# 2. DBを起動し直す（データは残る）
+bun run db:up:all
 
 # 3. 環境変数を確認
 cat .env | grep DATABASE_URL
 ```
 
-> **注意**: `db:down` は `compose down -v` で、main の共有コンテナ内に Claude Code の worktree が持つ
+> **注意**: データごと作り直す `db:reset` は `compose down -v` で、main の共有コンテナ内に Claude Code の worktree が持つ
 > `wt_<name>` DB（dev/test 両方）もすべて消える。開いている worktree があるなら、その worktree のルートで
 > `bash scripts/agent-worktree-setup.sh` を再実行して DB を作り直すこと（`docs/dev/git-worktree.md`）。
 > また worktree の中では `db:up` / `db:down` を実行しない（DB は main の共有コンテナ）。
@@ -78,13 +78,15 @@ lsof -i :3000
 lsof -i :8080
 lsof -i :5432
 
-# プロセスを終了
-kill -9 <PID>
-
-# または、ポートを変更（.envで設定）
+# ポートを変更する（.env で設定）
 CLIENT_PORT=3001
 API_PORT=8082
 ```
+
+`lsof` の出力で持ち主を確かめ、前回の `bun run dev` の残りなど自分が止めてよいプロセスなら、起動した端末で
+Ctrl+C するか `kill <PID>` で止める。別の worktree の dev サーバーや他のアプリのこともあるので、PID だけを見て
+`kill -9` しない。`CLIENT_PORT` を変えたら、`BETTER_AUTH_URL` / `BETTER_AUTH_TRUSTED_ORIGINS` / `CORS_ORIGIN` の
+ポートも同じ値にする。
 
 ---
 
@@ -97,8 +99,8 @@ API_PORT=8082
 ls packages/database/drizzle/
 cat packages/database/drizzle/meta/_journal.json
 
-# 2. 強制リセット（開発環境のみ。データは消える）
-bun run db:down && bun run db:up:all
+# 2. 強制リセット（開発環境のみ。データは消える。確認が出る）
+bun run db:reset && bun run db:up:all
 bun run db:migrate
 ```
 
@@ -204,8 +206,9 @@ pino の場合、Node ビルドは stream 引数を渡さない限り内部で S
 **確認事項:**
 1. `.env` の `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` が正しいか
 2. Google Cloud Console の OAuth クライアントで承認済みリダイレクト URI に
-   `http://localhost:3000/api/auth/callback/google` が含まれているか
-3. `BETTER_AUTH_SECRET` / `BETTER_AUTH_URL` が設定されているか
+   `<BETTER_AUTH_URL>/api/auth/callback/google`（既定は `http://localhost:3000/api/auth/callback/google`）が含まれているか
+3. `BETTER_AUTH_URL` が client のオリジン（`http://localhost:<CLIENT_PORT>`）になっているか。API のポート
+   （8080）にすると、Google から戻る先が client と食い違う。worktree ではフックが worktree の client ポートに書き換える
 
 #### 症状: `BETTER_AUTH_SECRET should be at least 32 characters` 警告
 

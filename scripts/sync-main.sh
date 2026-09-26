@@ -72,11 +72,15 @@ setup_database
 
 # Type checking
 echo "🔍 タイプチェックを実行中..."
-if bun run typecheck >/dev/null 2>&1; then
+TYPECHECK_LOG="$(mktemp)"
+if bun run typecheck >"$TYPECHECK_LOG" 2>&1; then
   echo "   ✅ タイプチェックが通りました"
 else
-  echo "   ⚠️ タイプチェックで問題が見つかりました（修正が必要かもしれません）"
+  # 出力を捨てると、どのファイルで落ちたかを調べるためにもう一度実行することになる
+  echo "   ⚠️ タイプチェックで問題が見つかりました（末尾 40 行。全文は bun run typecheck）:"
+  tail -n 40 "$TYPECHECK_LOG" | sed 's/^/      /'
 fi
+rm -f "$TYPECHECK_LOG"
 
 # Final status / hints
 if [[ "${CURRENT_BRANCH}" != "main" ]]; then

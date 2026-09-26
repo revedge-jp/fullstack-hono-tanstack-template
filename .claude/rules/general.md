@@ -31,7 +31,7 @@ typecheck / lint / test:unit は通り、`git push` の pre-push で初めて原
 
 - 実装前に `.env` に `WORKTREE_SHARED_DB=1` と `WORKTREE_DB_READY=1` があるか確かめる（`/start-dev` の 3b）。
   無ければ worktree のルートで `bash scripts/agent-worktree-setup.sh`（冪等）
-- worktree から `db:up` / `db:down` を実行しない。逆に **main で `db:down` すると全 worktree の `wt_*` DB が消える**
+- worktree から `db:up` / `db:down` を実行しない。逆に **main で `db:reset` すると全 worktree の `wt_*` DB が消える**（`db:down` は volume を残す）
 - セットアップが volume / コンテナを「別プロジェクト（X）のもの」として DB を飛ばしたら、直すのは worktree
   ではなく **main 側**で、原因は 2 通りある。X が main の以前のディレクトリ名なら（改名・移動した）ディレクトリ名を
   戻す（名前を変えると空の volume で起動する）。そうでなければ main の `.env` の DB コンテナ名・volume 名が
