@@ -47,6 +47,7 @@
 | `RATE_LIMIT_WINDOW_MS` | `/api/auth/*`・`/api/client-errors/*` のレート制限のウィンドウ長（ms。パスごとに別に数える） | `60000` |
 | `RATE_LIMIT_MAX` | 上のウィンドウあたりの最大リクエスト数 | `20` |
 | `APP_VERSION` / `GIT_SHA` | `/api/health` が返すビルド情報。CI が注入する | `dev` |
+| `INFRA_SHA` | `/api/health` の `infraCommit`（インフラの定義を適用した commit）。自動ロールバックのときだけ deploy.yml が `GIT_SHA` と別の値を注入する | `GIT_SHA` と同じ |
 
 **本番（`NODE_ENV=production`）で必須になるもの**（無いと起動時の設定検証で失敗する）: `CORS_ORIGIN`、`BETTER_AUTH_URL`、
 `BETTER_AUTH_SECRET` の 32 文字以上、`BETTER_AUTH_TRUSTED_ORIGINS`（または `BETTER_AUTH_URL` からの導出）。

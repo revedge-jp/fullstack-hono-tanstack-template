@@ -145,7 +145,15 @@ jobs:
       # 失敗する。実プロジェクト化 + 設定が揃うまでは赤い失敗にせず、後続 step を skip する。
       - name: Check deploy readiness
         id: readiness
+        env:
+          SMOKE_BASE_URL: ${{ vars.SMOKE_BASE_URL }}
         run: |
+          # CUSTOM_DOMAIN があるとデプロイで workers.dev の URL を閉じる（alchemy.run.ts の url）。smoke 先が
+          # workers.dev のままだと、正常なデプロイでも smoke が失敗して不要なロールバックが走るので、デプロイ前に止める
+          if [ -n "$CUSTOM_DOMAIN" ] && [[ "$SMOKE_BASE_URL" =~ ^https?://[^/]*\.workers\.dev(/|:|$) ]]; then
+            echo "::error::CUSTOM_DOMAIN を設定しているときは SMOKE_BASE_URL もそのドメインにしてください（workers.dev の URL はデプロイで閉じます）: $SMOKE_BASE_URL"
+            exit 1
+          fi
           missing=""
           [ -z "$APP_NAME" ] && missing="$missing APP_NAME(var)"
           [ -z "$CUSTOM_DOMAIN" ] && [ -z "$APP_ORIGIN" ] && [ -z "$WORKERS_SUBDOMAIN" ] && missing="$missing CUSTOM_DOMAIN|APP_ORIGIN|WORKERS_SUBDOMAIN(var)"
@@ -275,11 +283,25 @@ jobs:
           # checkout は persist-credentials: false のため origin に認証情報が残っていない。
           # トークン付き URL で該当 commit だけを明示的に fetch する。
           git fetch --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$good_sha"
-          git checkout --force "$good_sha"
-          bun install --frozen-lockfile
-          perl -pi -e 's/\{\{APP_NAME\}\}/$ENV{APP_NAME}/g' apps/client/wrangler.jsonc
-          bun run build
-          # /api/health のビルド情報をロールバック先の commit に合わせる
+          # 戻すのはアプリのビルド成果物だけで、インフラの定義（alchemy.run.ts）と alchemy 本体は今回のデプロイの
+          # ものを使う。古い alchemy.run.ts でデプロイすると、今回のリリースで足したリソース（KV / D1 / Queue 等）の
+          # 宣言が無いので、finalize が「宣言されなくなったリソース」として実体ごと削除する（データを失う）。
+          # 古い commit は別の worktree でビルドし、dist だけを持ってくる（今の node_modules・alchemy の版のまま動かす）。
+          # バインディング名・環境変数名を変えたリリースは、このやり方では戻せない（旧コードが旧名を読む）ので、
+          # 名前の変更も expand / contract で 2 リリースに分ける（docs/deploy/operations.md）
+          rollback_dir="$RUNNER_TEMP/rollback"
+          git worktree add --detach "$rollback_dir" "$good_sha"
+          (
+            cd "$rollback_dir"
+            bun install --frozen-lockfile
+            perl -pi -e 's/\{\{APP_NAME\}\}/$ENV{APP_NAME}/g' apps/client/wrangler.jsonc
+            bun run build
+          )
+          rm -rf apps/client/dist
+          cp -R "$rollback_dir/apps/client/dist" apps/client/dist
+          # /api/health のビルド情報をロールバック先の commit に合わせる。インフラの定義は今回の commit のままなので、
+          # その commit を infraCommit として残す（手動ロールバックはこの commit に合わせてデプロイする）
+          export INFRA_SHA="$GIT_SHA"
           export GIT_SHA="$good_sha"
           export APP_VERSION="rollback-${good_sha}"
           bunx alchemy deploy --stage "$DEPLOY_TARGET"

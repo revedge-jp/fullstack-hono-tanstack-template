@@ -47,6 +47,7 @@
     "check:kebab": "node scripts/check/check-kebab-case.mjs",
     "check:security-audit": "bun audit --json > audit-output.json 2>/dev/null; node scripts/check/security-audit-triage.mjs audit-output.json",
     "check:migration-order": "node scripts/check/check-migration-journal-order.mjs",
+    "check:migration-safety": "node scripts/check/migration-safety.mjs",
     "check:feature": "node scripts/check/feature-structure.mjs",
     "check:ui-copy": "node scripts/check/ui-copy.mjs",
     "lint:prose": "textlint AGENTS.md REVIEW.md \"apps/*/AGENTS.md\" \".claude/rules/*.md\" \".claude/commands/*.md\" \"docs/**/*.md\"",

@@ -9,6 +9,8 @@ export type HealthInfo = {
   // デプロイ時に注入されるビルド識別子（未注入なら "dev"）。監視・障害切り分け用。
   version: string;
   commit: string;
+  // インフラの定義（alchemy.run.ts）を適用した commit。自動ロールバックの後は commit と食い違う
+  infraCommit: string;
 };
 
 // DB がハングしても health 自体は必ず短時間で応答する（readiness チェックが

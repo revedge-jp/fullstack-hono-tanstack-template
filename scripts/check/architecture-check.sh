@@ -36,6 +36,7 @@ heading "アーキテクチャ / FSD チェック開始..."
 FAIL=0
 
 PIDS=()
+STEP_NAMES=()
 STEP_RESULTS=$(mktemp -d)
 
 run_step_bg() {
@@ -55,6 +56,9 @@ run_step_bg() {
     rm -f "$OUT" "$ERR"
   ) &
   PIDS+=($!)
+  # 集計は起動したステップの名前を回す（下で名前を並べ直すと、足したステップの失敗が集計から漏れて
+  # arch:check が通る。check-all.sh と同じ直し方）
+  STEP_NAMES+=("$name")
 }
 
 # 1) FSD (steiger)
@@ -102,6 +106,8 @@ fi
 # 7) migration journal の when 順序（詳細は check-migration-journal-order.mjs 冒頭）
 if [ "${SKIP_MIGRATION_ORDER:-0}" != "1" ]; then
   run_step_bg "MigrationOrder" bun run check:migration-order
+  # 旧コードを壊すスキーマ変更（削除・リネーム・型変更・NOT NULL の追加）を 1 本に入れていないか（expand / contract）
+  run_step_bg "MigrationSafety" bun run check:migration-safety
 else
   warn "migration journal 順序チェックは SKIP_MIGRATION_ORDER=1 によりスキップ"
 fi
@@ -144,6 +150,8 @@ done
 #    Guards と並列に走らせると同じ fixture パスを奪い合いフレーキーになる。
 #    並列バッチが完全に終わってから単独で実行する）
 if [ "${SKIP_SELFTEST:-0}" != "1" ]; then
+  # run_step_bg を通さず直列に走らせるので、集計の対象に自分で加える
+  STEP_NAMES+=("Selftest")
   SELFTEST_OUT=$(mktemp); SELFTEST_ERR=$(mktemp)
   if bash scripts/check/arch-guards.selftest.sh >"$SELFTEST_OUT" 2>"$SELFTEST_ERR"; then
     echo "ok" > "$STEP_RESULTS/Selftest.status"
@@ -198,15 +206,21 @@ Guards:構文/配置ガード
 Knip:未使用(knip)
 Dup:重複(jscpd)
 MigrationOrder:migration journal 順序
+MigrationSafety:マイグレーションの expand / contract
 Instructions:指示ファイルの参照整合
 ScriptTests:scripts のテスト
 Filename:ファイル名(kebab-case)
 ProcessEnv:api-service の process.env 直参照
 Selftest:ガード自己テスト"
 
-for name in FSD Deps DC Guards Knip Dup MigrationOrder Instructions ScriptTests Filename ProcessEnv Selftest; do
+for name in "${STEP_NAMES[@]}"; do
   status_file="$STEP_RESULTS/$name.status"
-  [ -f "$status_file" ] || continue
+  # 起動したのに結果が無い（途中で落ちた）ステップは失敗として扱う
+  if [ ! -f "$status_file" ]; then
+    err "$name: 結果がありません"
+    FAIL=1
+    continue
+  fi
   status=$(cat "$status_file")
   label=$(echo "$STEP_LABELS" | grep "^$name:" | cut -d: -f2-)
   [ -n "$label" ] || label="$name"

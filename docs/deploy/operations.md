@@ -30,19 +30,48 @@
 ### 手動ロールバック
 
 ```bash
+# 稼働中のインフラの定義の commit（staging / production それぞれの SMOKE_BASE_URL で読む）。自動ロールバックの後は
+# アプリ（commit）だけが古く、インフラ（infraCommit）は失敗したデプロイの commit のままなので、commit ではなくこちらを使う
+git fetch origin --tags
+running_sha=$(curl -fsS "$SMOKE_BASE_URL/api/health/live" | jq -r '.infraCommit // .commit')
+
 # 方法1: 過去の成功した Deploy run を GitHub 上で rerun する（その commit が再デプロイされる）
+# rerun はその commit の alchemy.run.ts でデプロイする。稼働中のインフラより後にリソースを足していたら削除されるので、
+# 次のコマンドの出力が空のときだけ使う（空でなければ方法2）
+git diff <good-sha> "$running_sha" -- alchemy.run.ts
 gh run list --workflow Deploy   # 戻りたい run を特定
 gh run rerun <run-id>
 
-# 方法2: ローカルから任意の commit をデプロイする
-git checkout <good-sha>
-bun run infra:deploy:staging    # または infra:deploy:production
+# 方法2: 古い commit のアプリを別の worktree でビルドし、稼働中のインフラの定義でデプロイする（自動ロールバックと同じ考え方）
+# 手元の作業ツリーの alchemy.run.ts と node_modules でデプロイするので、先にその commit に合わせる
+# （古い main や作業中のブランチのままだと、その定義でリソースが消える・未リリースのインフラ変更が入る）
+git checkout --detach "$running_sha" && bun install --frozen-lockfile
+git worktree add --detach ../rollback <good-sha>
+(cd ../rollback && bun install --frozen-lockfile && bun run build)
+rm -rf apps/client/dist && cp -R ../rollback/apps/client/dist apps/client/dist
+# infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ。
+# 手元が稼働中のインフラの commit で、alchemy.run.ts 等にコミットしていない変更が無いときだけデプロイする
+# （checkout が失敗して別のブランチのまま・変更を持ち越したままだと、その定義でリソースが消える）
+test "$(git rev-parse HEAD)" = "$(git rev-parse "$running_sha")" \
+  && test -z "$(git status --porcelain --untracked-files=no)" \
+  && GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> INFRA_SHA="$running_sha" \
+    bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
+git worktree remove ../rollback
+git checkout -    # 元のブランチに戻る（apps/client/dist は古い版のままなので、次の作業の前にビルドし直す）
 ```
 
 稼働中の版より古い commit を**新しく**デプロイしようとすると（main 上の古い commit に `vX.Y.Z` タグを打つ等）、
 deploy.yml は止まる（`SMOKE_BASE_URL` 設定時。稼働中の版を読めない・稼働中の版が main に無い・compare API が失敗したときは止めない）。巻き戻しは上の方法1（rerun は止めない）か方法2 で行う。
 
 **注意**: ロールバックで戻るのは **Worker のコードだけ**で、DB スキーマは戻らない。
+自動ロールバックはインフラの定義（`alchemy.run.ts`）を**今回のデプロイのもの**のまま使う（古い定義でデプロイすると、
+今回のリリースで足したリソースが finalize で削除される）。古い commit は別の worktree でビルドし、ビルド成果物
+（`apps/client/dist`）だけを差し替えてデプロイする。手動で戻すときも、古い commit を checkout して
+`infra:deploy:*` を実行しない（古い `alchemy.run.ts` でデプロイされる）。上の方法2 を使う。
+
+同じ理由で、**Worker のバインディング名・環境変数名の変更と削除も expand / contract で 2 リリースに分ける**
+（新しい名前を足すリリース → 旧い名前をやめるリリース）。1 リリースで変えると、ロールバックで旧コードが旧い名前を
+読んで失敗する。
 下記の expand/contract 規律を守っていれば「旧コード + 新スキーマ」でも動作する。
 
 ## DB マイグレーション規律（expand / contract）
@@ -59,6 +88,12 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 
 **禁止（単一リリースでの破壊的変更）**: カラム/テーブルの削除・リネーム、NOT NULL 追加
 （DEFAULT なし）、型変更。これらは必ず expand → contract の 2 リリースに分割する。
+
+`bun run check:migration-safety`（`arch:check` と pre-push に含まれる）がこれらの文を含むマイグレーションを止める。
+expand 済みのリリースの後の contract なら、そのファイルの先頭（SQL より前）に `-- migration-safety: allow <理由>` を書く。
+このチェックが読むのは drizzle-kit が出すテーブル・カラム・制約・index・enum の変更の形だけで、それ以外（`DO $$ ... $$`・
+ブロックコメント・`COLUMN` を省いた `ALTER TABLE`・sequence / policy / role の変更・関数の作成など）は「読まない書き方」として止める。手書きの SQL は別のマイグレーションファイルに分け、同じ印に理由を書く。
+0007 以前はガードより前に適用済みの履歴なので対象外（0007 は backfill と SET NOT NULL を 1 本で行っている）。
 
 ## 障害通知
 

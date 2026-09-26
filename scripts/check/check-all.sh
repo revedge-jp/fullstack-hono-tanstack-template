@@ -112,6 +112,7 @@ fi
 # migration journal の when 順序チェック（詳細は check-migration-journal-order.mjs 冒頭）
 if [ "${SKIP_MIGRATION_ORDER:-}" != "1" ]; then
   run_step_bg "MigrationOrder" bun run check:migration-order
+  run_step_bg "MigrationSafety" bun run check:migration-safety
 fi
 
 # Architecture 個別チェック（SKIP_ARCH=1 のときはすべてスキップ）

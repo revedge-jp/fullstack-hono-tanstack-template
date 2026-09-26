@@ -101,6 +101,10 @@ staging / production との違い:
 - **`infra:destroy` は DB を削除しない**: PlanetScale の `Database` / `Role` は `delete: false`
   （デフォルト）のため、destroy 時は state から外れるだけで実体は残る（誤削除防止）。
   本当に消す場合は PlanetScale ダッシュボードから削除する
+- **Hyperdrive のクエリキャッシュは切っている**（`caching: { disabled: true }`）。既定の有効のままだと、同じ SELECT を
+  最大 60 秒キャッシュから返すので、作った直後の一覧が古い・削除したセッションが返る・`/api/health` の `SELECT 1` が
+  DB の障害を隠す、が起きる（ローカルと E2E は Hyperdrive を通らないのでテストでは見つからない）。読み取りの多い画面で
+  キャッシュを使いたいなら、キャッシュしてよいクエリだけを別の Hyperdrive に分ける
 - **Hyperdrive の `origin_connection_limit` は Cloudflare API 直叩きで是正している**（`15`。
   alchemy 0.93.12 の `HyperdriveProps` にこのプロパティ自体が存在しないため、`Hyperdrive` 作成
   直後に `cfApi.patch(...)` している）。Cloudflare 側のデフォルト値（60）は PlanetScale PS-5
@@ -167,7 +171,7 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
 
 | 環境変数 | リソース | 内容 |
 |---|---|---|
-| `CUSTOM_DOMAIN` | `CustomDomain` | Worker へのカスタムドメイン割り当て（例: `app.example.com`）。zone ID はホスト名から自動解決、DNS レコード・TLS 証明書は Cloudflare が自動管理。公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN`）もここから導出されるため設定の不一致が起きない |
+| `CUSTOM_DOMAIN` | `CustomDomain` | Worker へのカスタムドメイン割り当て（例: `app.example.com`）。zone ID はホスト名から自動解決、DNS レコード・TLS 証明書は Cloudflare が自動管理。公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN`）もここから導出されるため設定の不一致が起きない。設定すると workers.dev の URL は閉じる（workers.dev 経由だと、そのドメインにかけた WAF のレート制限がかからないため） |
 | `EDGE_RATE_LIMIT_RPM` | `Ruleset`（`http_ratelimit`） | エッジ（WAF）での `/api/*` IP 別レート制限。`CUSTOM_DOMAIN` 必須。無料プラン制約に合わせ RPM を 10 秒窓に換算する。アプリ内 rate-limit ミドルウェア（isolate ローカル）より手前で分散カウントされる |
 | `LOGPUSH_DESTINATION` | `Worker.logpush` + `LogPushJob` | Worker trace ログ（console / 例外）の外部転送（dataset: `workers_trace_events`）。**Workers Paid プラン必須** |
 
