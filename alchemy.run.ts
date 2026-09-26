@@ -266,7 +266,7 @@ async function assertLocalCheckoutCoversRunningInfra(origin: string): Promise<vo
   } catch {
     throw new Error(
       `手元の HEAD が稼働中のインフラの定義の commit（${running}）を含みません。git fetch して、それを含む commit ` +
-        "からデプロイしてください（古い checkout でデプロイすると、その後に足したリソースを finalize が削除する）",
+        "からデプロイしてください（古い checkout でデプロイすると、稼働中より古い定義で Worker 等が上書きされる）",
     );
   }
   if (

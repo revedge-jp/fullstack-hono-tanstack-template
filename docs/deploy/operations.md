@@ -44,7 +44,8 @@ gh run rerun <run-id>
 
 # 方法2: 古い commit のアプリを別の worktree でビルドし、稼働中のインフラの定義でデプロイする（自動ロールバックと同じ考え方）
 # 手元の作業ツリーの alchemy.run.ts と node_modules でデプロイするので、先にその commit に合わせる
-# （古い main や作業中のブランチのままだと、その定義でリソースが消える・未リリースのインフラ変更が入る）
+# （古い main や作業中のブランチのままだと、稼働中より古い定義で Worker 等が上書きされる・未リリースのインフラ変更が入る。
+# ローカルのデプロイは finalize しないので、宣言から外れたリソースは消えない）
 git checkout --detach "$running_sha" && bun install --frozen-lockfile
 git worktree add --detach ../rollback <good-sha>
 (cd ../rollback && bun install --frozen-lockfile && bun run build)
@@ -52,7 +53,7 @@ rm -rf apps/client/dist && cp -R ../rollback/apps/client/dist apps/client/dist
 # production なら --stage production にする。行末にコメントを書かない（zsh の既定では # 以降も引数になる）
 # infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ。
 # 手元が稼働中のインフラの commit で、alchemy.run.ts 等にコミットしていない変更が無いときだけデプロイする
-# （checkout が失敗して別のブランチのまま・変更を持ち越したままだと、その定義でリソースが消える）
+# （checkout が失敗して別のブランチのまま・変更を持ち越したままだと、その定義で Worker 等が上書きされる）
 test "$(git rev-parse HEAD)" = "$(git rev-parse "$running_sha")" \
   && test -z "$(git status --porcelain --untracked-files=no)" \
   && GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> INFRA_SHA="$running_sha" \
