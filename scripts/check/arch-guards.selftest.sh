@@ -86,6 +86,18 @@ expect_guard "id-token: write 検出" \
   $'name: selftest\non: push\npermissions:\n  id-token: write\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
   "id-token: write が付与"
 
+expect_guard "id-token: write 検出（フロー形式）" \
+  guard_no_id_token_write \
+  ".github/workflows/__selftest_idtoken.yml" \
+  $'name: selftest\non: push\npermissions: { contents: read, id-token: write }\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
+  "id-token: write が付与"
+
+expect_guard "id-token: write 検出（write-all）" \
+  guard_no_id_token_write \
+  ".github/workflows/__selftest_idtoken.yml" \
+  $'name: selftest\non: push\npermissions: write-all\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
+  "id-token: write が付与"
+
 expect_guard "throw 禁止" \
   guard_no_throw \
   "$D/application/__selftest_throw.ts" \
@@ -180,11 +192,72 @@ expect_guard "features 配下 process.env 直接参照禁止" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
+expect_guard "features 配下 process.env 直接参照禁止（分割代入）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  'const { SELFTEST } = process.env;
+export const selftestEnv = SELFTEST;' \
+  "features 配下で process.env を直接参照できません"
+
+expect_guard "features 配下 process.env 直接参照禁止（node:process の env）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  'import { env } from "node:process";
+export const selftestEnv = env.SELFTEST;' \
+  "features 配下で process.env を直接参照できません"
+
+expect_guard "features 配下 process.env 直接参照禁止（const { env } = process）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  'const { env } = process;
+export const selftestEnv = env.SELFTEST;' \
+  "features 配下で process.env を直接参照できません"
+
+expect_guard "features 配下 process.env 直接参照禁止（Bun.env）" \
+  guard_features_no_process_env \
+  "$D/application/__selftest_env.ts" \
+  'export const selftestEnv = Bun.env.SELFTEST;' \
+  "features 配下で process.env を直接参照できません"
+
 expect_guard "client features process.env 直接参照禁止" \
   guard_client_features_no_process_env \
   "apps/client/features/__selftest/queries/get-x.ts" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "client features 配下で process.env を直接参照できません"
+
+expect_guard "client features process.env 直接参照禁止（ブラケット記法）" \
+  guard_client_features_no_process_env \
+  "apps/client/features/__selftest/queries/get-x.ts" \
+  'export const selftestEnv = process.env["SELFTEST"];' \
+  "client features 配下で process.env を直接参照できません"
+
+# api-process-env.sh（features 以外の integrations / routes / middlewares / shared も見る）
+mkfix "apps/api-service/src/shared/__selftest_env.ts" 'export const selftestEnv = process.env["SELFTEST"];'
+API_ENV_OUT=$(bash scripts/check/api-process-env.sh 2>&1)
+API_ENV_RC=$?
+rm -f "apps/api-service/src/shared/__selftest_env.ts"
+if [ "$API_ENV_RC" -ne 0 ] && printf '%s' "$API_ENV_OUT" | grep -qF "__selftest_env.ts"; then
+  echo "✅ api-process-env: shared 配下のブラケット記法を検出"
+else
+  echo "❌ api-process-env: shared 配下の process.env[\"X\"] を検出できませんでした（exit=${API_ENV_RC}）"
+  FAIL=1
+fi
+# cloudflare:workers から env を取り出すのは違反、DurableObject 等の import は違反にしない
+mkfix "apps/api-service/src/shared/__selftest_env.ts" 'import { DurableObject, env } from "cloudflare:workers";
+export const selftestEnv = [DurableObject, env];'
+API_ENV_OUT=$(bash scripts/check/api-process-env.sh 2>&1)
+API_ENV_RC=$?
+mkfix "apps/api-service/src/shared/__selftest_env.ts" 'import { DurableObject } from "cloudflare:workers";
+export const selftestDurableObject = DurableObject;'
+API_ENV_NEG_RC=0
+bash scripts/check/api-process-env.sh >/dev/null 2>&1 || API_ENV_NEG_RC=$?
+rm -f "apps/api-service/src/shared/__selftest_env.ts"
+if [ "$API_ENV_RC" -ne 0 ] && [ "$API_ENV_NEG_RC" -eq 0 ]; then
+  echo "✅ api-process-env: cloudflare:workers の env は検出し、DurableObject は通す"
+else
+  echo "❌ api-process-env: cloudflare:workers の判定が違います（env を含む import: exit=${API_ENV_RC} / DurableObject だけ: exit=${API_ENV_NEG_RC}）"
+  FAIL=1
+fi
 
 expect_guard "createServerFn の配置（queries 以外は禁止）" \
   guard_server_fn_placement \
@@ -610,8 +683,19 @@ export const selftestDcCrossFeature = reconstituteActivity;'
 export const selftestDcInfra = createTasksRepository;'
   mkfix "$D/domain/__selftest_dc_db.ts" 'import { tasks } from "@repo/db";
 export const selftestDcDb = tasks;'
+  # npm パッケージへのルール（hono の解決先 node_modules/…/hono/dist/ が exclude の部分一致で消えると空振りする）
+  mkfix "$D/application/__selftest_dc_hono.ts" 'import { Hono } from "hono";
+export const selftestDcHono = Hono;'
+  mkfix "$D/domain/__selftest_dc_zod.ts" 'import { z } from "zod";
+export const selftestDcZod = z;'
+  # 実際のコードで使う形（サブパスと import type）。素の値 import だけを試すと、この 2 つの空振りに気づけない
+  mkfix "$D/application/__selftest_dc_hono_subpath.ts" 'import { createMiddleware } from "hono/factory";
+export const selftestDcHonoSubpath = createMiddleware;'
+  mkfix "$D/application/__selftest_dc_hono_type.ts" 'import type { Context } from "hono";
+export type SelftestDcHonoType = Context;'
   DC_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/api-service/src 2>/dev/null || true)
-  for rule in server-application-cross-features-tasks server-presentation-no-infra-or-domain server-domain-no-db; do
+  for rule in server-application-cross-features-tasks server-presentation-no-infra-or-domain server-domain-no-db \
+    server-features-no-web-framework server-domain-no-framework-libs; do
     if printf '%s' "$DC_OUT" | grep -q "$rule"; then
       echo "✅ dep-cruiser: $rule"
     else
@@ -619,7 +703,29 @@ export const selftestDcDb = tasks;'
       FAIL=1
     fi
   done
-  rm -f "$D/application/__selftest_dc_cross_feature.ts" "$D/presentation/__selftest_dc_infra.ts" "$D/domain/__selftest_dc_db.ts"
+  for fixture in __selftest_dc_hono_subpath __selftest_dc_hono_type; do
+    if printf '%s' "$DC_OUT" | grep "server-features-no-web-framework" -A 2 | grep -q "$fixture"; then
+      echo "✅ dep-cruiser: server-features-no-web-framework（${fixture#__selftest_dc_}）"
+    else
+      echo "❌ dep-cruiser: $fixture の hono を検出しませんでした（exports の解決・tsPreCompilationDeps を確認）"
+      FAIL=1
+    fi
+  done
+  rm -f "$D/application/__selftest_dc_cross_feature.ts" "$D/presentation/__selftest_dc_infra.ts" "$D/domain/__selftest_dc_db.ts" \
+    "$D/application/__selftest_dc_hono.ts" "$D/domain/__selftest_dc_zod.ts" \
+    "$D/application/__selftest_dc_hono_subpath.ts" "$D/application/__selftest_dc_hono_type.ts"
+
+  # パスに dist / build / generated を含むだけのソース（feature 名 distribution 等）が解析から外れないこと
+  mkfix "$D/application/__selftest_dc_distribution.ts" 'import { reconstituteActivity } from "@app/features/activity/domain/models";
+export const selftestDcDistribution = reconstituteActivity;'
+  DC_DIST_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/api-service/src 2>/dev/null || true)
+  rm -f "$D/application/__selftest_dc_distribution.ts"
+  if printf '%s' "$DC_DIST_OUT" | grep -q "__selftest_dc_distribution"; then
+    echo "✅ dep-cruiser: パスに dist を含むソースも解析する"
+  else
+    echo "❌ dep-cruiser: パスに dist を含むソースが exclude で解析から外れています（exclude の部分一致を確認）"
+    FAIL=1
+  fi
 
   # client は @/ alias 経由の import が主流。tsconfig.depcruise.json に @/* が無いと解決できずに
   # ルールが空振りする（相対 import だけ検出して緑になる）ので、alias の形で置く

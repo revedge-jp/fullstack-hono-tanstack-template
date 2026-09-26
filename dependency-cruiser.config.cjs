@@ -55,6 +55,16 @@ module.exports = {
     // （含めるとエッジ自体がグラフから消え、npm パッケージを禁止する to.path ルールが
     // 全く発火しなくなる — 実際にこの不具合が存在していた）。
     doNotFollow: { path: "node_modules" },
+    // hono はサブパス（hono/factory・hono/http-exception 等）と import type で使うのが普通なので、どちらも
+    // 辺にしないと npm パッケージのルールが空振りする。サブパスは package.json の exports で解決する
+    // （既定では解決できず "hono/factory" という名前のまま残り、node_modules/…/hono/ のパターンに当たらない）。
+    // import type は tsPreCompilationDeps で辺にする（`import type { Context } from "hono"` を application に
+    // 持ち込む形が、hono のルールが防ぎたいものそのもの）。
+    tsPreCompilationDeps: true,
+    enhancedResolveOptions: {
+      exportsFields: ["exports"],
+      conditionNames: ["import", "require", "node", "default"],
+    },
     // `.claude/worktrees` はメインのチェックアウト配下に作られる git worktree の置き場で、
     // 中身は別ブランチのソース一式。depcruise はリポジトリルート(`.`)から走査し gitignore も
     // 見ないため、除外しないと他ブランチのコードまで解析対象になる。実害は2つ:
@@ -62,12 +72,14 @@ module.exports = {
     //   2. 他の worktree で mutation テスト(Stryker)が動いていると、走査中にサンドボックスが
     //      破棄されて ENOENT で落ちる。自分の変更と無関係に push が失敗し、原因も分かりにくい
     // `.stryker-tmp` 自体も、メイン側で mutation テストを回した場合に同じ問題を起こすため除外する。
+    // ビルド成果物・生成物は各パッケージの直下だけを先頭から指定する。"dist" のような部分一致だと、
+    // hono の解決先（node_modules/.bun/hono@…/hono/dist/…）や feature 名（distribution 等）にも当たり、
+    // hono への依存がグラフから消えて hono の層ルールが一度も発火しなかった。
     exclude: {
       path: [
-        "\\.next",
-        "dist",
-        "build",
-        "generated",
+        "^(apps|packages)/[^/]+/(dist|build|\\.output|\\.next)/",
+        // 量指定子を入れ子にしない（depcruise が遅い正規表現として実行を拒否する）
+        "^(apps|packages)/.*/generated/",
         "__tests__",
         "\\.test\\.",
         "\\.spec\\.",

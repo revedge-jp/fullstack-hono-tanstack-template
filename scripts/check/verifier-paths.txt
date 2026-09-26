@@ -1,13 +1,24 @@
 # 検証器(ゲート・ガード・CI・フック・閾値)のパス一覧。bash の case パターン、1 行 1 パターン。
 # ここが唯一の正典で、次の 2 か所が読む:
 #   - .claude/hooks/protect-verifiers.sh  (Claude Code の Edit/Write をユーザー確認にする)
-#   - .github/workflows/ci.yml の verifier-change ジョブ (PR 本文に「検証器の変更理由」を要求する)
+#   - .github/workflows/review-converged.yml の「検証器の変更に理由があるか」(PR 本文に「検証器の変更理由」を
+#     要求する。判定には base 側のこのファイルと is-verifier-path.sh を使う)
 # 判定は scripts/check/is-verifier-path.sh に集約している。
 scripts/check/*
-# ルート package.json: coverage:check* の COVERAGE_THRESHOLD や各ゲートのコマンド定義を持つ
-# (apps/*/package.json は対象外。bun add 等の CLI 経由の書き換えはフックを通らない。
-#  CI の verifier-change ジョブは bot の依存更新 PR を除外している)
+# package.json: ルートは coverage:check* の COVERAGE_THRESHOLD や各ゲートのコマンド定義、各アプリは
+# lint / test / coverage:unit / dep:* の定義を持つ。依存を足すだけの PR でも理由を求めることになるが、
+# `"lint": "true"` のようなゲートの無効化が理由なしで入るのを防ぐ方を取る
+# (bun add 等の CLI 経由の書き換えはフックを通らない。CI 側は bot の依存更新 PR を除外している)
 package.json
+apps/*/package.json
+packages/*/package.json
+# 型チェックの厳しさ(strict 等)と、E2E・整形の設定
+apps/*/tsconfig*.json
+packages/*/tsconfig*.json
+packages/typescript-config/*
+scripts/test/*
+apps/client/playwright.config.ts
+.oxfmtrc.json
 .github/workflows/*
 .claude/hooks/*
 .claude/settings.json

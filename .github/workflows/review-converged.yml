@@ -8,6 +8,11 @@ name: Review converged
 # (ready_for_review)で付くため、そのイベントで再評価が必要。ci.yml をそのイベントで回すと
 # 本文を直すたびに CI 全体が走ってしまう。ルールセットはこの check(Review converged)も必須にする。
 # merge_group では PR 本文を読めないので、そこでは無条件に success を返してキューを止めない。
+#
+# 検証器（ゲート・ガード・CI・フック・閾値。一覧は scripts/check/verifier-paths.txt）に触る PR に本文の
+# 「## 検証器の変更理由」を求める判定もここで行う。エージェントがゲートに引っかかったとき「コードを直す」
+# ではなく「ゲートを緩める」に流れるのを、編集時（Claude Code の PreToolUse フック）だけでなくマージ時にも
+# 止める。ci.yml ではなくここに置くのは、理由を本文に書き足したとき（edited）に再評価させるため。
 
 on:
   pull_request:
@@ -22,8 +27,65 @@ jobs:
     name: Review converged
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read # 検証器の判定で PR の差分と base 側の判定スクリプトを読む
     steps:
+      # merge commit（refs/pull/N/merge）と両親に加え、PR のコミットの作者を見るので全履歴を取る
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # 限界: pull_request では PR 側のワークフロー定義が動くので、同じ PR でこのステップを消す・if を
+      # 書き換えると判定は外れる（旧 ci.yml の verifier-change も同じ）。このファイル自体が検証器の一覧に
+      # 入っており、検証器に触る PR は手動マージ（.claude/commands/ship.md）なので、その確認が歯止めになる。
+      - name: 検証器の変更に理由があるか
+        if: github.event_name == 'pull_request'
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # 差分は merge commit とその第 1 親（merge を作った時点の base の先端）で取る。pull_request.base.sha は
+          # synchronize のペイロードで古いままのことがあり、間に main に入った他 PR の変更まで拾う（#111 で発生）
+          if ! git rev-parse -q --verify HEAD^2 >/dev/null; then
+            echo "::error::HEAD が merge commit ではないため PR の差分を特定できません"; exit 1
+          fi
+          # Renovate の PR は検証器一覧に当たるファイル（package.json、.github/workflows/* の action digest）を
+          # 触るが「検証器の緩和」ではないので対象外。ただし PR 作者だけで判定しない: bot が作った PR に
+          # 人やエージェントが修正を push し、ついでに検証器を緩めると素通りする。PR のコミットが全部 bot の
+          # ものであるときだけ外す。
+          # 注意: エージェントが bot トークンで PR を作る運用（claude-code-action 等）を導入するなら、
+          # その bot はこのゲートが本来止めたい対象なので、除外を renovate[bot] だけに絞ること。
+          if [[ "$AUTHOR" == *'[bot]' ]] && ! git log --format='%an' HEAD^1..HEAD^2 | grep -qv '\[bot\]$'; then
+            echo "bot のコミットだけの PR は対象外"; exit 0
+          fi
+          # 判定には base 側（HEAD^1）の判定スクリプトと一覧を使う。PR 側のものを使うと、同じ PR で
+          # スクリプトを「常に一致なし」に書き換えたり一覧から行を消したりして判定を外せる
+          # （ワークフロー定義そのものの書き換えは、上のステップのコメントの限界）
+          checker="$RUNNER_TEMP/verifier-check"
+          mkdir -p "$checker"
+          git show HEAD^1:scripts/check/is-verifier-path.sh > "$checker/is-verifier-path.sh"
+          git show HEAD^1:scripts/check/verifier-paths.txt > "$checker/verifier-paths.txt"
+          # --no-renames で移動元と移動先の両方を出す。移動先の名前だけだと、knip.json → knip.disabled.json の
+          # ような名前を変えただけの実質削除が一覧に当たらない
+          changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
+          [ -z "$changed" ] && { echo "変更なし"; exit 0; }
+          # shellcheck disable=SC2086
+          if ! hits=$(bash "$checker/is-verifier-path.sh" $changed); then
+            echo "検証器の変更なし"; exit 0
+          fi
+          echo "検証器に当たる変更:"
+          while IFS= read -r hit; do echo "  • $hit"; done <<< "$hits"
+          if printf '%s' "$PR_BODY" | grep -q '^## 検証器の変更理由'; then
+            echo "PR 本文に「## 検証器の変更理由」あり"; exit 0
+          fi
+          echo "::error::検証器(上記)を変更していますが、PR 本文に「## 検証器の変更理由」節がありません。閾値の引き下げ・除外の追加・ガードの削除がコードを直す代わりになっていないかを書いてください(一覧: scripts/check/verifier-paths.txt)。本文を直せばこの check は再実行されます"
+          exit 1
+
       - name: PR 本文にレビュー収束の記録があるか
+        # 検証器の判定が落ちても、こちらの結果も出す（両方を一度に直せるように）
+        if: success() || failure()
         env:
           EVENT: ${{ github.event_name }}
           # actor(イベントを起こした人)ではなく PR 作者で判定する。bot の PR に人が本文編集すると
