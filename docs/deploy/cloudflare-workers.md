@@ -88,11 +88,18 @@ secrets / vars が未設定のうちは deploy job は notice を出して skip 
 
 ### 3. 初回デプロイ
 
-main に push するだけでよい（DB がなければ Alchemy が作る）。手動でやる場合:
+main に push するだけでよい（DB がなければ Alchemy が作り、CI がマイグレーションしてから Worker を出す）。
+手動でやる場合は、`infra:deploy:*` がマイグレーションを流さないので、CI と同じ 3 段を手で踏む。
+`infra:deploy:*` だけだと空の DB の上で Worker が動き、テーブルを使う処理（サインインを含む）が 500 になる:
 
 ```bash
 # .env に Infra セクション（.env.example 参照）を設定した上で
-bun run infra:deploy:staging
+# 1) DB / Hyperdrive だけを作り、接続 URL を表示する（CI では表示しない。ログに残さないこと）
+SKIP_WORKER=1 SHOW_DATABASE_URL=1 bun run infra:deploy:staging
+# 2) 表示された DATABASE_URL でマイグレーションする
+(cd packages/database && DATABASE_URL='<表示された URL>' bunx drizzle-kit migrate)
+# 3) Worker をデプロイする（戻り先を残すため GIT_SHA を渡す。docs/deploy/operations.md）
+GIT_SHA=$(git rev-parse HEAD) bun run infra:deploy:staging
 ```
 
 ### 4. preview ラベルの作成（PR プレビュー環境を使う場合）
@@ -129,6 +136,10 @@ gh label create preview --color 1D76DB --description "この PR に使い捨て�
 - fork からの PR では動かない（GitHub の仕様で secrets が渡らない）。同一リポジトリのブランチ専用
 - ビルドは PR のコードを secrets が見える環境で実行するため、**信頼できる PR にだけラベルを付ける**こと
 - staging DB が存在していることが前提（プレビューの DB はそのブランチとして作られる）
+- **サインインが要る画面は確認できない**。preview も `NODE_ENV=production` なので開発用サインイン（`/api/dev/login`）は
+  無効で、Google のサインインは PR ごとに変わる URL（`{APP_NAME}-pr-N.<subdomain>.workers.dev`）が OAuth
+  クライアントの承認済みリダイレクト URI に無いため失敗する（ワイルドカードは登録できない）。確かめたい PR だけ
+  `https://…-pr-N…/api/auth/callback/google` を一時的に足す
 
 ---
 
