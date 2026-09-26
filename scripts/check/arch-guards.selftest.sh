@@ -173,8 +173,14 @@ expect_guard "クラス式禁止" \
 expect_guard "クラス式禁止（型注釈付き・代入）" \
   guard_no_class_interface \
   "$D/application/__selftest_class_annotated.ts" \
-  $'type Runner = { run(): void };\nexport const SelftestAnnotated: new () => Runner = class {\n  run() {}\n};\nconst holder: { Impl?: unknown } = {};\nholder.Impl = class {};' \
+  $'type Runner = { run(): void };\nexport const SelftestAnnotated: new () => Runner = class {\n  run() {}\n};' \
   "__selftest_class_annotated.ts:2:"
+
+expect_guard "クラス式禁止（プロパティへの代入）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_property.ts" \
+  $'const holder: { Impl?: unknown } = {};\nholder.Impl = class {};' \
+  "__selftest_class_property.ts:2:"
 
 expect_guard "クラス式禁止（mixin の return class）" \
   guard_no_class_interface \

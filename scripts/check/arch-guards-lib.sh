@@ -131,11 +131,12 @@ guard_no_throw() {
 guard_no_class_interface() {
   echo "[guard] class/interface 禁止"
   # `export class` / `class` に加え、`abstract class` / `export default class` /
-  # `export default abstract class`・`declare class`・クラス式（`X = class`・`return class`）も検出する（行頭が `//` `*` の行、つまりコメントの中の語は数えない）。
+  # `export default abstract class`・`declare class`・クラス式（`X = class`・`return class`）も検出する（行頭が `//` `*` の行と、`=` より前に `//` がある行末のコメントは
+  # 数えない）。文字列の中の `= class` は検出してしまうが、止める側の誤りなので文言を変えて避ける。
   CLASS_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
-    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?(abstract\s+)?class\b|^\s*[^/*[:space:]].*[^=!<>]=\s*class\b|^\s*return\s+class\b' || true)
+    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?(abstract\s+)?class\b|^\s*[^/*[:space:]]([^/]|/[^/])*[^=!<>/]=\s*class\b|^\s*return\s+class\b' || true)
   INTF_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
