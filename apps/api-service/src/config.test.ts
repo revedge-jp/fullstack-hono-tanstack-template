@@ -148,4 +148,22 @@ describe("loadConfig — 空文字 env（CI の未設定 GitHub Variable）を�
     const config = loadConfig({ ...devEnv, APP_VERSION: "", GIT_SHA: "   " });
     expect(config.version).toEqual({ appVersion: "dev", gitSha: "dev" });
   });
+
+  test("ポートが空文字なら未設定として扱い、もう片方か 8080 を使う（0 で起動しない）", () => {
+    expect(loadConfig({ ...devEnv, API_PORT: "", PORT: "" }).port).toBe(8080);
+    expect(loadConfig({ ...devEnv, API_PORT: "", PORT: "3001" }).port).toBe(3001);
+  });
+
+  test("CORS_ORIGIN が空文字なら、本番は必須検証で止まり、開発はローカル既定を使う", () => {
+    expect(() => loadConfig({ ...prodEnv, CORS_ORIGIN: "" })).toThrow(
+      /CORS_ORIGIN is required in production/,
+    );
+    expect(loadConfig({ ...devEnv, CORS_ORIGIN: "" }).corsOrigin).toBe("http://localhost:3000");
+  });
+
+  test("BETTER_AUTH_URL / BETTER_AUTH_TRUSTED_ORIGINS が空文字なら未設定と同じ", () => {
+    expect(() => loadConfig({ ...prodEnv, BETTER_AUTH_URL: "" })).toThrow(/BETTER_AUTH_URL/);
+    const config = loadConfig({ ...prodEnv, BETTER_AUTH_TRUSTED_ORIGINS: "" });
+    expect(config.auth.trustedOrigins).toEqual(["https://app.example.com"]);
+  });
 });

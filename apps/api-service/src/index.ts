@@ -1,14 +1,18 @@
 import { createApp } from "./app";
 import { loadConfig } from "./config";
+import { withConnectingIp } from "./shared/http/connecting-ip";
 
-type FetchHandler = (req: Request) => Response | Promise<Response>;
 type BunServer = {
   port: number;
   // 新規接続を止め、既存リクエストの完了を待つ（closeActiveConnections で強制切断）。
   stop: (closeActiveConnections?: boolean) => Promise<void>;
+  requestIP: (req: Request) => { address: string } | null;
 };
 type BunGlobal = {
-  serve: (options: { fetch: FetchHandler; port: number }) => BunServer;
+  serve: (options: {
+    fetch: (req: Request, server: BunServer) => Response | Promise<Response>;
+    port: number;
+  }) => BunServer;
 };
 declare const Bun: BunGlobal;
 
@@ -18,7 +22,10 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 const { port, nodeEnv } = loadConfig();
 const { app, end } = createApp();
 
-const server = Bun.serve({ fetch: app.fetch, port });
+const server = Bun.serve({
+  fetch: (req, bunServer) => app.fetch(withConnectingIp(req, bunServer.requestIP(req)?.address)),
+  port,
+});
 console.log(`Server is running on http://localhost:${server.port} (env: ${nodeEnv})`);
 
 let shuttingDown = false;

@@ -94,4 +94,31 @@ describe("tasks.advanceTask usecase", () => {
       expect(r.error).toBe("AlreadyDone");
     }
   });
+
+  test("異常: 読み込み（getById）の Unexpected（DB 障害）をそのまま返し、更新しない", async () => {
+    let updated = false;
+    const tasksRepository = buildRepo({
+      getById: () => errAsync("Unexpected" as const),
+      update: (task) => {
+        updated = true;
+        return okAsync(task);
+      },
+    });
+    const usecase = makeAdvanceTask({ tasksRepository });
+
+    const r = await usecase({ id: "task-1", ownerId: "user-1" });
+    expect(r._unsafeUnwrapErr()).toBe("Unexpected");
+    expect(updated).toBe(false);
+  });
+
+  test("異常: 書き込み（update）の Unexpected（DB 障害）をそのまま返す", async () => {
+    const tasksRepository = buildRepo({
+      getById: () => okAsync(buildTask("todo")),
+      update: () => errAsync("Unexpected" as const),
+    });
+    const usecase = makeAdvanceTask({ tasksRepository });
+
+    const r = await usecase({ id: "task-1", ownerId: "user-1" });
+    expect(r._unsafeUnwrapErr()).toBe("Unexpected");
+  });
 });

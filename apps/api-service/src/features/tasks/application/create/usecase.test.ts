@@ -115,4 +115,21 @@ describe("tasks.create usecase", () => {
     expect(warned[0]?.obj).toEqual({ reason: "Unexpected", taskId: ID_1 });
     expect(warned[0]?.msg).toBe("activity の記録に失敗しました");
   });
+
+  test("異常: リポジトリの Unexpected（DB 障害）をそのまま返し、activity を記録しない", async () => {
+    let recorded = false;
+    const tasksRepository = buildRepo({ create: () => errAsync("Unexpected" as const) });
+    const activityRecorder = buildActivityRecorder({
+      recordTaskCreated: () => {
+        recorded = true;
+        return okAsync(undefined);
+      },
+    });
+    const { logger } = buildLogger();
+    const usecase = makeCreateTask({ tasksRepository, activityRecorder, logger });
+
+    const r = await usecase({ ownerId: "user-1", title: "Write docs" });
+    expect(r._unsafeUnwrapErr()).toBe("Unexpected");
+    expect(recorded).toBe(false);
+  });
 });

@@ -4,7 +4,7 @@ import { err, ok, ResultAsync } from "neverthrow";
 
 import { reconstituteAuthUser } from "../domain/models";
 
-type Logger = { error: (obj: unknown, msg?: string) => void };
+type Logger = { warn: (obj: unknown, msg?: string) => void };
 
 /**
  * リクエストからセッションを検証して AuthUser と、レスポンスに付けるべき Set-Cookie を返す。
@@ -28,8 +28,10 @@ export function makeVerifySession(auth: Auth, logger: Logger) {
       // 埋め込まれたバインド値(セッショントークン等)がログに載る。redact はキー単位で文字列の中身に
       // 届かない。現状 DB 障害は Better Auth が APIError に包み直してから届くが、包まずに投げる経路が
       // 増えても漏らさないよう、app.ts の onError と同じく切り落とした message と識別子だけを出す。
-      logger.error(
-        { err: stringifyErrorSafe(e), causeCode: readCauseCode(e), ...apiError },
+      // warn にして error / err キーは使わない: "Unexpected" は呼び出し側の toHttp が 500 として error で
+      // 1 件記録するので、ここでも error にすると 1 回の障害が Errors に 2 件数えられる（shared/db-error.ts と同じ）
+      logger.warn(
+        { detail: stringifyErrorSafe(e), causeCode: readCauseCode(e), ...apiError },
         "verifySession unexpected error",
       );
       return "Unexpected" as const;
