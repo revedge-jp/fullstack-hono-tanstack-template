@@ -116,6 +116,22 @@ describe("静的アセットの取りこぼし(/assets/*)", () => {
   });
 });
 
+describe("設定の不備（initHonoApp の throw）", () => {
+  test("Cloudflare のエラーページにせず、requestId とセキュリティヘッダー付きの 500 を返す", async () => {
+    // 本番扱いで CORS_ORIGIN を空にすると、api-service の loadConfig が本番の必須検証で throw する
+    // （空文字は未設定として扱われ、シェルに CORS_ORIGIN があっても上書きする）
+    const res = await server.fetch(
+      new Request("https://app.example.com/api/health", { headers: { "x-request-id": "req-cfg" } }),
+      { NODE_ENV: "production", CORS_ORIGIN: "" },
+      undefined,
+    );
+    expect(res.status).toBe(500);
+    expect(res.headers.get("x-request-id")).toBe("req-cfg");
+    expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
+    expect(await res.text()).toContain("req-cfg");
+  });
+});
+
 // TanStack Start はこの Accept のページ要求に 500 を返し、エラー監視を鳴らす。SSR へ渡す前に
 // 404 で返す。404 の経路は Hono アプリ初期化前に return するので DB なしで叩ける。
 // 通す側(SSR / Hono へ進む)は DB が要るので、判定関数を直接検証する。

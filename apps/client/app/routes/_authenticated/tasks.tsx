@@ -56,7 +56,7 @@ function TasksPage() {
           )}
         </div>
         <Link to="/" className="text-sm text-muted-foreground underline">
-          ← home
+          ← ホーム
         </Link>
       </main>
     </CenteredPage>

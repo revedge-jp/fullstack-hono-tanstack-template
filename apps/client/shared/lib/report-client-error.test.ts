@@ -180,6 +180,16 @@ describe("reportHandledError", () => {
     reportHandledError("plain string", "somewhere");
     expect(captured[0]?.body).toMatchObject({ message: "somewhere: plain string" });
   });
+
+  test("message を持つオブジェクトは message を使う（[object Object] にしない）", () => {
+    reportHandledError({ message: "x" }, "ctx");
+    expect(captured[0]?.body).toMatchObject({ message: "ctx: x" });
+  });
+
+  test("message の無いオブジェクトは [object] にする", () => {
+    reportHandledError({ code: 1 }, "ctx");
+    expect(captured[0]?.body).toMatchObject({ message: "ctx: [object]" });
+  });
 });
 
 describe("installClientErrorReporting", () => {

@@ -23,13 +23,12 @@ function HomePage() {
           <p className="text-sm font-medium">{user.name}</p>
           <p className="text-sm wrap-anywhere text-muted-foreground">{user.email}</p>
         </div>
-        <p className="text-sm text-muted-foreground">Coming soon.</p>
         <div className="flex gap-3">
           <Link to="/tasks" className="text-sm text-muted-foreground underline">
-            tasks
+            タスク
           </Link>
           <Link to="/about" className="text-sm text-muted-foreground underline">
-            about
+            このアプリについて
           </Link>
         </div>
         <div className="flex items-start gap-3">

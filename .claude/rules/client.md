@@ -160,7 +160,7 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 - 読み込み中: `Skeleton`（スピナーだけで画面を空にしない）
 - 空: `EmptyState`（「無い」ではなく次の行動を示す。`features/tasks/ui/task-list.tsx` が実例）
 - エラー: `role="alert"` + `text-destructive`
-- 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingId` が実例）
+- 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingIds` が実例。行ごとに持つ）
 
 ### 文章を中央揃えにしない — 塊は中央、文字は左
 

@@ -54,6 +54,11 @@ describe("tasks.getTasksServerFn", () => {
     }
   });
 
+  test("入力は validator（GetTasksInputSchema）を通る: cursor が文字列でなければ API を呼ばずに失敗する", async () => {
+    // @ts-expect-error 型の外の入力で validator が効くことを確かめる
+    await expect(getTasksServerFn({ data: { cursor: 123 } })).rejects.toThrow();
+  });
+
   test("cursor 無しの 400 はリダイレクトで隠さず throw する（ループさせない）", async () => {
     api.state.ok = false;
     api.state.status = 400;
