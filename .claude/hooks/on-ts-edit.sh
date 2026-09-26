@@ -17,10 +17,17 @@ except Exception:
 
 case "$FILE_PATH" in
   *.ts|*.tsx)
-    if ! (cd "$CLAUDE_PROJECT_DIR" && ./node_modules/.bin/oxlint --fix "$FILE_PATH"); then
+    # 整形はファイルがあるチェックアウト（worktree ならその worktree）の設定と node_modules で行う。
+    # main（CLAUDE_PROJECT_DIR）から worktree のファイルに oxlint をかけると、worktree の .oxlintrc.json を
+    # 入れ子の設定として読んで設定エラーになり、自動修正が一度も効かない
+    FMT_ROOT=$(git -C "$(dirname "$FILE_PATH")" rev-parse --show-toplevel 2>/dev/null)
+    if [ -z "$FMT_ROOT" ] || [ ! -x "$FMT_ROOT/node_modules/.bin/oxlint" ]; then
+      FMT_ROOT="$CLAUDE_PROJECT_DIR"
+    fi
+    if ! (cd "$FMT_ROOT" && ./node_modules/.bin/oxlint --fix "$FILE_PATH"); then
       echo "oxlint の自動修正に失敗しました: $FILE_PATH" >&2
     fi
-    if ! (cd "$CLAUDE_PROJECT_DIR" && ./node_modules/.bin/oxfmt --no-error-on-unmatched-pattern "$FILE_PATH"); then
+    if ! (cd "$FMT_ROOT" && ./node_modules/.bin/oxfmt --no-error-on-unmatched-pattern "$FILE_PATH"); then
       echo "oxfmt の整形に失敗しました: $FILE_PATH" >&2
     fi
     # client の画面文言に AI が書く文章に出やすい語が無いかを、整形の後に続けてチェックする（別のフックに

@@ -45,29 +45,59 @@ fi
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""' 2>/dev/null || echo "")
 [ -z "$FILE" ] && exit 0
 
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-REL="${FILE#"$ROOT"/}"
+# `./`・`..`・シンボリックリンクを解決してから判定する。文字列の前方一致だけだと apps/../scripts/check/x.sh の
+# ような書き方で検証器・秘密情報の判定を避けられる。存在しないパス（Write の新規作成）も解決できるところまで解決する。
+# リンクを辿る前の名前（.. だけ畳んだパス）でも判定する。辿った先の名前だけで見ると、別名のファイルへのリンクに
+# なった .env が素通りする
+resolve_path() {
+  python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1" 2>/dev/null || printf '%s' "$1"
+}
+normalize_path() {
+  python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$1" 2>/dev/null || printf '%s' "$1"
+}
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+# 接頭辞「$2/」を大文字小文字を区別せずに取り除く（macOS の既定のファイルシステムでは大文字小文字違いも同じパス）
+strip_prefix_ci() {
+  local path="$1" prefix="$2/"
+  case "$(lower "$path")" in
+    "$(lower "$prefix")"*) printf '%s' "${path:${#prefix}}" ;;
+    *) printf '%s' "$path" ;;
+  esac
+}
+
 # CLAUDE_PROJECT_DIR はセッション起動時のメイン checkout のままで、worktree 作業中も変わらない。
 # 別 checkout 配下のパスは git に root を聞き、worktree の接頭辞も落として root 相対に正規化する。
-if [ "$REL" = "$FILE" ]; then
-  TOP=$(git -C "$(dirname "$FILE")" rev-parse --show-toplevel 2>/dev/null || true)
-  [ -n "$TOP" ] && REL="${FILE#"$TOP"/}"
-fi
-REL="${REL#.claude/worktrees/*/}"
-BASE=$(basename "$REL")
+to_rel() { # $1 パス、$2 root
+  local file="$1" rel top
+  rel=$(strip_prefix_ci "$file" "$2")
+  if [ "$rel" = "$file" ]; then
+    top=$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null || true)
+    [ -n "$top" ] && rel=$(strip_prefix_ci "$file" "$top")
+  fi
+  case "$(lower "$rel")" in
+    .claude/worktrees/*/*) rel="${rel#*/*/*/}" ;;
+  esac
+  printf '%s' "$rel"
+}
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+REL=$(to_rel "$(resolve_path "$FILE")" "$(resolve_path "${CLAUDE_PROJECT_DIR:-$PWD}")")
+RAW_REL=$(to_rel "$(normalize_path "$FILE")" "$(normalize_path "${CLAUDE_PROJECT_DIR:-$PWD}")")
 
 emit() { # $1 decision, $2 reason
   jq -cn --arg d "$1" --arg r "$2" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}'
 }
 
-case "$BASE" in
-  .env.example) ;;
-  .env|.env.*|.dev.vars|.dev.vars.*)
-    emit deny "$REL は秘密情報を含みうるため読み書きしません。設定項目は .env.example と docs/dev/environment-variables.md を参照してください"
-    exit 0 ;;
-esac
+for rel in "$RAW_REL" "$REL"; do
+  case "$(lower "$(basename "$rel")")" in
+    .env.example) ;;
+    .env|.env.*|.dev.vars|.dev.vars.*)
+      emit deny "$rel は秘密情報を含みうるため読み書きしません。設定項目は .env.example と docs/dev/environment-variables.md を参照してください"
+      exit 0 ;;
+  esac
+done
 
 case "$TOOL" in
   Edit|Write|MultiEdit|NotebookEdit) ;;

@@ -37,7 +37,16 @@ BASE_REF="${MUTATION_DIFF_BASE:-origin/main}"
 # ローカル実行時（既に main の履歴がある）は冗長だが害はない。
 git fetch origin main --quiet 2>/dev/null || true
 
-CHANGED_FILES=$(git diff --name-only "$BASE_REF"...HEAD -- 'apps/api-service/src/features' 2>/dev/null |
+# 基準が無い・diff が失敗したときを「変更なし」と同じに扱わない（mutation testing が黙って飛ばされる）
+if ! git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null; then
+  echo "❌ 比較の基準 ${BASE_REF} が見つかりません（MUTATION_DIFF_BASE を確かめてください）" >&2
+  exit 1
+fi
+if ! DIFF_FILES=$(git diff --name-only "$BASE_REF"...HEAD -- 'apps/api-service/src/features'); then
+  echo "❌ ${BASE_REF} との差分を取れませんでした" >&2
+  exit 1
+fi
+CHANGED_FILES=$(printf '%s\n' "$DIFF_FILES" |
   grep -E '/(domain|application)/.*\.ts$' |
   grep -v '\.test\.ts$' |
   grep -vE '/application/(service|index|ports)\.ts$' || true)

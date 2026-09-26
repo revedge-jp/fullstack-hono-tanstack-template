@@ -223,13 +223,13 @@ expect_guard "client features process.env 直接参照禁止" \
   guard_client_features_no_process_env \
   "apps/client/features/__selftest/queries/get-x.ts" \
   'export const selftestEnv = process.env.SELFTEST;' \
-  "client features 配下で process.env を直接参照できません"
+  "で process.env を直接参照できません"
 
 expect_guard "client features process.env 直接参照禁止（ブラケット記法）" \
   guard_client_features_no_process_env \
   "apps/client/features/__selftest/queries/get-x.ts" \
   'export const selftestEnv = process.env["SELFTEST"];' \
-  "client features 配下で process.env を直接参照できません"
+  "で process.env を直接参照できません"
 
 # api-process-env.sh（features 以外の integrations / routes / middlewares / shared も見る）
 mkfix "apps/api-service/src/shared/__selftest_env.ts" 'export const selftestEnv = process.env["SELFTEST"];'
