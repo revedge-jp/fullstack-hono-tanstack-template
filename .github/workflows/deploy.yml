@@ -275,10 +275,15 @@ jobs:
           # checkout は persist-credentials: false のため origin に認証情報が残っていない。
           # トークン付き URL で該当 commit だけを明示的に fetch する。
           git fetch --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$good_sha"
+          # 戻すのはアプリのコードだけで、インフラの定義（alchemy.run.ts）は今回のデプロイのものを使う。
+          # 古い alchemy.run.ts でデプロイすると、今回のリリースで足したリソース（KV / D1 / Queue 等）の宣言が
+          # 無いので、finalize が「宣言されなくなったリソース」として実体ごと削除する（データを失う）
+          cp alchemy.run.ts "$RUNNER_TEMP/alchemy.run.current.ts"
           git checkout --force "$good_sha"
           bun install --frozen-lockfile
           perl -pi -e 's/\{\{APP_NAME\}\}/$ENV{APP_NAME}/g' apps/client/wrangler.jsonc
           bun run build
+          cp "$RUNNER_TEMP/alchemy.run.current.ts" alchemy.run.ts
           # /api/health のビルド情報をロールバック先の commit に合わせる
           export GIT_SHA="$good_sha"
           export APP_VERSION="rollback-${good_sha}"

@@ -43,6 +43,9 @@ bun run infra:deploy:staging    # または infra:deploy:production
 deploy.yml は止まる（`SMOKE_BASE_URL` 設定時。稼働中の版を読めない・稼働中の版が main に無い・compare API が失敗したときは止めない）。巻き戻しは上の方法1（rerun は止めない）か方法2 で行う。
 
 **注意**: ロールバックで戻るのは **Worker のコードだけ**で、DB スキーマは戻らない。
+自動ロールバックはインフラの定義（`alchemy.run.ts`）を**今回のデプロイのもの**のまま使う（古い定義でデプロイすると、
+今回のリリースで足したリソースが finalize で削除される）。方法2 で手動デプロイするときも同じで、古い commit の
+`alchemy.run.ts` でデプロイしない（`git checkout <good-sha> -- apps packages` のようにアプリだけを戻す）。
 下記の expand/contract 規律を守っていれば「旧コード + 新スキーマ」でも動作する。
 
 ## DB マイグレーション規律（expand / contract）
@@ -59,6 +62,10 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 
 **禁止（単一リリースでの破壊的変更）**: カラム/テーブルの削除・リネーム、NOT NULL 追加
 （DEFAULT なし）、型変更。これらは必ず expand → contract の 2 リリースに分割する。
+
+`bun run check:migration-safety`（`arch:check` と pre-push に含まれる）がこれらの文を含むマイグレーションを止める。
+expand 済みのリリースの後の contract なら、そのファイルに `-- migration-safety: allow <理由>` を書く。
+0007 以前はガードより前に適用済みの履歴なので対象外（0007 は backfill と SET NOT NULL を 1 本で行っている）。
 
 ## 障害通知
 

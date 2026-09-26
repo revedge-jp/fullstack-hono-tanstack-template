@@ -166,6 +166,10 @@ if (isPreview) {
 const hyperdrive = await Hyperdrive("hyperdrive", {
   name: `${appName}-${stage}`,
   adopt: true,
+  // クエリキャッシュは切る（既定では有効で、同じ SELECT を最大 60 秒キャッシュから返す）。作った直後の一覧に
+  // 古い結果が出る・削除したセッションの行が返る・/api/health の SELECT 1 がキャッシュから返って DB の障害を
+  // 隠す、が起きる。ローカルと E2E は Hyperdrive を通らないので、テストでは見つからない
+  caching: { disabled: true },
   origin: {
     host: dbRole.host,
     port: 5432,
@@ -235,7 +239,9 @@ if (process.env.SKIP_WORKER !== "1") {
     compatibilityDate: "2026-06-01", // wrangler.jsonc の compatibility_date と揃える
     compatibilityFlags: ["nodejs_compat"],
     adopt: true,
-    url: true,
+    // カスタムドメインがあるときは workers.dev の URL を閉じる。開けたままだと、そのドメインにかけた WAF の
+    // レート制限（EDGE_RATE_LIMIT_RPM）を workers.dev 経由で素通りできる
+    url: !customDomain,
     observability: { enabled: true, traces: { enabled: true } }, // wrangler.jsonc と揃える
     // Logpush 転送は Worker 側のフラグと LogPushJob の両方が必要（下のブロック参照）
     logpush: logpushDestination !== undefined,
