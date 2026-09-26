@@ -61,6 +61,9 @@ WAF ルールが ② の間消える。宣言から外したリソースの削�
 ```bash
 bun run infra:deploy:staging      # client をビルドして staging をデプロイ（DB がなければ作成）
 bun run infra:deploy:production   # production をデプロイ（通常は CI。ローカルからなら production 用アカウントの値だけを入れた env で）
+# ローカルからのデプロイは、稼働中の版の /api/health/live の infraCommit を手元の HEAD が含み、alchemy.run.ts 等に
+# コミットしていない変更が無いときだけ進む（古い checkout や GitHub Environment にしか無い変数の入れ忘れで、finalize が
+# リソースを削除するのを止める）。初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付ける
 bun run infra:destroy:staging     # staging のリソースを削除
 
 # ローカルでマイグレーションを流したい時: 接続 URL の取り出し口
@@ -171,7 +174,7 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
 
 | 環境変数 | リソース | 内容 |
 |---|---|---|
-| `CUSTOM_DOMAIN` | `CustomDomain` | Worker へのカスタムドメイン割り当て（例: `app.example.com`）。zone ID はホスト名から自動解決、DNS レコード・TLS 証明書は Cloudflare が自動管理。公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN`）もここから導出されるため設定の不一致が起きない。設定すると workers.dev の URL は閉じる（workers.dev 経由だと、そのドメインにかけた WAF のレート制限がかからないため） |
+| `CUSTOM_DOMAIN` | `CustomDomain` | Worker へのカスタムドメイン割り当て（例: `app.example.com`）。zone ID はホスト名から自動解決、DNS レコード・TLS 証明書は Cloudflare が自動管理。公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN`）もここから導出されるため設定の不一致が起きない。ドメインが Worker に付いた**次のデプロイで** workers.dev の URL を閉じる（workers.dev 経由だと、そのドメインにかけた WAF のレート制限がかからないため。付ける前に閉じると、ドメインの割り当てが失敗したときにどちらの URL からも届かなくなる）。同じホスト名の DNS レコードが zone に既にあると割り当てに失敗するので、先に消しておく。Google OAuth のクライアントに `https://<ドメイン>` と `https://<ドメイン>/api/auth/callback/google` を足してからデプロイする（サインインの URL がドメインに変わるため） |
 | `EDGE_RATE_LIMIT_RPM` | `Ruleset`（`http_ratelimit`） | エッジ（WAF）での `/api/*` IP 別レート制限。`CUSTOM_DOMAIN` 必須。無料プラン制約に合わせ RPM を 10 秒窓に換算する。アプリ内 rate-limit ミドルウェア（isolate ローカル）より手前で分散カウントされる |
 | `LOGPUSH_DESTINATION` | `Worker.logpush` + `LogPushJob` | Worker trace ログ（console / 例外）の外部転送（dataset: `workers_trace_events`）。**Workers Paid プラン必須** |
 
@@ -181,9 +184,14 @@ entrypoint ruleset を「丸ごと」管理する（宣言したルールで全�
 同じ zone に手動のレート制限ルールがある場合や、staging / production が同一 zone を
 共有する場合は、有効化を 1 stage に限定すること。
 
-誤上書きはデプロイ時のガードで機械的に防いでいる: `alchemy.run.ts` が Ruleset の適用前に
+誤上書きはデプロイ時のガードで機械的に防いでいる: `alchemy.run.ts` が Worker を更新する前に
 zone の既存ルールをチェックし、この stage の目印（`[alchemy:{worker名}]`）を持たないルール
 （手動ルール・別 stage のルール）が 1 件でもあれば、**上書きせずエラーで中断**する。
+
+ガードで止まったときに `EDGE_RATE_LIMIT_RPM` を外して再デプロイしてはいけない。Ruleset の削除（変数を外した後の
+finalize・`infra:destroy:*`）はフェーズ全体を空にするので、ガードが挙げた管理外のルールも消える。管理外のルールを
+別の zone へ移すか削除してからデプロイし直す。`EDGE_RATE_LIMIT_RPM` をやめるときも、先に zone に管理外のルールが
+無いことを確かめる。
 
 ## Alchemy 管理に「しない」もの
 

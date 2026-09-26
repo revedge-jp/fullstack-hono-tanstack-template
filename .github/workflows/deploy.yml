@@ -250,15 +250,18 @@ jobs:
 
       # ③ Worker デプロイ
       - name: Deploy Worker
+        id: deploy
         if: steps.readiness.outputs.ready == 'true'
         run: bunx alchemy deploy --stage "$DEPLOY_TARGET"
 
       # デプロイ直後の稼働確認。失敗したらこのジョブを赤にする
       # （production はタグ push で別途デプロイされるため、ここが赤のうちはタグを切らないこと）。
       # SMOKE_BASE_URL は GitHub Environment の Variables に設定する。
+      # Deploy Worker が Worker を更新した後（CustomDomain・Ruleset・LogPushJob）で失敗しても、新しいコードは公開されて
+      # いるので smoke を回す（落ちていればロールバックする）。Worker の更新より前に落ちたときは旧版のままで、smoke は通る
       - name: Smoke check
         id: smoke
-        if: steps.readiness.outputs.ready == 'true'
+        if: ${{ !cancelled() && steps.readiness.outputs.ready == 'true' && (steps.deploy.outcome == 'success' || steps.deploy.outcome == 'failure') }}
         run: bash scripts/check/post-deploy-smoke.sh "${{ vars.SMOKE_BASE_URL }}"
 
       # smoke 失敗時は、デプロイ前に動いていた版（Record running version で記録した commit）を

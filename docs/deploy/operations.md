@@ -16,8 +16,7 @@
 
 - 初回デプロイ、または直前から停止していた
 - 稼働中の版が main に含まれない、または含まれるかを確かめられなかった（compare API の失敗。ジョブに warning が出る）
-- 直前の版を手動デプロイ（`bun run infra:deploy:*`）した。`GIT_SHA` を渡さないと `commit` が `dev` になる
-  （手動デプロイでも戻り先を残すなら `GIT_SHA=$(git rev-parse HEAD) bun run infra:deploy:staging`）
+- 直前の版を `GIT_SHA` を渡さずに手動デプロイした（`commit` が `dev` になる。`infra:deploy:*` は手元の HEAD を渡す）
 
 `SMOKE_BASE_URL` が未設定なら smoke も自動ロールバックも行わない。
 ロールバック後もジョブは赤のまま残るので、原因を修正するまで

@@ -12,6 +12,7 @@
  *   bun run infra:deploy:staging   # ビルド + staging デプロイ
  *   bun run infra:destroy:staging  # staging リソース削除（DB 本体は削除されず state からのみ外れる）
  */
+import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync } from "node:fs";
 
 import alchemy from "alchemy";
@@ -201,6 +202,72 @@ const HYPERDRIVE_ORIGIN_CONNECTION_LIMIT = 15;
   );
 }
 
+// Cloudflare の Workers Custom Domains の一覧で、このホスト名がこの Worker に付いているかを見る
+async function isCustomDomainAttached(hostname: string, service: string): Promise<boolean> {
+  const cfApi = await createCloudflareApi();
+  const res = await cfApi.get(
+    `/accounts/${cfApi.accountId}/workers/domains?hostname=${encodeURIComponent(hostname)}`,
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Workers Custom Domains の確認に失敗しました（HTTP ${res.status}）。CLOUDFLARE_API_TOKEN の権限を確認してください`,
+    );
+  }
+  const body: { result?: Array<{ hostname?: string; service?: string }> } = await res.json();
+  return (body.result ?? []).some(
+    (domain) => domain.hostname === hostname && domain.service === service,
+  );
+}
+
+const ALLOW_UNVERIFIED_HINT =
+  "初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付けて実行してください";
+
+// 稼働中のインフラの定義の commit（/api/health/live の infraCommit）を、手元の HEAD が含むかを確かめる
+async function assertLocalCheckoutCoversRunningInfra(origin: string): Promise<void> {
+  let running: string | undefined;
+  try {
+    const res = await fetch(`${origin}/api/health/live`, { signal: AbortSignal.timeout(10_000) });
+    if (res.ok) {
+      const body: { infraCommit?: unknown; commit?: unknown } = await res.json();
+      const value = body.infraCommit ?? body.commit;
+      running = typeof value === "string" ? value : undefined;
+    }
+  } catch {
+    running = undefined;
+  }
+  if (running === undefined || !/^[0-9a-f]{40}$/.test(running)) {
+    throw new Error(
+      `稼働中のインフラの定義の commit を ${origin}/api/health/live から読めません` +
+        "（CUSTOM_DOMAIN 等の GitHub Environment の変数を入れ忘れた・稼働中の版を GIT_SHA 無しでデプロイした等）。" +
+        ALLOW_UNVERIFIED_HINT,
+    );
+  }
+  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
+  try {
+    git("merge-base", "--is-ancestor", running, "HEAD");
+  } catch {
+    throw new Error(
+      `手元の HEAD が稼働中のインフラの定義の commit（${running}）を含みません。git fetch して、それを含む commit ` +
+        "からデプロイしてください（古い checkout でデプロイすると、その後に足したリソースを finalize が削除する）",
+    );
+  }
+  if (
+    git(
+      "status",
+      "--porcelain",
+      "--untracked-files=no",
+      "--",
+      "alchemy.run.ts",
+      "package.json",
+      "bun.lock",
+    )
+  ) {
+    throw new Error(
+      "alchemy.run.ts・package.json・bun.lock にコミットしていない変更があります。コミットしてからデプロイしてください",
+    );
+  }
+}
+
 // ---- Worker ------------------------------------------------------------
 // vite build（@cloudflare/vite-plugin）の成果物をそのままデプロイする。
 // noBundle: true — dist/server/ 以下の .js チャンクは既に CF Workers 向けにバンドル済み。
@@ -232,6 +299,62 @@ if (process.env.SKIP_WORKER !== "1") {
     );
   }
 
+  // ローカル（CI 以外）から staging / production へデプロイするときは、手元の checkout が稼働中のインフラの定義を
+  // 含むときだけ進める。古い checkout・作業中のブランチ、GitHub Environment にしか無い変数（CUSTOM_DOMAIN 等）の
+  // 入れ忘れのままデプロイすると、finalize が宣言の無いリソース（カスタムドメイン・WAF ルール・後から足した KV / D1 等）
+  // を削除する。初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 で飛ばす
+  // カスタムドメインが既にこの Worker に付いているときだけ workers.dev の URL を閉じる。ドメインを足すデプロイで
+  // 先に閉じると、CustomDomain の作成が失敗したとき（同じホスト名の DNS レコードが既にある等）に、どちらの URL からも
+  // 届かなくなる（smoke も自動ロールバックも走らない）。付いた次のデプロイで閉じる
+  const customDomainAttached = customDomain
+    ? await isCustomDomainAttached(customDomain, workerName)
+    : false;
+  const workersDevOrigin = process.env.WORKERS_SUBDOMAIN
+    ? `https://${workerName}.${process.env.WORKERS_SUBDOMAIN}.workers.dev`
+    : undefined;
+
+  if (!process.env.CI && !isPreview && process.env.ALLOW_UNVERIFIED_LOCAL_DEPLOY !== "1") {
+    // ドメインを足すデプロイでは、稼働中の版はまだ workers.dev で動いている
+    const runningOrigin = customDomain && !customDomainAttached ? workersDevOrigin : appOrigin;
+    await assertLocalCheckoutCoversRunningInfra(runningOrigin ?? appOrigin);
+  }
+
+  // WAF の上書きガードは Worker を更新する前に確かめる（後で止めると、新しいコードだけが公開されたまま smoke を通らない）
+  const ruleMarker = `[alchemy:${workerName}]`;
+  if (customDomain && edgeRateLimitRpm !== undefined) {
+    // 上書きガード: Ruleset はフェーズの entrypoint を全置換するため、この stage の目印
+    // （ruleMarker）を持たないルールが zone に残っている場合は、消さずに中断する。
+    // 別 stage のルールも目印が異なるので検出される（「1 zone 1 stage」の機械的な強制）。
+    const cfApi = await createCloudflareApi();
+    const { zoneId } = await findZoneForHostname(cfApi, customDomain);
+    const entrypointRes = await cfApi.get(
+      `/zones/${zoneId}/rulesets/phases/http_ratelimit/entrypoint`,
+    );
+    if (entrypointRes.ok) {
+      const entrypoint: { result?: { rules?: Array<{ description?: string }> } } =
+        await entrypointRes.json();
+      const foreignRules = (entrypoint.result?.rules ?? []).filter(
+        (rule) => !(rule.description ?? "").includes(ruleMarker),
+      );
+      if (foreignRules.length > 0) {
+        const summary = foreignRules.map((r) => r.description || "(説明なし)").join(" / ");
+        throw new Error(
+          `zone の http_ratelimit フェーズに管理外のルールが ${foreignRules.length} 件あります（${summary}）。` +
+            "EDGE_RATE_LIMIT_RPM はフェーズを丸ごと上書きするため中断しました。" +
+            "管理外のルールをダッシュボードで別の zone へ移すか削除してから、もう一度デプロイしてください。" +
+            "EDGE_RATE_LIMIT_RPM を外して再デプロイしてはいけません（Ruleset の削除はフェーズ全体を空にするので、" +
+            "ここに挙げた管理外のルールも消えます）",
+        );
+      }
+    } else if (entrypointRes.status !== 404) {
+      // 404 = entrypoint 未作成（ルールなし）。それ以外は権限不足などの異常
+      throw new Error(
+        `http_ratelimit エントリポイントの確認に失敗しました（HTTP ${entrypointRes.status}）。` +
+          "CLOUDFLARE_API_TOKEN に対象 zone の WAF 権限があるか確認してください",
+      );
+    }
+  }
+
   const worker = await Worker("client", {
     name: workerName,
     entrypoint,
@@ -240,8 +363,8 @@ if (process.env.SKIP_WORKER !== "1") {
     compatibilityFlags: ["nodejs_compat"],
     adopt: true,
     // カスタムドメインがあるときは workers.dev の URL を閉じる。開けたままだと、そのドメインにかけた WAF の
-    // レート制限（EDGE_RATE_LIMIT_RPM）を workers.dev 経由で素通りできる
-    url: !customDomain,
+    // レート制限（EDGE_RATE_LIMIT_RPM）を workers.dev 経由で素通りできる（閉じるのはドメインが付いた後。上を参照）
+    url: !customDomainAttached,
     observability: { enabled: true, traces: { enabled: true } }, // wrangler.jsonc と揃える
     // Logpush 転送は Worker 側のフラグと LogPushJob の両方が必要（下のブロック参照）
     logpush: logpushDestination !== undefined,
@@ -274,6 +397,11 @@ if (process.env.SKIP_WORKER !== "1") {
       adopt: true,
     });
     console.info(`[alchemy] custom domain=${customDomain} -> ${workerName}`);
+    if (!customDomainAttached) {
+      console.info(
+        "[alchemy] workers.dev の URL は次のデプロイで閉じます（ドメインが付いたことを確かめてから）",
+      );
+    }
   }
 
   // ---- エッジレート制限（opt-in・zone の http_ratelimit フェーズを専有） ----
@@ -283,38 +411,6 @@ if (process.env.SKIP_WORKER !== "1") {
   // 「専有」は zone 単位なので、上の EDGE_RATE_LIMIT_RPM の注意書きを必ず読むこと。
   if (customDomain && edgeRateLimitRpm !== undefined) {
     const requestsPer10s = Math.max(1, Math.round(edgeRateLimitRpm / 6));
-
-    // 上書きガード: Ruleset はフェーズの entrypoint を全置換するため、この stage の目印
-    // （ruleMarker）を持たないルールが zone に残っている場合は、消さずに中断する。
-    // 別 stage のルールも目印が異なるので検出される（「1 zone 1 stage」の機械的な強制）。
-    const ruleMarker = `[alchemy:${workerName}]`;
-    const cfApi = await createCloudflareApi();
-    const { zoneId } = await findZoneForHostname(cfApi, customDomain);
-    const entrypointRes = await cfApi.get(
-      `/zones/${zoneId}/rulesets/phases/http_ratelimit/entrypoint`,
-    );
-    if (entrypointRes.ok) {
-      const entrypoint: { result?: { rules?: Array<{ description?: string }> } } =
-        await entrypointRes.json();
-      const foreignRules = (entrypoint.result?.rules ?? []).filter(
-        (rule) => !(rule.description ?? "").includes(ruleMarker),
-      );
-      if (foreignRules.length > 0) {
-        const summary = foreignRules.map((r) => r.description || "(説明なし)").join(" / ");
-        throw new Error(
-          `zone の http_ratelimit フェーズに管理外のルールが ${foreignRules.length} 件あります（${summary}）。` +
-            "EDGE_RATE_LIMIT_RPM はフェーズを丸ごと上書きするため中断しました。" +
-            "既存ルールを整理するか、この stage の EDGE_RATE_LIMIT_RPM を外してください",
-        );
-      }
-    } else if (entrypointRes.status !== 404) {
-      // 404 = entrypoint 未作成（ルールなし）。それ以外は権限不足などの異常
-      throw new Error(
-        `http_ratelimit エントリポイントの確認に失敗しました（HTTP ${entrypointRes.status}）。` +
-          "CLOUDFLARE_API_TOKEN に対象 zone の WAF 権限があるか確認してください",
-      );
-    }
-
     await Ruleset("edge-rate-limit", {
       zone: customDomain,
       phase: "http_ratelimit",
