@@ -3,11 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { createInProcessApiClient, getApiClient } from "@/shared/lib/api-client";
 
 import server, {
+  appVersionFromEnv,
   isNonHtmlPageRequest,
   isProductionEnv,
   releaseAfterResponse,
   renderWithInProcessApi,
   withForwardedSetCookies,
+  withAppVersionTiming,
   withSecurityHeaders,
 } from "./server";
 
@@ -302,6 +304,29 @@ describe("withSecurityHeaders", () => {
     expect(csp).toContain("'unsafe-eval'");
     expect(csp).toContain("ws: wss:");
     expect(res.headers.get("Strict-Transport-Security")).toBeNull();
+  });
+});
+
+describe("withAppVersionTiming / appVersionFromEnv（古いタブ検知の基準）", () => {
+  test("SSR レスポンスに Server-Timing でバージョンを付け、既存のヘッダーは残す", () => {
+    const res = withAppVersionTiming(
+      new Response("ok", { headers: { "x-request-id": "req-1" } }),
+      "abc123",
+    );
+    expect(res.headers.get("Server-Timing")).toBe('app;desc="abc123"');
+    expect(res.headers.get("x-request-id")).toBe("req-1");
+  });
+
+  test("引用符などを含む値は付けない", () => {
+    const res = withAppVersionTiming(new Response("ok"), 'a"b');
+    expect(res.headers.get("Server-Timing")).toBeNull();
+  });
+
+  test("api-service の x-app-version と同じく、未設定・空白は dev、前後の空白は落とす", () => {
+    expect(appVersionFromEnv(undefined)).toBe("dev");
+    expect(appVersionFromEnv({})).toBe("dev");
+    expect(appVersionFromEnv({ GIT_SHA: "  " })).toBe("dev");
+    expect(appVersionFromEnv({ GIT_SHA: " abc123 " })).toBe("abc123");
   });
 });
 

@@ -148,10 +148,10 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 
 - `components/ui/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
   手で書き換えない。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
-  Base UI 前提。Radix 前提の例をそのまま貼らない）。同じ場所にある `ThemeToggle` は手書きのコンポーネントで
-  書き換えてよいが、スタイルガードの対象外なので規約は目視で守る
+  Base UI 前提。Radix 前提の例をそのまま貼らない）。**手書きのコンポーネントをここに置かない**（`components/ui` は
+  lint・スタイルガード・knip の対象外なので、置くと規約違反が検出されない）
 - `components/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
-- `components/layout/`: ページ枠（`CenteredPage`）と常駐バナー
+- `components/layout/`: ページ枠（`CenteredPage`）・常駐バナー・テーマ切り替え（`ThemeToggle`）
 - コンポーネントに渡す `className` は**配置（余白・幅・並び）だけ**に使い、色や文字を上書きしない。見た目の違いは
   `variant` / `size` で表す（例: 削除は `<Button variant="destructive">`、控えめな操作は `variant="ghost"`）
 

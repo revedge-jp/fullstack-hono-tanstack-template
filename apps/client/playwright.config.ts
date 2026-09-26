@@ -4,7 +4,8 @@ const isCI = !!process.env.CI;
 // prod-shape モード: dev サーバーではなく、ビルド成果物（SSR + API が 1 Worker に同居）を
 // workerd で起動して E2E を流す。dev（Bun / vite dev）と本番（workerd）のランタイム乖離 —
 // バンドル・per-request 生成・ctx.waitUntil・AsyncLocalStorage 等 — をデプロイ前に検証する。
-// 実行: E2E_PROD_SHAPE=1 bunx playwright test（または scripts/test/test-e2e.sh --prod-shape）
+// 実行: bun run test:e2e -- --prod-shape（bunx playwright test を直接実行すると、.dev.vars が開発 DB を
+// 指したままなので globalSetup が止める）
 const isProdShape = !!process.env.E2E_PROD_SHAPE;
 
 export default defineConfig({

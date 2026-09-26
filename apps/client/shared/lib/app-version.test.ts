@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
+  getObservedAppVersion,
   isStaleVersion,
   recordAppVersion,
   resetAppVersionForTest,
@@ -64,5 +65,47 @@ describe("shared/lib/app-version", () => {
     recordAppVersion(responseWithVersion("v2"));
     expect(isStaleVersion()).toBe(true);
     expect(notified).toBe(0);
+  });
+
+  describe("SSR が Server-Timing で渡したバージョンを基準にする", () => {
+    function stubDocumentVersion(serverTiming: unknown[]) {
+      return spyOn(performance, "getEntriesByType").mockImplementation((type: string) =>
+        type === "navigation"
+          ? ([{ entryType: "navigation", serverTiming }] as unknown as PerformanceEntryList)
+          : [],
+      );
+    }
+
+    let spy: ReturnType<typeof stubDocumentVersion> | null = null;
+    afterEach(() => {
+      spy?.mockRestore();
+      spy = null;
+    });
+
+    test("開いたまま放置中にデプロイされ、最初の API 応答がもう新しい版なら stale になる", () => {
+      spy = stubDocumentVersion([{ name: "app", description: "v1" }]);
+      recordAppVersion(responseWithVersion("v2"));
+      expect(isStaleVersion()).toBe(true);
+    });
+
+    test("SSR と同じ版の応答なら stale にならない", () => {
+      spy = stubDocumentVersion([{ name: "app", description: "v1" }]);
+      recordAppVersion(responseWithVersion("v1"));
+      expect(isStaleVersion()).toBe(false);
+      expect(getObservedAppVersion()).toBe("v1");
+    });
+
+    test("API 応答の前でも SSR のバージョンを通報用に返す", () => {
+      spy = stubDocumentVersion([{ name: "app", description: "v1" }]);
+      expect(getObservedAppVersion()).toBe("v1");
+    });
+
+    test("Server-Timing が無いブラウザでは最初の API 応答を基準にする", () => {
+      spy = stubDocumentVersion([]);
+      recordAppVersion(responseWithVersion("v2"));
+      expect(isStaleVersion()).toBe(false);
+      recordAppVersion(responseWithVersion("v3"));
+      expect(isStaleVersion()).toBe(true);
+    });
   });
 });
