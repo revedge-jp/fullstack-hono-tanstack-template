@@ -39,6 +39,9 @@ git checkout <good-sha>
 bun run infra:deploy:staging    # または infra:deploy:production
 ```
 
+稼働中の版より古い commit を**新しく**デプロイしようとすると（main 上の古い commit に `vX.Y.Z` タグを打つ等）、
+deploy.yml は止まる（`SMOKE_BASE_URL` 設定時。稼働中の版を読めない・稼働中の版が main に無い・compare API が失敗したときは止めない）。巻き戻しは上の方法1（rerun は止めない）か方法2 で行う。
+
 **注意**: ロールバックで戻るのは **Worker のコードだけ**で、DB スキーマは戻らない。
 下記の expand/contract 規律を守っていれば「旧コード + 新スキーマ」でも動作する。
 

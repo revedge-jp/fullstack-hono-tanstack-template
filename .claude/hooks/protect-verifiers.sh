@@ -108,7 +108,8 @@ esac
 # Bash からフック自身の環境は変えられない。deny(秘密情報)には効かない
 if [ "${CLAUDE_EVAL_DISABLE_VERIFIER_ASK:-}" = "1" ]; then exit 0; fi
 
-if bash "$HOOK_DIR/../../scripts/check/is-verifier-path.sh" "$REL" >/dev/null; then
+# リンクを辿る前の名前でも判定する（検証器のファイル自体がリポジトリ外へのリンクになっていても確認を出す）
+if bash "$HOOK_DIR/../../scripts/check/is-verifier-path.sh" "$REL" "$RAW_REL" >/dev/null; then
   emit ask "$REL は検証器(ゲート・ガード・CI・フック)です。閾値の引き下げ・除外の追加・ガードの削除はコードを直す代わりになっていないか確認してください。意図した変更なら許可し、PR 本文の「## 検証器の変更理由」に理由を書いてください(CI が要求します)"
 fi
 exit 0

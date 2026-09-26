@@ -18,7 +18,7 @@ paths:
   api-service の `src/config.ts` だけ。api-service は `loadConfig()` → container DI で受け取り、`integrations/` 層も
   呼び出し元からパラメータで受け取る。client は独自の設定機構を持たない（下の「client / Docker のみの場合」）。
 - 検証: api-service は `scripts/check/api-process-env.sh`（`src/` 全体。`bun run arch:check` と `bun run check-all` が呼ぶ）、
-  client は `bun run arch:guards` の `guard_client_features_no_process_env`（`apps/client/features/` のみ）が検出する。
+  client は `bun run arch:guards` の `guard_client_features_no_process_env`（`apps/client/` の app/・features/・shared/・components/）が検出する。
 
 ## api-service に追加する場合
 

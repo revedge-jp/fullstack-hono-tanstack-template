@@ -16,6 +16,6 @@
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["**/*.ts", "**/*.tsx", "app.config.ts"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "../api-service/**", ".output", "dist"]
 }
