@@ -218,6 +218,33 @@ expect_guard "client process.env 直接参照禁止（{ default as p } の impor
   $'import { default as nodeProcess } from "node:process";\nexport const selftestEnv = nodeProcess.env.SELFTEST;' \
   "で process.env を直接参照できません"
 
+expect_guard "features 配下 process.env 直接参照禁止（/* を含むコメントの後の折り返した import）" \
+  guard_features_no_process_env \
+  "$D/infrastructure/__selftest_env_after_comment.ts" \
+  $'// /api/auth/* のハンドラから使う\nimport {\n  DurableObject,\n  env,\n  RpcTarget,\n} from "cloudflare:workers";\n/** 設定 */\nexport const selftestEnv = [DurableObject, env, RpcTarget];' \
+  "features 配下で process.env を直接参照できません"
+
+# 誤検出しないこと: コメントの中の import / return class の語、型だけの import
+NEG_QUERY="apps/client/features/tasks/queries/__selftest-type-only.ts"
+mkfix "$NEG_QUERY" $'import { queryOptions } from "@tanstack/react-query";\n\n// 値を import するとブラウザのバンドルに入るので型だけ使う\nimport type { SessionUser } from "@/shared/lib/api-client";\nexport const selftestTypeOnly = (user: SessionUser) => queryOptions({ queryKey: [user.id] });'
+NEG_CLASS="apps/client/shared/lib/__selftest_class_comment.ts"
+mkfix "$NEG_CLASS" $'// return class names for the given variant\nexport const selftestVariant = "a";'
+neg_query_out=$(run_guard guard_client_queries_server_modules 2>&1)
+neg_class_out=$(run_guard guard_no_class_interface 2>&1)
+rm -f "$NEG_QUERY" "$NEG_CLASS"
+if printf '%s' "$neg_query_out" | grep -qF "__selftest-type-only.ts"; then
+  echo "❌ client queries: コメントの後の型だけの import を誤検出しました"
+  FAIL=1
+else
+  echo "✅ client queries（コメントの後の型だけの import は許す）"
+fi
+if printf '%s' "$neg_class_out" | grep -qF "__selftest_class_comment.ts"; then
+  echo "❌ class 禁止: コメントの中の return class を誤検出しました"
+  FAIL=1
+else
+  echo "✅ class 禁止（コメントの中の語は数えない）"
+fi
+
 expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
   guard_client_queries_server_modules \
   "apps/client/features/tasks/queries/__selftest-query.ts" \

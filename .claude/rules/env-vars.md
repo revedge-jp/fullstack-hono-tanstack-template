@@ -19,6 +19,8 @@ paths:
   呼び出し元からパラメータで受け取る。client は独自の設定機構を持たない（下の「client / Docker のみの場合」）。
 - 検証: api-service は `scripts/check/api-process-env.sh`（`src/` 全体。`bun run arch:check` と `bun run check-all` が呼ぶ）、
   client は `bun run arch:guards` の `guard_client_features_no_process_env`（`apps/client/` の app/・features/・shared/・components/）が検出する。
+  `node:process` / `process` / `cloudflare:workers` の default・namespace の import（`import nodeProcess from "node:process"`）は
+  env を使わなくても止まる。`process.exit` 等はグローバルの `process` を使う。
 
 ## api-service に追加する場合
 

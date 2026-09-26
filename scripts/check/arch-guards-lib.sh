@@ -131,11 +131,11 @@ guard_no_throw() {
 guard_no_class_interface() {
   echo "[guard] class/interface 禁止"
   # `export class` / `class` に加え、`abstract class` / `export default class` /
-  # `export default abstract class`・`declare class`・クラス式（`= class`・`return class`）も検出する。
+  # `export default abstract class`・`declare class`・クラス式（`const X = class`・`return class`）も検出する（行頭に固定してコメントの中の語に当たらないようにする）。
   CLASS_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
-    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?(abstract\s+)?class\b|=\s*class\b|\breturn\s+class\b' || true)
+    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?(abstract\s+)?class\b|^\s*(export\s+)?(const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(:[^=]*)?=\s*class\b|^\s*return\s+class\b' || true)
   INTF_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
@@ -336,8 +336,9 @@ guard_client_queries_server_modules() {
     # 値の import / re-export（type 以外）を、oxfmt が折り返した形・相対パスも含めて探す。型の import は数えない。
     # 免除は createServerFn を import しているファイルだけ（コメントに語があるだけでは免除しない）。判定はファイル
     # 単位なので、createServerFn のファイルが handler の外でサーバー専用モジュールを使う形はここでは分からない
-    if perl -0777 -ne 'exit(/\b(?:import|export)\s+(?!type\b)[^;]*?from\s*["\x27][^"\x27]*shared\/lib\/(?:api-client|hono-app|server-logger)["\x27]/ ? 0 : 1)' "$file" &&
-      ! perl -0777 -ne 'exit(/\bimport\s+\{[^}]*\bcreateServerFn\b[^}]*\}\s*from\s*["\x27]\@tanstack\/react-start["\x27]/ ? 0 : 1)' "$file"; then
+    # 行頭の import / export だけを見る（コメントの中の語から次の import type まで一致しない）
+    if perl -0777 -ne 'exit(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["\x27][^"\x27]*shared\/lib\/(?:api-client|hono-app|server-logger)["\x27]/m ? 0 : 1)' "$file" &&
+      ! perl -0777 -ne 'exit(/^import\s+\{[^}]*\bcreateServerFn\b[^}]*\}\s*from\s*["\x27]\@tanstack\/react-start["\x27]/m ? 0 : 1)' "$file"; then
       QUERY_VIOL="${QUERY_VIOL}${file}"$'\n'
     fi
   done < <(find apps/client/features -path '*/queries/*' -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.test.ts' ! -name '*.test.tsx' -print0 2>/dev/null)
