@@ -118,7 +118,7 @@ describe("makeVerifySession — getSession が reject したとき", () => {
     expect(JSON.stringify(spy.warn)).not.toContain(SESSION_TOKEN);
   });
 
-  test("cause の無い例外: message を err に出し、causeCode は undefined", async () => {
+  test("cause の無い例外: message を detail に出し、causeCode は undefined", async () => {
     const { spy, result } = verifyWith(new Error("boom"));
 
     expect((await result)._unsafeUnwrapErr()).toBe("Unexpected");
