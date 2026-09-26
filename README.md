@@ -85,6 +85,7 @@ gh auth login          # 未認証の場合
 - [環境変数ガイド](docs/dev/environment-variables.md) - 環境変数一覧と追加フロー
 - [開発コマンド詳細](docs/dev/dev-commands.md) - よく使うコマンドの詳細説明
 - [システムアーキテクチャ](docs/architecture/architecture.md) - システム全体の構成とデプロイフロー
+- [既知の制約と見送り](docs/architecture/known-limitations.md) - テンプレートとして直す基準と、対応を見送っている項目の一覧
 - [api-service README](apps/api-service/README.md) - 単体での起動・エンドポイント一覧と、規約の正典への案内
 
 ### デプロイ向け
