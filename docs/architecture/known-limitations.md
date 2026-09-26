@@ -15,7 +15,7 @@
 
 | 項目 | 今の状態 | 必要になったら |
 |---|---|---|
-| production デプロイの関門 | main に含まれる commit か・稼働中より古くないか（`SMOKE_BASE_URL` を設定したときだけ）しか見ない。staging で成功したかは見ず、`v*` タグの保護も production の承認者も無い | GitHub の ruleset でタグの作成を絞り、production の Environment に required reviewers を付ける |
+| production デプロイの関門 | main に含まれる commit か・稼働中より古くないか（`SMOKE_BASE_URL` を設定し、稼働中の版を読めて compare API が成功したときだけ）しか見ない。staging で成功したかは見ず、`v*` タグの保護も production の承認者も無い | GitHub の ruleset でタグの作成を絞り、production の Environment に required reviewers を付ける |
 | 検証器を変える PR のマージ | 必須チェック `Review converged` は PR 本文の記述を見るだけで、PR 側のワークフロー定義で動く。承認数 0・CODEOWNERS 無し | チームで運用するなら CODEOWNERS と `require_code_owner_review` を検証器のパスに付ける（1 人の開発では自分の PR を承認できないので付けていない） |
 | DB のロール | アプリとマイグレーションが同じ権限のロールを使う | マイグレーション用の DDL 権限と、アプリ用の DML だけのロールを分ける |
 | バックアップ・復元 | 手順を書いていない（PlanetScale の既定のバックアップに任せている） | 復元の手順と PITR の要否を決め、`docs/deploy/operations.md` に書く |
