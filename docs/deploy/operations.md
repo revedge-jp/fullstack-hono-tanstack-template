@@ -16,8 +16,7 @@
 
 - 初回デプロイ、または直前から停止していた
 - 稼働中の版が main に含まれない、または含まれるかを確かめられなかった（compare API の失敗。ジョブに warning が出る）
-- 直前の版を手動デプロイ（`bun run infra:deploy:*`）した。`GIT_SHA` を渡さないと `commit` が `dev` になる
-  （手動デプロイでも戻り先を残すなら `GIT_SHA=$(git rev-parse HEAD) bun run infra:deploy:staging`）
+- 直前の版を `GIT_SHA` を渡さずに手動デプロイした（`commit` が `dev` になる。`infra:deploy:*` は手元の HEAD を渡す）
 
 `SMOKE_BASE_URL` が未設定なら smoke も自動ロールバックも行わない。
 ロールバック後もジョブは赤のまま残るので、原因を修正するまで
@@ -39,25 +38,29 @@ running_sha=$(curl -fsS "$SMOKE_BASE_URL/api/health/live" | jq -r '.infraCommit 
 # rerun はその commit の alchemy.run.ts でデプロイする。稼働中のインフラより後にリソースを足していたら削除されるので、
 # 次のコマンドの出力が空のときだけ使う（空でなければ方法2）
 git diff <good-sha> "$running_sha" -- alchemy.run.ts
-gh run list --workflow Deploy   # 戻りたい run を特定
+# 戻りたい run を特定する
+gh run list --workflow Deploy
 gh run rerun <run-id>
 
 # 方法2: 古い commit のアプリを別の worktree でビルドし、稼働中のインフラの定義でデプロイする（自動ロールバックと同じ考え方）
 # 手元の作業ツリーの alchemy.run.ts と node_modules でデプロイするので、先にその commit に合わせる
-# （古い main や作業中のブランチのままだと、その定義でリソースが消える・未リリースのインフラ変更が入る）
+# （古い main や作業中のブランチのままだと、稼働中より古い定義で Worker 等が上書きされる・未リリースのインフラ変更が入る。
+# ローカルのデプロイは finalize しないので、宣言から外れたリソースは消えない）
 git checkout --detach "$running_sha" && bun install --frozen-lockfile
 git worktree add --detach ../rollback <good-sha>
 (cd ../rollback && bun install --frozen-lockfile && bun run build)
 rm -rf apps/client/dist && cp -R ../rollback/apps/client/dist apps/client/dist
+# production なら --stage production にする。行末にコメントを書かない（zsh の既定では # 以降も引数になる）
 # infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ。
 # 手元が稼働中のインフラの commit で、alchemy.run.ts 等にコミットしていない変更が無いときだけデプロイする
-# （checkout が失敗して別のブランチのまま・変更を持ち越したままだと、その定義でリソースが消える）
+# （checkout が失敗して別のブランチのまま・変更を持ち越したままだと、その定義で Worker 等が上書きされる）
 test "$(git rev-parse HEAD)" = "$(git rev-parse "$running_sha")" \
   && test -z "$(git status --porcelain --untracked-files=no)" \
   && GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> INFRA_SHA="$running_sha" \
-    bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
+    bunx dotenv -e .env -- bunx alchemy deploy --stage staging
 git worktree remove ../rollback
-git checkout -    # 元のブランチに戻る（apps/client/dist は古い版のままなので、次の作業の前にビルドし直す）
+# 元のブランチに戻る（apps/client/dist は古い版のままなので、次の作業の前にビルドし直す）
+git checkout -
 ```
 
 稼働中の版より古い commit を**新しく**デプロイしようとすると（main 上の古い commit に `vX.Y.Z` タグを打つ等）、

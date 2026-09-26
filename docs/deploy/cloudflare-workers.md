@@ -41,6 +41,7 @@ Hyperdrive / Worker を IaC として作成・reconcile するため、**DB やH
 Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client:
 - Authorized JavaScript origins: `https://{{APP_NAME}}-staging.[account].workers.dev`
 - Authorized redirect URIs: `https://{{APP_NAME}}-staging.[account].workers.dev/api/auth/callback/google`
+- `CUSTOM_DOMAIN` を使う stage は、そのドメインの origin と `/api/auth/callback/google` も足す（デプロイより前に）
 
 ### 2. GitHub Environments の設定
 
@@ -80,7 +81,7 @@ bash scripts/setup-deploy-env.sh production
 | `PLANETSCALE_ORGANIZATION` | PlanetScale の組織名（preview は staging と同じ組織。production は別の組織を推奨） |
 | `CUSTOM_DOMAIN` / `APP_ORIGIN` / `WORKERS_SUBDOMAIN` | 公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN` に使用）。この優先順で解決される。`CUSTOM_DOMAIN`（推奨、例: `app.example.com`）は Alchemy がドメイン割り当て・DNS・TLS まで自動設定する。`APP_ORIGIN` は手動割り当てした URL の明示指定（後方互換）。`WORKERS_SUBDOMAIN` 指定時は `https://{worker名}.{subdomain}.workers.dev` を自動組み立て |
 | `EDGE_RATE_LIMIT_RPM` | （オプション）エッジ（WAF）での `/api/*` レート制限。IP ごとの分間リクエスト数（例: `300`）。`CUSTOM_DOMAIN` 必須。**対象 zone の http_ratelimit フェーズを専有する**ため、zone を他アプリ・手動ルールと共有している場合や staging/production が同一 zone の場合は 1 stage のみで設定すること（管理外の既存ルールを検知した場合、deploy は上書きせず中断する） |
-| `SMOKE_BASE_URL` | デプロイ直後の smoke チェック先 URL。`/api/health`（Hyperdrive 経由の DB 疎通）と `/`（SSR）を検証し、失敗するとデプロイジョブが赤になる。**未設定の場合 smoke チェックは skip される**（notice が出るだけでジョブは成功扱い）。`CUSTOM_DOMAIN` を使うときはそのドメインにする（workers.dev の URL は閉じる） |
+| `SMOKE_BASE_URL` | デプロイ直後の smoke チェック先 URL。`/api/health`（Hyperdrive 経由の DB 疎通）と `/`（SSR）を検証し、失敗するとデプロイジョブが赤になる。**未設定の場合 smoke チェックは skip される**（notice が出るだけでジョブは成功扱い）。`CUSTOM_DOMAIN` を使うときはそのドメインにする（ドメインが応答したら workers.dev の URL は閉じる。ドメインを足すデプロイでは稼働中の版を読めないので、そのデプロイが失敗しても自動ロールバックしない） |
 
 secrets / vars が未設定のうちは deploy job は notice を出して skip する（テンプレート原本や
 セットアップ途中のリポジトリが赤くならないため）。個別に追加・修正する場合は
@@ -98,8 +99,8 @@ main に push するだけでよい（DB がなければ Alchemy が作り、CI 
 SKIP_WORKER=1 SHOW_DATABASE_URL=1 bun run infra:deploy:staging
 # 2) 表示された DATABASE_URL でマイグレーションする
 (cd packages/database && DATABASE_URL='<表示された URL>' bunx drizzle-kit migrate)
-# 3) Worker をデプロイする（戻り先を残すため GIT_SHA を渡す。docs/deploy/operations.md）
-GIT_SHA=$(git rev-parse HEAD) bun run infra:deploy:staging
+# 3) Worker をデプロイする（初回は稼働中の版が無いので、ローカルデプロイの照合を飛ばす。docs/dev/alchemy-iac.md）
+ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 bun run infra:deploy:staging
 ```
 
 ### 4. preview ラベルの作成（PR プレビュー環境を使う場合）
