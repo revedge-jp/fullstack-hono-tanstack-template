@@ -46,10 +46,22 @@ if ! DIFF_FILES=$(git diff --name-only "$BASE_REF"...HEAD -- 'apps/api-service/s
   echo "❌ ${BASE_REF} との差分を取れませんでした" >&2
   exit 1
 fi
-CHANGED_FILES=$(printf '%s\n' "$DIFF_FILES" |
+# テストだけを変えた PR も対象にする。実装の差分だけを見ると、テストを弱めた・消した PR では対象が空になり、
+# mutation testing がスキップされて CI が通る。変えたテストと同じ名前の実装（x.test.ts → x.ts）を、無ければ同じ
+# ディレクトリの実装を対象に加える
+TESTED_FILES=$(printf '%s\n' "$DIFF_FILES" | grep -E '/(domain|application)/.*\.test\.ts$' |
+  while IFS= read -r test_file; do
+    source_file="${test_file%.test.ts}.ts"
+    if [ -f "$source_file" ]; then
+      echo "$source_file"
+    elif [ -d "$(dirname "$test_file")" ]; then
+      find "$(dirname "$test_file")" -maxdepth 1 -name '*.ts' ! -name '*.test.ts'
+    fi
+  done || true)
+CHANGED_FILES=$(printf '%s\n%s\n' "$DIFF_FILES" "$TESTED_FILES" |
   grep -E '/(domain|application)/.*\.ts$' |
   grep -v '\.test\.ts$' |
-  grep -vE '/application/(service|index|ports)\.ts$' || true)
+  grep -vE '/application/(service|index|ports)\.ts$' | sort -u || true)
 
 if [ -z "$CHANGED_FILES" ]; then
   echo "domain/application 層に対象の変更が無いため mutation testing をスキップします。"
