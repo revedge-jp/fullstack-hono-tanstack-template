@@ -5,6 +5,8 @@ import { createInProcessApiClient, runWithApiClient } from "@/shared/lib/api-cli
 import { initHonoApp } from "@/shared/lib/hono-app";
 import { serverLogger } from "@/shared/lib/server-logger";
 
+import { createCspNonce, runWithCspNonce } from "./csp-nonce";
+
 const handler = createStartHandler(defaultRenderHandler);
 
 if (typeof globalThis.addEventListener === "function") {
@@ -61,14 +63,19 @@ export function withSecurityHeaders(
   response: Response,
   isProd: boolean,
   requestId?: string,
+  nonce?: string,
 ): Response {
   const csp = [
     "default-src 'self'",
-    // TanStack Start がハイドレーションデータをインラインスクリプトで注入するため 'unsafe-inline' が必要。
-    // dev では vite の変換で 'unsafe-eval' も要る。
-    isProd
-      ? "script-src 'self' 'unsafe-inline'"
-      : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // ビルド済みの Worker はリクエストごとの nonce を付けたインラインスクリプト（ハイドレーションデータ・
+    // __root.tsx の head）だけを許す。nonce は router の ssr.nonce 経由ですべてのスクリプトに付く
+    // （app/csp-nonce.ts）。nonce の無い応答（SSR の失敗時の 500 等）はインラインスクリプトを含まないので
+    // 'self' だけでよい。vite の dev サーバー（nonce を渡さない）はスクリプトを差し込み eval も使うので緩める
+    nonce
+      ? `script-src 'self' 'nonce-${nonce}'`
+      : isProd
+        ? "script-src 'self'"
+        : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
     // Google Fonts（__root.tsx）を許可。セルフホスト化したらこの2行から外部オリジンを外すこと。
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
@@ -260,10 +267,13 @@ export default {
         return releaseAfterResponse(response, cleanup, waitUntil);
       }
 
-      const response = await renderWithInProcessApi(handler, honoApp, request, requestId);
+      // vite の dev サーバーは自前のスクリプトに nonce を付けないので、ビルド済みのときだけ使う
+      const nonce = import.meta.env.DEV ? undefined : createCspNonce();
+      const render = () => renderWithInProcessApi(handler, honoApp, request, requestId);
+      const response = await (nonce ? runWithCspNonce(nonce, render) : render());
       return releaseAfterResponse(
         withAppVersionTiming(
-          withSecurityHeaders(response, isProd, requestId),
+          withSecurityHeaders(response, isProd, requestId, nonce),
           appVersionFromEnv(env),
         ),
         cleanup,

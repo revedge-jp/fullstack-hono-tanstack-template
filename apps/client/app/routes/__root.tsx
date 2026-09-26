@@ -1,5 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import {
+  createRootRouteWithContext,
+  HeadContent,
+  Outlet,
+  ScriptOnce,
+  Scripts,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import type { ReactNode } from "react";
 
@@ -13,22 +19,20 @@ type RouterContext = {
   queryClient: QueryClient;
 };
 
+// head のインラインスクリプトは ScriptOnce で出す（サーバーでだけ描画され、実行後に自分を消す）。head.scripts に
+// 置くと、CSP の nonce をヘッダーで送ったときにブラウザが nonce 属性を隠すので、TanStack Router がハイドレーション後に
+// 「同じスクリプトがまだ無い」と判断してもう一度差し込み、2 回実行する。
+// 1) SSR インラインハイドレーションスクリプトで使用される esbuild ランタイムヘルパー。
+//    TanStack Start がインラインスクリプトを注入する前にグローバルで定義する必要がある。
+const DEFINE_NAME_HELPER =
+  "var __name=(t,v)=>(Object.defineProperty(t,'name',{value:v,configurable:true}),t);";
+// 2) ダークモードの初期適用。head 内で first paint 前に実行し FOUC を防ぐ。
+//    localStorage.theme（ThemeToggle が保存）→ なければ prefers-color-scheme の順で判定する。
+const APPLY_INITIAL_THEME =
+  "(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();";
+
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
-    scripts: [
-      // SSR インラインハイドレーションスクリプトで使用される esbuild ランタイムヘルパー。
-      // TanStack Start がインラインスクリプトを注入する前にグローバルで定義する必要がある。
-      {
-        children:
-          "var __name=(t,v)=>(Object.defineProperty(t,'name',{value:v,configurable:true}),t);",
-      },
-      // ダークモードの初期適用。head 内で first paint 前に実行し FOUC を防ぐ。
-      // localStorage.theme（ThemeToggle が保存）→ なければ prefers-color-scheme の順で判定する。
-      {
-        children:
-          "(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();",
-      },
-    ],
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
@@ -80,6 +84,8 @@ function RootDocument({ children }: { children: ReactNode }) {
             TanStack の HeadContent で重複排除され1つに畳まれるため、静的タグとして直接置く。 */}
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+        <ScriptOnce>{DEFINE_NAME_HELPER}</ScriptOnce>
+        <ScriptOnce>{APPLY_INITIAL_THEME}</ScriptOnce>
         <HeadContent />
       </head>
       <body className="antialiased" suppressHydrationWarning>

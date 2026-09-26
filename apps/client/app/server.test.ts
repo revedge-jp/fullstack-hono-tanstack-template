@@ -314,6 +314,22 @@ describe("withSecurityHeaders", () => {
     expect(res.headers.get("Strict-Transport-Security")).toContain("max-age=");
   });
 
+  test("nonce を渡すと script-src をその nonce で許し、'unsafe-inline' を使わない（NODE_ENV に関係なく）", () => {
+    for (const isProd of [true, false]) {
+      const res = withSecurityHeaders(new Response("ok"), isProd, "req-1", "abc123==");
+      const scriptSrc =
+        (res.headers.get("Content-Security-Policy") ?? "")
+          .split(";")
+          .find((directive) => directive.trim().startsWith("script-src")) ?? "";
+      expect(scriptSrc.trim()).toBe("script-src 'self' 'nonce-abc123=='");
+    }
+  });
+
+  test("本番で nonce の無い応答（SSR 失敗時の 500 等）は 'self' だけを許す", () => {
+    const res = withSecurityHeaders(new Response("error"), true, "req-1");
+    expect(res.headers.get("Content-Security-Policy")).toContain("script-src 'self';");
+  });
+
   test("開発では vite 向けの緩和(unsafe-eval / ws:)が入り、HSTS は付かない", () => {
     const res = withSecurityHeaders(new Response("ok"), false);
     const csp = res.headers.get("Content-Security-Policy") ?? "";
