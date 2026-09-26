@@ -6,8 +6,13 @@ import { join } from "node:path";
 
 // init-template.sh の回帰テスト。テンプレートを受け取る経路（ZIP・clone 後の .git 作り直し）では
 // ファイルがまだ追跡されていないので、追跡中のファイルだけを探すと何も置換せず「初期化済み」で終わる。
-// 実際のテンプレート一式（HEAD の git archive）を展開して、どの経路でもプレースホルダーが残らないことを見る。
+// 実際のテンプレート一式（作業ツリーのファイル）を展開して、どの経路でもプレースホルダーが残らないことを見る。
 const ROOT = join(import.meta.dir, "..");
+// git のフック（pre-push）の中では GIT_DIR 等が設定されている。子プロセスに引き継ぐと、git は cwd ではなく
+// そのリポジトリを見る（一時ディレクトリの init-template が本体のリポジトリを検索する）ので外す
+const CLEAN_ENV = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+);
 // このファイル自身が置換対象にならないよう、プレースホルダーは組み立てる
 const PLACEHOLDER = ["{{", "APP_NAME", "}}"].join("");
 // 仕組みそのものを説明・処理しているので置換しないファイル（init-template.sh の EXCLUDES と同じ）
@@ -27,6 +32,7 @@ function extractTemplate() {
   dirs.push(dir);
   const files = execFileSync("git", ["ls-files", "-z", "-co", "--exclude-standard"], {
     cwd: ROOT,
+    env: CLEAN_ENV,
     maxBuffer: 64 * 1024 * 1024,
   });
   const archive = execFileSync("tar", ["--null", "-T", "-", "-cf", "-"], {
@@ -39,7 +45,11 @@ function extractTemplate() {
 }
 
 function runInit(dir, appName) {
-  return spawnSync("bash", ["scripts/init-template.sh", appName], { cwd: dir, encoding: "utf8" });
+  return spawnSync("bash", ["scripts/init-template.sh", appName], {
+    cwd: dir,
+    env: CLEAN_ENV,
+    encoding: "utf8",
+  });
 }
 
 function remainingPlaceholders(dir) {
@@ -52,7 +62,7 @@ function remainingPlaceholders(dir) {
 }
 
 function git(dir, ...args) {
-  execFileSync("git", args, { cwd: dir, stdio: "ignore" });
+  execFileSync("git", args, { cwd: dir, env: CLEAN_ENV, stdio: "ignore" });
 }
 
 describe("init-template.sh", () => {
