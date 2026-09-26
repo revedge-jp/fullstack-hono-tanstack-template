@@ -133,6 +133,8 @@ guard_no_class_interface() {
   # `export class` / `class` に加え、`abstract class` / `export default class` /
   # `export default abstract class`・`declare class`・クラス式（`X = class`・`return class`）も検出する（行頭が `//` `*` の行と、`=` より前に `//` がある行末のコメントは
   # 数えない）。文字列の中の `= class` は検出してしまうが、止める側の誤りなので文言を変えて避ける。
+  # 相手にするのは oxfmt で整形した通常のコードで、名前と `=` の間にコメントを挟む・行末の /* */ のような
+  # 形まで正規表現で読み分けない（読み分けを足すたびに別の形の見逃しと誤検出が出る）
   CLASS_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
