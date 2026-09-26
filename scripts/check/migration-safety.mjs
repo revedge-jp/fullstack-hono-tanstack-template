@@ -29,7 +29,9 @@ const RULES = [
   { pattern: /\brename\s+(column\b|to\b)/i, reason: "リネーム" },
   { pattern: /\bset\s+data\s+type\b|\balter\s+column\s+"?[\w]+"?\s+type\b/i, reason: "型の変更" },
   { pattern: /\bset\s+not\s+null\b/i, reason: "既存カラムへの NOT NULL の追加" },
-  // NOT NULL の列から DEFAULT を外すと、列を省いて INSERT する旧コードが「DEFAULT なしの NOT NULL」と同じく失敗する
+  // NOT NULL の列から DEFAULT を外すと、列を省いて INSERT する旧コードが「DEFAULT なしの NOT NULL」と同じく失敗する。
+  // NULL 可かどうかは文から分からないので NULL 可の列でも止める（旧コードが列を省いたときの値が DEFAULT から NULL に変わる）。
+  // 意図した変更なら、その文だけを別のマイグレーションに分けて allow の印を付ける
   { pattern: /\balter\s+column\b[^;]*\bdrop\s+default\b/i, reason: "DEFAULT の削除" },
 ];
 
@@ -118,7 +120,8 @@ function main() {
 // （一致しないと main() を呼ばずに exit 0 になり、違反を黙って通す）
 if (
   import.meta.main ??
-  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  (process.argv[1] !== undefined &&
+    realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))
 ) {
   main();
 }

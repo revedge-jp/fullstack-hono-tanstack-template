@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { findViolations } from "./migration-safety.mjs";
 
@@ -69,5 +71,15 @@ describe("migration-safety", () => {
     const sql =
       'ALTER TABLE "t" ADD COLUMN "a" text;--> statement-breakpoint\nALTER TABLE "t" ALTER COLUMN "a" SET NOT NULL;';
     expect(findViolations(sql)).toHaveLength(1);
+  });
+
+  // Node 22 は import.meta.main が無く、起動パスで判定する。node -e から import したときは argv[1] が無い
+  test("node -e から import しても例外にならない", () => {
+    const modulePath = fileURLToPath(new URL("./migration-safety.mjs", import.meta.url));
+    const result = spawnSync("node", ["-e", `import(${JSON.stringify(modulePath)})`], {
+      encoding: "utf8",
+    });
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
   });
 });

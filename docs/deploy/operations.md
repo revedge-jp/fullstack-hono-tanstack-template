@@ -31,12 +31,19 @@
 
 ```bash
 # 方法1: 過去の成功した Deploy run を GitHub 上で rerun する（その commit が再デプロイされる）
+# rerun はその commit の alchemy.run.ts でデプロイする。それ以降にリソースを足していたら削除されるので、
+# 次のコマンドの出力が空のときだけ使う（空でなければ方法2）
+git diff <good-sha> origin/main -- alchemy.run.ts
 gh run list --workflow Deploy   # 戻りたい run を特定
 gh run rerun <run-id>
 
-# 方法2: ローカルから任意の commit をデプロイする
-git checkout <good-sha>
-bun run infra:deploy:staging    # または infra:deploy:production
+# 方法2: 古い commit のアプリを別の worktree でビルドし、今のインフラ定義でデプロイする（自動ロールバックと同じ手順）
+git worktree add --detach ../rollback <good-sha>
+(cd ../rollback && bun install --frozen-lockfile && bun run build)
+rm -rf apps/client/dist && cp -R ../rollback/apps/client/dist apps/client/dist
+# infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ
+GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
+git worktree remove ../rollback
 ```
 
 稼働中の版より古い commit を**新しく**デプロイしようとすると（main 上の古い commit に `vX.Y.Z` タグを打つ等）、
@@ -45,9 +52,8 @@ deploy.yml は止まる（`SMOKE_BASE_URL` 設定時。稼働中の版を読め�
 **注意**: ロールバックで戻るのは **Worker のコードだけ**で、DB スキーマは戻らない。
 自動ロールバックはインフラの定義（`alchemy.run.ts`）を**今回のデプロイのもの**のまま使う（古い定義でデプロイすると、
 今回のリリースで足したリソースが finalize で削除される）。古い commit は別の worktree でビルドし、ビルド成果物
-（`apps/client/dist`）だけを差し替えてデプロイする。方法2 で手動デプロイするときも古い commit の `alchemy.run.ts` で
-デプロイしない。アプリだけを戻すなら `git restore --source=<good-sha> --staged --worktree -- apps packages package.json bun.lock`
-（`git checkout <sha> -- <path>` はその後に足したファイルを消さないので、新しいルート等が残ったままビルドされる）。
+（`apps/client/dist`）だけを差し替えてデプロイする。手動で戻すときも、古い commit を checkout して
+`infra:deploy:*` を実行しない（古い `alchemy.run.ts` でデプロイされる）。上の方法2 を使う。
 
 同じ理由で、**Worker のバインディング名・環境変数名の変更と削除も expand / contract で 2 リリースに分ける**
 （新しい名前を足すリリース → 旧い名前をやめるリリース）。1 リリースで変えると、ロールバックで旧コードが旧い名前を
