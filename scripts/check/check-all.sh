@@ -75,10 +75,19 @@ if [ "${#LINT_TASKS[@]}" -gt 0 ]; then
   run_step_bg "LintTypecheck" bunx turbo run "${LINT_TASKS[@]}" --filter="${TURBO_FILTER}" --continue=dependencies-successful
 fi
 
+# alchemy.run.ts（デプロイ定義）はどのワークスペースにも属さず、turbo の typecheck が見ない。壊れても
+# main マージ後の staging デプロイで初めて表に出るので、ここで型を確かめる（1 秒ほど）
+if [ "${SKIP_TYPECHECK:-}" != "1" ]; then
+  run_step_bg "InfraTypecheck" bun run typecheck:infra
+fi
+
 # Tests（TURBO_FILTER で変更の影響を受けるパッケージだけ。既定は origin/main との差分なので、
 # main と同じ内容なら何も走らない。全件は `bun run test`。DB migrate を含む）
 if [ "${SKIP_TEST:-}" != "1" ]; then
-  run_step_bg "Tests" bash -lc "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx drizzle-kit migrate && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
+  # NODE_ENV=test はルートの test スクリプトと揃える（.env の NODE_ENV=development のままだと Better Auth の
+  # 挙動が CI・bun run test と変わる。bun test は NODE_ENV が既に入っていると上書きしない）。
+  # bash -c（-l ではない）: ログインシェルの profile を読む理由が無く、読むと環境ごとに結果が変わる
+  run_step_bg "Tests" bash -c "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx drizzle-kit migrate && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" NODE_ENV=test bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
 fi
 
 # scripts/ 配下のテスト（turbo のワークスペース外なので Tests には含まれない）

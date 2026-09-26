@@ -2,7 +2,7 @@
  * 認証済みユーザーのドメインモデル。
  * Better Auth の session から復元する値オブジェクト。
  */
-export type AuthUserId = string & { readonly _brand: "AuthUserId" };
+type AuthUserId = string & { readonly _brand: "AuthUserId" };
 
 export type AuthUser = {
   readonly id: AuthUserId;

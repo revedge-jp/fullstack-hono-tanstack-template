@@ -134,6 +134,37 @@ for (const feature of features) {
   }
 }
 
+// client: actions / queries は co-located テストが必須（apps/client/AGENTS.md の「What tests to write」）。
+// カバレッジの閾値は、テストから一度も import されないファイルを数えない（bun の lcov に載らない）ので、
+// テストの無いファイルはカバレッジでは見つからない。ここでファイル単位に確かめる。
+// schemas.ts（Zod のスキーマ定義だけ）は、それを使う query のテストで形が確かめられるので対象外。
+const CLIENT_FEATURES_DIR = "apps/client/features";
+const CLIENT_TEST_EXEMPT = new Set(["schemas.ts", "index.ts"]);
+if (isDir(CLIENT_FEATURES_DIR)) {
+  for (const feature of readdirSync(CLIENT_FEATURES_DIR).filter((name) =>
+    isDir(join(CLIENT_FEATURES_DIR, name)),
+  )) {
+    for (const layer of ["actions", "queries"]) {
+      const dir = join(CLIENT_FEATURES_DIR, feature, layer);
+      if (!isDir(dir)) {
+        continue;
+      }
+      for (const file of readdirSync(dir)) {
+        if (!/\.tsx?$/.test(file) || /\.test\.tsx?$/.test(file) || CLIENT_TEST_EXEMPT.has(file)) {
+          continue;
+        }
+        const testFile = file.replace(/\.(tsx?)$/, ".test.$1");
+        if (!isFile(join(dir, testFile))) {
+          add(
+            `client/${feature}`,
+            `${layer}/${file} に co-located テスト（${layer}/${testFile}）がありません`,
+          );
+        }
+      }
+    }
+  }
+}
+
 if (violations.length === 0) {
   console.log("OK");
   process.exit(0);
