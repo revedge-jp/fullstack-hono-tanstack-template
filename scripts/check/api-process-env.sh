@@ -14,8 +14,9 @@ cd "$ROOT_DIR"
 # 除外は src/config.ts だけ(パスで一致させる)。grep の --exclude はファイル名で一致するので、
 # それを使うと src/shared/**/config.ts 等のどの階層の config.ts も素通りする
 # process.env.X だけでなく process.env["X"]・process["env"]・分割代入（const { env } = process も）・
-# node:process / cloudflare:workers の env・Bun.env・import.meta.env も拾う
-hits=$(grep -rnE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|from [\"'](node:)?process[\"']|from [\"']cloudflare:workers[\"']|Bun\.env|import\.meta\.env" \
+# node:process / cloudflare:workers から env を取り出す import・Bun.env・import.meta.env も拾う
+# （cloudflare:workers の DurableObject 等、env 以外の import は止めない）
+hits=$(grep -rnE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env|import\.meta\.env" \
   apps/api-service/src/ --include="*.ts" --exclude="*.test.ts" --exclude-dir="__tests__")
 [ $? -gt 1 ] && exit 1
 hits=$(printf '%s\n' "$hits" | grep -v '^apps/api-service/src/config\.ts:' | grep -v '^$')

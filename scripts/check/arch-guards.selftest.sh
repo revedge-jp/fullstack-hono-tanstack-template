@@ -242,6 +242,22 @@ else
   echo "❌ api-process-env: shared 配下の process.env[\"X\"] を検出できませんでした（exit=${API_ENV_RC}）"
   FAIL=1
 fi
+# cloudflare:workers から env を取り出すのは違反、DurableObject 等の import は違反にしない
+mkfix "apps/api-service/src/shared/__selftest_env.ts" 'import { DurableObject, env } from "cloudflare:workers";
+export const selftestEnv = [DurableObject, env];'
+API_ENV_OUT=$(bash scripts/check/api-process-env.sh 2>&1)
+API_ENV_RC=$?
+mkfix "apps/api-service/src/shared/__selftest_env.ts" 'import { DurableObject } from "cloudflare:workers";
+export const selftestDurableObject = DurableObject;'
+API_ENV_NEG_RC=0
+bash scripts/check/api-process-env.sh >/dev/null 2>&1 || API_ENV_NEG_RC=$?
+rm -f "apps/api-service/src/shared/__selftest_env.ts"
+if [ "$API_ENV_RC" -ne 0 ] && [ "$API_ENV_NEG_RC" -eq 0 ]; then
+  echo "✅ api-process-env: cloudflare:workers の env は検出し、DurableObject は通す"
+else
+  echo "❌ api-process-env: cloudflare:workers の判定が違います（env を含む import: exit=${API_ENV_RC} / DurableObject だけ: exit=${API_ENV_NEG_RC}）"
+  FAIL=1
+fi
 
 expect_guard "createServerFn の配置（queries 以外は禁止）" \
   guard_server_fn_placement \

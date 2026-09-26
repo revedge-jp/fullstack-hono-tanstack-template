@@ -304,9 +304,10 @@ guard_routes_flat_files() {
 guard_features_no_process_env() {
   echo "[guard] features 配下での process.env 直接参照禁止（config 経由に統一）"
   # process.env.X だけでなく process.env["X"]・process["env"]・分割代入（const { env } = process も）・
-  # node:process / cloudflare:workers の env・Bun.env・import.meta.env も拾う
+  # node:process / cloudflare:workers から env を取り出す import・Bun.env・import.meta.env も拾う
+  # （cloudflare:workers の DurableObject 等、env 以外の import は止めない）
   ENV_VIOL=$(find apps/api-service/src/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | \
-    xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|from [\"'](node:)?process[\"']|from [\"']cloudflare:workers[\"']|Bun\.env|import\.meta\.env" -- || true)
+    xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env|import\.meta\.env" -- || true)
   if [ -z "$ENV_VIOL" ]; then
     echo "OK"
   else
@@ -321,9 +322,9 @@ guard_features_no_process_env() {
 guard_client_features_no_process_env() {
   echo "[guard] client features 配下での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
   # process.env.X だけでなく process.env["X"]・process["env"]・分割代入（const { env } = process も）・
-  # node:process / cloudflare:workers の env・Bun.env も拾う（import.meta.env.DEV は許可）
+  # node:process / cloudflare:workers から env を取り出す import・Bun.env も拾う（import.meta.env.DEV は許可）
   CLIENT_ENV_VIOL=$(find apps/client/features -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
-    xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|from [\"'](node:)?process[\"']|from [\"']cloudflare:workers[\"']|Bun\.env" -- || true)
+    xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env" -- || true)
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"
   else
