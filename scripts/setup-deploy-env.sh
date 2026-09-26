@@ -121,7 +121,7 @@ PLANETSCALE_ORGANIZATION|var|PlanetScale の組織名。preview は staging と�
 WORKERS_SUBDOMAIN|var|CF アカウントの workers.dev サブドメイン（bunx wrangler whoami で確認可）。カスタムドメイン運用でも preview 環境が使うため設定推奨
 CUSTOM_DOMAIN|var|Worker に割り当てるカスタムドメインのホスト名（例: app.example.com。zone が CF アカウントにあること）。DNS/TLS/公開 URL は Alchemy が自動設定。workers.dev 運用なら空 Enter でスキップ
 EDGE_RATE_LIMIT_RPM|var|エッジ（WAF）での /api/* レート制限（IP ごとの分間リクエスト数、例: 300）。CUSTOM_DOMAIN 必須。zone の http_ratelimit フェーズを専有するため zone を共有する場合は 1 stage のみで設定（管理外の既存ルールを検知した場合、deploy は上書きせず中断する）。不要なら空 Enter
-SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL（例: https://<app>-staging.<subdomain>.workers.dev）。空だと smoke は skip される
+SMOKE_BASE_URL|var|デプロイ直後の smoke チェック先 URL。CUSTOM_DOMAIN を設定したならそのドメイン（例: https://app.example.com。workers.dev の URL はデプロイで閉じる）、workers.dev 運用なら https://<app>-staging.<subdomain>.workers.dev。空だと smoke は skip される
 CLOUDFLARE_API_TOKEN|secret|CF API トークン（権限: Workers Scripts:Edit + Hyperdrive:Edit。CUSTOM_DOMAIN 利用時は対象 zone の Zone:Read + DNS:Edit、EDGE_RATE_LIMIT_RPM 利用時は Zone WAF:Edit、LOGPUSH_DESTINATION 利用時は Logs:Edit も追加）。同じ CF アカウントの staging / production では同じ値を使い回してよい（production を別アカウントに置くならそのアカウント用に、preview は専用に発行）。発行時のトークン名は「<APP_NAME>-deploy」推奨（例: my-app-deploy。preview 用は my-app-preview）
 CLOUDFLARE_ACCOUNT_ID|secret|CF アカウント ID（bunx wrangler whoami で確認可）
 PLANETSCALE_SERVICE_TOKEN_ID|secret|PlanetScale サービストークンの ID（org: create_databases + DB read/write/delete 権限、無期限）。【Environment ごとに別に発行】し、production 用は production にだけ置く。staging / preview のトークンが production の DB に届かないよう、production は別の PlanetScale org に置くのが確実（docs/dev/alchemy-iac.md「state と資格情報の権限境界」）。発行時のトークン名は「<APP_NAME>-<stage>」推奨（例: my-app-production）

@@ -7,7 +7,7 @@
 //
 // 止める文を含めてよいのは、expand 済みのリリースの後の contract のマイグレーションだけ。そのときは
 // ファイルに `-- migration-safety: allow <理由>` を書く（理由が PR の差分に出るのでレビューで判断できる）。
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,6 +29,8 @@ const RULES = [
   { pattern: /\brename\s+(column\b|to\b)/i, reason: "リネーム" },
   { pattern: /\bset\s+data\s+type\b|\balter\s+column\s+"?[\w]+"?\s+type\b/i, reason: "型の変更" },
   { pattern: /\bset\s+not\s+null\b/i, reason: "既存カラムへの NOT NULL の追加" },
+  // NOT NULL の列から DEFAULT を外すと、列を省いて INSERT する旧コードが「DEFAULT なしの NOT NULL」と同じく失敗する
+  { pattern: /\balter\s+column\b[^;]*\bdrop\s+default\b/i, reason: "DEFAULT の削除" },
 ];
 
 // ADD COLUMN は 1 文に複数並べられる（ADD COLUMN a ... NOT NULL, ADD COLUMN b ... DEFAULT 0）。DEFAULT の有無は
@@ -46,13 +48,18 @@ function addColumnWithoutDefault(statement) {
 }
 
 // SQL の行コメントを外してから文ごとに分ける（コメントの中の語で誤検出しない）
+// 先に drizzle の区切り（`--> statement-breakpoint`）と `;` で分けてから行コメントを外す。先にコメントを外すと
+// 区切り自体も消え、`;` の無い文（手書きのマイグレーション）が 1 つにつながって、次の文の DEFAULT で見逃す
 function statementsOf(sql) {
   return sql
-    .split("\n")
-    .map((line) => line.replace(/--.*$/, ""))
-    .join("\n")
-    .split(/;|-->\s*statement-breakpoint/)
-    .map((statement) => statement.trim())
+    .split(/-->\s*statement-breakpoint|;/)
+    .map((statement) =>
+      statement
+        .split("\n")
+        .map((line) => line.replace(/--.*$/, ""))
+        .join("\n")
+        .trim(),
+    )
     .filter(Boolean);
 }
 
@@ -107,6 +114,11 @@ function main() {
   console.log("✅ マイグレーションの expand / contract チェック: OK");
 }
 
-if (import.meta.main ?? process.argv[1] === fileURLToPath(import.meta.url)) {
+// Node 22 には import.meta.main が無い。シンボリックリンクを含むパスで起動されても一致するよう実パスで比べる
+// （一致しないと main() を呼ばずに exit 0 になり、違反を黙って通す）
+if (
+  import.meta.main ??
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+) {
   main();
 }

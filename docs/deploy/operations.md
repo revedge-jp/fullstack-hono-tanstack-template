@@ -44,8 +44,14 @@ deploy.yml は止まる（`SMOKE_BASE_URL` 設定時。稼働中の版を読め�
 
 **注意**: ロールバックで戻るのは **Worker のコードだけ**で、DB スキーマは戻らない。
 自動ロールバックはインフラの定義（`alchemy.run.ts`）を**今回のデプロイのもの**のまま使う（古い定義でデプロイすると、
-今回のリリースで足したリソースが finalize で削除される）。方法2 で手動デプロイするときも同じで、古い commit の
-`alchemy.run.ts` でデプロイしない（`git checkout <good-sha> -- apps packages` のようにアプリだけを戻す）。
+今回のリリースで足したリソースが finalize で削除される）。古い commit は別の worktree でビルドし、ビルド成果物
+（`apps/client/dist`）だけを差し替えてデプロイする。方法2 で手動デプロイするときも古い commit の `alchemy.run.ts` で
+デプロイしない。アプリだけを戻すなら `git restore --source=<good-sha> --staged --worktree -- apps packages package.json bun.lock`
+（`git checkout <sha> -- <path>` はその後に足したファイルを消さないので、新しいルート等が残ったままビルドされる）。
+
+同じ理由で、**Worker のバインディング名・環境変数名の変更と削除も expand / contract で 2 リリースに分ける**
+（新しい名前を足すリリース → 旧い名前をやめるリリース）。1 リリースで変えると、ロールバックで旧コードが旧い名前を
+読んで失敗する。
 下記の expand/contract 規律を守っていれば「旧コード + 新スキーマ」でも動作する。
 
 ## DB マイグレーション規律（expand / contract）

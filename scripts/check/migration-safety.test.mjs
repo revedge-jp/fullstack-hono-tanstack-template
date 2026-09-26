@@ -31,6 +31,22 @@ describe("migration-safety", () => {
     );
   });
 
+  test("`;` の無い statement-breakpoint 区切りでも文ごとに見る（次の文の DEFAULT で見逃さない）", () => {
+    const sql =
+      'ALTER TABLE "t" ADD COLUMN "a" text NOT NULL--> statement-breakpoint\nALTER TABLE "u" ALTER COLUMN "b" SET DEFAULT \'x\'';
+    expect(findViolations(sql).map((v) => v.reason)).toContain(
+      "DEFAULT なしの NOT NULL カラムの追加",
+    );
+    const two =
+      'ALTER TABLE "t" DROP COLUMN "a"--> statement-breakpoint\nALTER TABLE "t" DROP COLUMN "b"';
+    expect(findViolations(two)).toHaveLength(2);
+  });
+
+  test("DEFAULT の削除を止める", () => {
+    const sql = 'ALTER TABLE "tasks" ALTER COLUMN "status" DROP DEFAULT;';
+    expect(findViolations(sql).map((v) => v.reason)).toContain("DEFAULT の削除");
+  });
+
   test("理由を書いた allow マーカーがあれば通す", () => {
     const sql = '-- migration-safety: allow 0010 で expand 済み\nALTER TABLE "t" DROP COLUMN "c";';
     expect(findViolations(sql)).toEqual([]);
