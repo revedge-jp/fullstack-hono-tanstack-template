@@ -37,8 +37,21 @@ WT_PATH="$MAIN_ROOT/.claude/worktrees/$name"
 BRANCH="claude/$name"
 # 再実行（agent-worktree-setup.sh）では .env にある名前を使い続ける。命名規則を変える前に作った
 # worktree で名前を計算し直すと、空の DB を新しく作って .env をそちらに向けてしまう
-DB_NAME="$(db_name_from_env "$WT_PATH")"
-DB_NAME="${DB_NAME:-$(db_name_for "$name")}"
+DB_NAME="$(db_name_for_worktree "$WT_PATH" "$name")"
+if other="$(worktree_using_db "$DB_NAME" "$WT_PATH")"; then
+  if [ "$DB_NAME" = "$(db_name_from_env "$WT_PATH")" ]; then
+    # 以前から共有している（どちらも変更前の規則で作った）。名前を変えると空の DB に切り替わるので
+    # そのまま使い、知らせるだけにする
+    log "警告: DB $DB_NAME は $other と共有しています。片方を削除してももう片方の DB は消しません"
+  else
+    DB_NAME="$(hashed_db_name_for "$name")"
+    log "DB 名が $other と重なるため $DB_NAME を使います"
+    # DB を飛ばすだけだと .env の DATABASE_URL がその DB を指したまま共有されるので、何も作らずに止める
+    if other="$(worktree_using_db "$DB_NAME" "$WT_PATH")"; then
+      die "DB $DB_NAME も $other が使っています。別の worktree 名で作り直してください"
+    fi
+  fi
+fi
 PROJECT_NAME="$(basename "$MAIN_ROOT")"
 
 echo "=== worktree セットアップ: $name ===" >&2

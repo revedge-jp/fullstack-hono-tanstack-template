@@ -115,10 +115,20 @@ toplevel_of() {
 }
 ORPHAN_PIDS=$(lsof -ti "tcp:$E2E_PORT" -sTCP:LISTEN 2>/dev/null || true)
 ROOT_DIR_TOPLEVEL="$(toplevel_of "$ROOT_DIR")"
+ROOT_DIR_PHYSICAL="$(cd "$ROOT_DIR" && pwd -P)"
 FOREIGN_PIDS=""
 for pid in $ORPHAN_PIDS; do
   pid_cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1)"
-  if [ -n "$pid_cwd" ] && [ -n "$ROOT_DIR_TOPLEVEL" ] && [ "$(toplevel_of "$pid_cwd")" = "$ROOT_DIR_TOPLEVEL" ]; then
+  same_checkout=0
+  if [ -z "$pid_cwd" ]; then
+    :
+  elif [ -n "$ROOT_DIR_TOPLEVEL" ]; then
+    [ "$(toplevel_of "$pid_cwd")" = "$ROOT_DIR_TOPLEVEL" ] && same_checkout=1
+  else
+    # git の無いチェックアウト（ZIP で取得した直後）には worktree も無いので、パスの前方一致で足りる
+    case "$pid_cwd" in "$ROOT_DIR_PHYSICAL" | "$ROOT_DIR_PHYSICAL"/*) same_checkout=1 ;; esac
+  fi
+  if [ "$same_checkout" = 1 ]; then
     echo "==> Killing orphaned E2E server on port $E2E_PORT (pid: $pid)..."
     kill "$pid" 2>/dev/null || true
   else
