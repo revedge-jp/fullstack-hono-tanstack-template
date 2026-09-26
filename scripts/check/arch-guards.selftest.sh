@@ -170,6 +170,12 @@ expect_guard "クラス式禁止" \
   'export const SelftestExpr = class { x = 1 };' \
   "class の使用が禁止"
 
+expect_guard "クラス式禁止（型注釈付き・代入）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_class_annotated.ts" \
+  $'type Runner = { run(): void };\nexport const SelftestAnnotated: new () => Runner = class {\n  run() {}\n};\nconst holder: { Impl?: unknown } = {};\nholder.Impl = class {};' \
+  "__selftest_class_annotated.ts:2:"
+
 expect_guard "クラス式禁止（mixin の return class）" \
   guard_no_class_interface \
   "$D/application/__selftest_class_mixin.ts" \

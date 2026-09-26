@@ -131,11 +131,11 @@ guard_no_throw() {
 guard_no_class_interface() {
   echo "[guard] class/interface 禁止"
   # `export class` / `class` に加え、`abstract class` / `export default class` /
-  # `export default abstract class`・`declare class`・クラス式（`const X = class`・`return class`）も検出する（行頭に固定してコメントの中の語に当たらないようにする）。
+  # `export default abstract class`・`declare class`・クラス式（`X = class`・`return class`）も検出する（行頭が `//` `*` の行、つまりコメントの中の語は数えない）。
   CLASS_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
-    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?(abstract\s+)?class\b|^\s*(export\s+)?(const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(:[^=]*)?=\s*class\b|^\s*return\s+class\b' || true)
+    xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?(abstract\s+)?class\b|^\s*[^/*[:space:]].*[^=!<>]=\s*class\b|^\s*return\s+class\b' || true)
   INTF_VIOL=$(find apps packages \
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
