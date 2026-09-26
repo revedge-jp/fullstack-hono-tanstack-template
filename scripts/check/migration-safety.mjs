@@ -179,9 +179,10 @@ function clauseViolation(clause) {
     const filled = /\bdefault\s+(?!null\b)|\bgenerated\b|\b(?:small|big)?serial\b/i.test(clause);
     return notNull && !filled ? "DEFAULT なしの NOT NULL カラムの追加" : undefined;
   }
-  // 主キーは対象の列を暗黙に NOT NULL にする（NULL 可の既存の列なら SET NOT NULL と同じ）
+  // 主キーは対象の列を暗黙に NOT NULL にする（NULL 可の既存の列なら SET NOT NULL と同じ）。列が NULL 可かは文から
+  // 分からないので、主キーの名前の変更（DROP CONSTRAINT → ADD CONSTRAINT）も止める
   if (/^add\s+(?:constraint\s+\S+\s+)?primary\s+key\b/i.test(clause)) {
-    return "既存カラムへの NOT NULL の追加";
+    return "主キーの追加・変更（対象の列が NULL 可なら NOT NULL の追加と同じ）";
   }
   if (/^add\s+(?:constraint|unique|foreign\s+key|check)\b/i.test(clause)) {
     return undefined;
@@ -240,7 +241,8 @@ function statementViolations(normalized) {
 }
 
 export function findViolations(sql) {
-  const leading = LEADING_COMMENTS.exec(sql)?.[0] ?? "";
+  // エディタが付ける BOM は印の前の文字として数えない
+  const leading = LEADING_COMMENTS.exec(sql.replace(/^\uFEFF/, ""))?.[0] ?? "";
   if (leading.split(/\r?\n/).some((line) => ALLOW_MARKER.test(line.trim()))) {
     return [];
   }
@@ -287,7 +289,7 @@ function main() {
       [
         "",
         "旧コードを壊すスキーマ変更です。expand（追加）と contract（削除・制約の追加）を別のリリースに分けてください（docs/deploy/operations.md）。",
-        "expand 済みの後の contract なら、そのファイルに `-- migration-safety: allow <理由>` を書いてください。",
+        "expand 済みの後の contract なら、そのファイルの先頭（SQL より前）に `-- migration-safety: allow <理由>` を書いてください。",
       ].join("\n"),
     );
     process.exit(1);

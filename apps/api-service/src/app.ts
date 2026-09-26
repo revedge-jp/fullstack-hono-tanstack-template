@@ -22,7 +22,7 @@ import { createContainer } from "./container";
 import { createRateLimitStore, rateLimit, type RateLimitStore } from "./middlewares/rate-limit";
 import { type RequestLogger, requestLogger } from "./middlewares/request-logger";
 import { createClientErrorsRouter } from "./routes/client-errors";
-import { createHealthRouter, type HealthDb } from "./routes/health";
+import { createHealthRouter, type HealthDb, type HealthInfo } from "./routes/health";
 
 // buildApp が実行時に必要とする依存の構造的な型。本番の Container はこれに代入可能で、
 // テストの createFakeApp はこの形の fake を渡すことで「本物のミドルウェアスタック」を
@@ -224,7 +224,7 @@ export function buildApp(
   return routes;
 }
 
-function toHealthInfo(config: BuildConfig) {
+function toHealthInfo(config: BuildConfig): HealthInfo {
   return {
     version: config.version.appVersion,
     commit: config.version.gitSha,

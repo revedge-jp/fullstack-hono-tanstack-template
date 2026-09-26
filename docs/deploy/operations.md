@@ -45,13 +45,17 @@ gh run rerun <run-id>
 # 方法2: 古い commit のアプリを別の worktree でビルドし、稼働中のインフラの定義でデプロイする（自動ロールバックと同じ考え方）
 # 手元の作業ツリーの alchemy.run.ts と node_modules でデプロイするので、先にその commit に合わせる
 # （古い main や作業中のブランチのままだと、その定義でリソースが消える・未リリースのインフラ変更が入る）
-# （コミットしていない変更は checkout で持ち越されるので、作業ツリーが空のときだけ進める）
-test -z "$(git status --porcelain)" && git checkout --detach "$running_sha" && bun install --frozen-lockfile
+git checkout --detach "$running_sha" && bun install --frozen-lockfile
 git worktree add --detach ../rollback <good-sha>
 (cd ../rollback && bun install --frozen-lockfile && bun run build)
 rm -rf apps/client/dist && cp -R ../rollback/apps/client/dist apps/client/dist
-# infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ
-GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> INFRA_SHA="$running_sha" bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
+# infra:deploy:* はビルドし直して dist を上書きするので使わず、alchemy を直接呼ぶ。
+# 手元が稼働中のインフラの commit で、alchemy.run.ts 等にコミットしていない変更が無いときだけデプロイする
+# （checkout が失敗して別のブランチのまま・変更を持ち越したままだと、その定義でリソースが消える）
+test "$(git rev-parse HEAD)" = "$(git rev-parse "$running_sha")" \
+  && test -z "$(git status --porcelain --untracked-files=no)" \
+  && GIT_SHA=<good-sha> APP_VERSION=rollback-<good-sha> INFRA_SHA="$running_sha" \
+    bunx dotenv -e .env -- bunx alchemy deploy --stage staging   # または production
 git worktree remove ../rollback
 git checkout -    # 元のブランチに戻る（apps/client/dist は古い版のままなので、次の作業の前にビルドし直す）
 ```

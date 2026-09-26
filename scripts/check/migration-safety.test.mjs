@@ -122,9 +122,12 @@ describe("migration-safety", () => {
     ["ALTER TYPE \"status\" RENAME VALUE 'a' TO 'b';", "リネーム"],
     [
       'ALTER TABLE "m" ADD CONSTRAINT "m_pk" PRIMARY KEY("a","b");',
-      "既存カラムへの NOT NULL の追加",
+      "主キーの追加・変更（対象の列が NULL 可なら NOT NULL の追加と同じ）",
     ],
-    ['ALTER TABLE "m" ADD PRIMARY KEY ("a");', "既存カラムへの NOT NULL の追加"],
+    [
+      'ALTER TABLE "m" ADD PRIMARY KEY ("a");',
+      "主キーの追加・変更（対象の列が NULL 可なら NOT NULL の追加と同じ）",
+    ],
     ['ALTER TABLE "u" ALTER COLUMN "c" SET DEFAULT null;', "DEFAULT の削除"],
     ['ALTER TABLE "m" ALTER COLUMN "p" SET GENERATED ALWAYS;', "GENERATED ALWAYS への変更"],
     [
@@ -168,6 +171,12 @@ describe("migration-safety", () => {
   test("先頭の複数行のコメントの中の allow の印で通す", () => {
     const sql =
       '-- contract: 0010 で expand 済み\n\n-- migration-safety: allow 0010 で expand 済み\nALTER TABLE "t" DROP COLUMN "c";';
+    expect(findViolations(sql)).toEqual([]);
+  });
+
+  test("BOM 付きのファイルでも先頭の allow の印で通す", () => {
+    const sql =
+      '\uFEFF-- migration-safety: allow 0010 で expand 済み\nALTER TABLE "t" DROP COLUMN "c";';
     expect(findViolations(sql)).toEqual([]);
   });
 
