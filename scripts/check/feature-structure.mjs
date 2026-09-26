@@ -151,7 +151,11 @@ if (isDir(CLIENT_FEATURES_DIR)) {
         continue;
       }
       for (const file of readdirSync(dir)) {
-        if (!/\.tsx?$/.test(file) || /\.test\.tsx?$/.test(file) || CLIENT_TEST_EXEMPT.has(file)) {
+        if (
+          !/\.tsx?$/.test(file) ||
+          /\.(test|d)\.tsx?$/.test(file) ||
+          CLIENT_TEST_EXEMPT.has(file)
+        ) {
           continue;
         }
         const testFile = file.replace(/\.(tsx?)$/, ".test.$1");

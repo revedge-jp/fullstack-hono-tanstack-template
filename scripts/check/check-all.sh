@@ -41,6 +41,7 @@ heading "品質チェック (lint/type/test/arch/filename/process.env/deprecated
 
 # --- 全チェックを単一並列グループで実行 ---
 PIDS=()
+STEP_NAMES=()
 STEP_RESULTS=$(mktemp -d)
 
 run_step_bg() {
@@ -60,6 +61,9 @@ run_step_bg() {
     rm -f "$OUT" "$ERR"
   ) &
   PIDS+=($!)
+  # 集計は起動したステップの名前を回す（名前を別に並べると、足したステップの失敗が集計から漏れて
+  # pre-push が通る。InfraTypecheck で実際に起きた）
+  STEP_NAMES+=("$name")
 }
 
 # Lint / Typecheck（変更影響に限定）。1 回の turbo 呼び出しにまとめる: 別プロセスで並列に起動すると、
@@ -84,10 +88,10 @@ fi
 # Tests（TURBO_FILTER で変更の影響を受けるパッケージだけ。既定は origin/main との差分なので、
 # main と同じ内容なら何も走らない。全件は `bun run test`。DB migrate を含む）
 if [ "${SKIP_TEST:-}" != "1" ]; then
-  # NODE_ENV=test はルートの test スクリプトと揃える（.env の NODE_ENV=development のままだと Better Auth の
-  # 挙動が CI・bun run test と変わる。bun test は NODE_ENV が既に入っていると上書きしない）。
+  # NODE_ENV はここで決めない: turbo の strict env mode が turbo.json の env に無い変数（.env の
+  # NODE_ENV=development も）をテストに渡さず、bun test が NODE_ENV=test を入れる。
   # bash -c（-l ではない）: ログインシェルの profile を読む理由が無く、読むと環境ごとに結果が変わる
-  run_step_bg "Tests" bash -c "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx drizzle-kit migrate && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" NODE_ENV=test bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
+  run_step_bg "Tests" bash -c "dotenv -e .env -- sh -c 'cd packages/database && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx drizzle-kit migrate && cd ../../ && DATABASE_URL=\"\$TEST_DATABASE_URL\" bunx turbo run test --filter=\"${TURBO_FILTER}\" --continue'"
 fi
 
 # scripts/ 配下のテスト（turbo のワークスペース外なので Tests には含まれない）
@@ -146,9 +150,14 @@ done
 
 # 結果を表示（Deprecated は警告のみで FAIL にしない）
 WARN_ONLY_STEPS="Deprecated"
-for name in LintTypecheck Tests ScriptTests Filename Prose MigrationOrder FSD Deps DC Guards Knip ProcessEnv Deprecated; do
+for name in "${STEP_NAMES[@]}"; do
   status_file="$STEP_RESULTS/$name.status"
-  [ -f "$status_file" ] || continue
+  # 起動したのに結果が無い（ステップ自体が落ちた）ものは失敗として扱う
+  if [ ! -f "$status_file" ]; then
+    err "$name: 結果がありません（ステップが途中で終了した可能性）"
+    FAIL=1
+    continue
+  fi
   status=$(cat "$status_file")
   if [ "$status" = "ok" ]; then
     ok "$name: OK"
