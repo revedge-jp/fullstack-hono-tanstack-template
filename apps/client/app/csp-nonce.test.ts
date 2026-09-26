@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { createCspNonce, getCspNonce, runWithCspNonce } from "./csp-nonce";
 
-describe("shared/lib/csp-nonce", () => {
+describe("app/csp-nonce", () => {
   test("毎回違う 128 bit の値を base64 で返す", () => {
     const a = createCspNonce();
     const b = createCspNonce();

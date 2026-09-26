@@ -72,6 +72,28 @@ test.describe("CSP", () => {
     expect(violations).toEqual([]);
   });
 
+  test("head のインラインスクリプトはハイドレーション後に差し込み直されず、テーマの初期適用は動く", async ({
+    page,
+  }) => {
+    // CSP の nonce をヘッダーで送るとブラウザが nonce 属性を隠すので、head.scripts に置いたスクリプトは
+    // TanStack Router がハイドレーション後に「まだ無い」と判断して差し込み直し、2 回実行していた
+    await page.addInitScript(() => localStorage.setItem("theme", "dark"));
+    await page.goto("/signin");
+    await expect(page.getByRole("button", { name: /Google/i })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+
+    const reinserted = await page.evaluate(
+      () =>
+        [...document.scripts].filter(
+          (script) =>
+            script.textContent?.includes("var __name") ||
+            script.textContent?.includes("localStorage.getItem('theme')"),
+        ).length,
+    );
+    expect(reinserted).toBe(0);
+    await expect(page.locator("html")).toHaveClass(/dark/);
+  });
+
   test("本番は script-src をリクエストごとの nonce で許し、'unsafe-inline' を使わない", async ({
     page,
   }) => {

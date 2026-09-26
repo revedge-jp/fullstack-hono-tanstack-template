@@ -9,12 +9,11 @@ import { FullScreenError } from "@/components/patterns/full-screen-error";
 import { getCspNonce } from "./csp-nonce";
 import { routeTree } from "./routeTree.gen";
 
-// サーバーでは server.ts が決めたリクエストごとの nonce を使う。ブラウザでは、SSR が付けた nonce を
-// 読み直す（nonce 属性は読み出せないが、要素の nonce プロパティは読める）。ハイドレーションで描き直す
-// スクリプトにも同じ値を付けないと、属性の食い違いになる
+// サーバーでは server.ts が決めたリクエストごとの nonce を使う。ブラウザでは使わない（ハイドレーション時に
+// router-core が SSR の <meta property="csp-nonce"> から読み直して ssr.nonce を上書きする）
 const getNonce = createIsomorphicFn()
   .server(() => getCspNonce())
-  .client(() => document.querySelector<HTMLScriptElement>("script[nonce]")?.nonce || undefined);
+  .client(() => undefined);
 
 export function getRouter() {
   const queryClient = new QueryClient({
