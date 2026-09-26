@@ -219,6 +219,22 @@ async function isCustomDomainAttached(hostname: string, service: string): Promis
   );
 }
 
+// /api/health/live が 200 を返すまで待つ（証明書の発行・DNS の反映に数分かかることがある）
+async function waitUntilServing(origin: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    try {
+      const res = await fetch(`${origin}/api/health/live`, { signal: AbortSignal.timeout(10_000) });
+      if (res.ok) {
+        return true;
+      }
+    } catch {
+      // まだ届かない
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+  return false;
+}
+
 const ALLOW_UNVERIFIED_HINT =
   "初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付けて実行してください";
 
@@ -397,10 +413,25 @@ if (process.env.SKIP_WORKER !== "1") {
       adopt: true,
     });
     console.info(`[alchemy] custom domain=${customDomain} -> ${workerName}`);
+    // ドメインを足したデプロイでは Worker を workers.dev を開けたまま更新している。ドメインで応答が返るのを確かめてから
+    // 同じデプロイの中で閉じる（開けたままだと、ドメインにかけた WAF のレート制限を workers.dev 経由で素通りできる）。
+    // 応答が返らなければ開けたままにする（次のデプロイで Worker の url: false が閉じる）
     if (!customDomainAttached) {
-      console.info(
-        "[alchemy] workers.dev の URL は次のデプロイで閉じます（ドメインが付いたことを確かめてから）",
-      );
+      if (await waitUntilServing(`https://${customDomain}`)) {
+        const cfApi = await createCloudflareApi();
+        const res = await cfApi.post(
+          `/accounts/${cfApi.accountId}/workers/scripts/${workerName}/subdomain`,
+          { enabled: false },
+        );
+        if (!res.ok) {
+          throw new Error(`workers.dev の URL を閉じられませんでした（HTTP ${res.status}）`);
+        }
+        console.info("[alchemy] ドメインの応答を確かめたので workers.dev の URL を閉じました");
+      } else {
+        console.info(
+          "[alchemy] ドメインがまだ応答しないので workers.dev の URL を開けたままにします（次のデプロイで閉じる）",
+        );
+      }
     }
   }
 
@@ -470,6 +501,16 @@ if (process.env.SHOW_DATABASE_URL === "1" && !process.env.CI) {
 // 宣言しないため、ここで finalize すると稼働中の Worker（と CustomDomain / Ruleset / LogPushJob）が消え、
 // migrate の間サービスが止まる（migrate が失敗すると消えたまま残る）。宣言から外したリソースの削除は
 // 全リソースを宣言する Worker の段の finalize に任せる（作成済みリソースの state は finalize を待たずに保存される）。
+//
+// ローカル（CI 以外）のデプロイでは finalize しない（リソースを削除しない）。GitHub Environment にしか無い変数
+// （EDGE_RATE_LIMIT_RPM・LOGPUSH_DESTINATION 等）を入れ忘れると、その宣言が外れて finalize が稼働中のリソースを
+// 削除する。宣言から外したリソースの削除は、Environment の変数でデプロイする CI に限る
 if (process.env.SKIP_WORKER !== "1") {
-  await app.finalize();
+  if (process.env.CI) {
+    await app.finalize();
+  } else {
+    console.info(
+      "[alchemy] ローカルのデプロイなので、宣言から外れたリソースは削除しません（削除は CI のデプロイで行われる）",
+    );
+  }
 }

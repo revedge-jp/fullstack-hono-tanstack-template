@@ -63,7 +63,8 @@ bun run infra:deploy:staging      # client をビルドして staging をデプ�
 bun run infra:deploy:production   # production をデプロイ（通常は CI。ローカルからなら production 用アカウントの値だけを入れた env で）
 # ローカルからのデプロイは、稼働中の版の /api/health/live の infraCommit を手元の HEAD が含み、alchemy.run.ts 等に
 # コミットしていない変更が無いときだけ進む（古い checkout や GitHub Environment にしか無い変数の入れ忘れで、finalize が
-# リソースを削除するのを止める）。初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付ける
+# リソースを削除するのを止める）。初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付ける。
+# ローカルのデプロイは宣言から外れたリソースを削除しない（finalize しない）。リソースの削除は CI のデプロイで行われる
 bun run infra:destroy:staging     # staging のリソースを削除
 
 # ローカルでマイグレーションを流したい時: 接続 URL の取り出し口
@@ -174,7 +175,7 @@ preview（`preview.yml`）は PR のコード（`bun install` の依存スクリ
 
 | 環境変数 | リソース | 内容 |
 |---|---|---|
-| `CUSTOM_DOMAIN` | `CustomDomain` | Worker へのカスタムドメイン割り当て（例: `app.example.com`）。zone ID はホスト名から自動解決、DNS レコード・TLS 証明書は Cloudflare が自動管理。公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN`）もここから導出されるため設定の不一致が起きない。ドメインが Worker に付いた**次のデプロイで** workers.dev の URL を閉じる（workers.dev 経由だと、そのドメインにかけた WAF のレート制限がかからないため。付ける前に閉じると、ドメインの割り当てが失敗したときにどちらの URL からも届かなくなる）。同じホスト名の DNS レコードが zone に既にあると割り当てに失敗するので、先に消しておく。Google OAuth のクライアントに `https://<ドメイン>` と `https://<ドメイン>/api/auth/callback/google` を足してからデプロイする（サインインの URL がドメインに変わるため） |
+| `CUSTOM_DOMAIN` | `CustomDomain` | Worker へのカスタムドメイン割り当て（例: `app.example.com`）。zone ID はホスト名から自動解決、DNS レコード・TLS 証明書は Cloudflare が自動管理。公開 URL（`BETTER_AUTH_URL` / `CORS_ORIGIN`）もここから導出されるため設定の不一致が起きない。ドメインを付けたデプロイでは、ドメインで応答が返るのを確かめてから workers.dev の URL を閉じる（workers.dev 経由だと、そのドメインにかけた WAF のレート制限がかからないため。付ける前に閉じると、ドメインの割り当てが失敗したときにどちらの URL からも届かなくなる。数分待っても応答が無ければ開けたままにし、次のデプロイで閉じる）。同じホスト名の DNS レコードが zone に既にあると割り当てに失敗するので、先に消しておく。Google OAuth のクライアントに `https://<ドメイン>` と `https://<ドメイン>/api/auth/callback/google` を足してからデプロイする（サインインの URL がドメインに変わるため） |
 | `EDGE_RATE_LIMIT_RPM` | `Ruleset`（`http_ratelimit`） | エッジ（WAF）での `/api/*` IP 別レート制限。`CUSTOM_DOMAIN` 必須。無料プラン制約に合わせ RPM を 10 秒窓に換算する。アプリ内 rate-limit ミドルウェア（isolate ローカル）より手前で分散カウントされる |
 | `LOGPUSH_DESTINATION` | `Worker.logpush` + `LogPushJob` | Worker trace ログ（console / 例外）の外部転送（dataset: `workers_trace_events`）。**Workers Paid プラン必須** |
 
