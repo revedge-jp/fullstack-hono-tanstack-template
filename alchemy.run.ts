@@ -69,7 +69,9 @@ const workerName = stage === "production" ? appName : `${appName}-${stage}`;
 // CF アカウントにあれば zone ID はホスト名から自動解決され、DNS レコードの作成・
 // TLS 証明書の発行まで Cloudflare 側で自動化される。API トークンには Workers 権限に
 // 加えて対象 zone の Zone:Read + DNS:Edit が必要（docs/deploy/cloudflare-workers.md）。
-const customDomain = (!isPreview && process.env.CUSTOM_DOMAIN) || undefined;
+// Cloudflare はホスト名を小文字で返すので、比べる前にそろえる（大文字のままだと Custom Domains の一覧と一致せず、
+// workers.dev の URL がいつまでも閉じない）
+const customDomain = (!isPreview && process.env.CUSTOM_DOMAIN?.toLowerCase()) || undefined;
 if (customDomain && !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(customDomain)) {
   throw new Error(
     `CUSTOM_DOMAIN はホスト名のみで指定してください（例: app.example.com — URL 形式・パス・ポート付きは不可。現在: ${customDomain}）`,
@@ -315,13 +317,10 @@ if (process.env.SKIP_WORKER !== "1") {
     );
   }
 
-  // ローカル（CI 以外）から staging / production へデプロイするときは、手元の checkout が稼働中のインフラの定義を
-  // 含むときだけ進める。古い checkout・作業中のブランチ、GitHub Environment にしか無い変数（CUSTOM_DOMAIN 等）の
-  // 入れ忘れのままデプロイすると、finalize が宣言の無いリソース（カスタムドメイン・WAF ルール・後から足した KV / D1 等）
-  // を削除する。初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 で飛ばす
-  // カスタムドメインが既にこの Worker に付いているときだけ workers.dev の URL を閉じる。ドメインを足すデプロイで
-  // 先に閉じると、CustomDomain の作成が失敗したとき（同じホスト名の DNS レコードが既にある等）に、どちらの URL からも
-  // 届かなくなる（smoke も自動ロールバックも走らない）。付いた次のデプロイで閉じる
+  // カスタムドメインが既にこの Worker に付いているときだけ、Worker の更新で workers.dev の URL を閉じる。ドメインを
+  // 足すデプロイで先に閉じると、CustomDomain の作成が失敗したとき（同じホスト名の DNS レコードが既にある等）に、
+  // どちらの URL からも届かなくなる（smoke も自動ロールバックも走らない）。足すデプロイでは、ドメインが応答してから
+  // 閉じる（下の CustomDomain の後）
   const customDomainAttached = customDomain
     ? await isCustomDomainAttached(customDomain, workerName)
     : false;
@@ -329,6 +328,10 @@ if (process.env.SKIP_WORKER !== "1") {
     ? `https://${workerName}.${process.env.WORKERS_SUBDOMAIN}.workers.dev`
     : undefined;
 
+  // ローカル（CI 以外）から staging / production へデプロイするときは、手元の checkout が稼働中のインフラの定義を
+  // 含むときだけ進める（古い checkout・作業中のブランチでデプロイすると、稼働中より古い定義で Worker 等が上書きされる）。
+  // GitHub Environment にしか無い変数の入れ忘れはここでは分からないので、ローカルでは finalize しない（ファイル末尾）。
+  // 初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 で飛ばす
   if (!process.env.CI && !isPreview && process.env.ALLOW_UNVERIFIED_LOCAL_DEPLOY !== "1") {
     // ドメインを足すデプロイでは、稼働中の版はまだ workers.dev で動いている
     const runningOrigin = customDomain && !customDomainAttached ? workersDevOrigin : appOrigin;

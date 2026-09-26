@@ -307,7 +307,11 @@ jobs:
           export INFRA_SHA="$GIT_SHA"
           export GIT_SHA="$good_sha"
           export APP_VERSION="rollback-${good_sha}"
-          bunx alchemy deploy --stage "$DEPLOY_TARGET"
+          # 元のデプロイが Worker の更新後の工程（Ruleset・LogPushJob 等）で失敗していたなら、ここも同じ所で失敗する。
+          # Worker は先に旧版へ戻っているので、止めずにロールバック版の smoke へ進む
+          if ! bunx alchemy deploy --stage "$DEPLOY_TARGET"; then
+            echo "::error::ロールバックの deploy が失敗しました。Worker は旧版に戻っている可能性があるので、smoke で確かめます"
+          fi
           echo "==> Rollback deploy 完了（$good_sha）。ロールバック版の稼働を再確認します。"
           # ロールバック版が実際に healthy かを smoke で再検証する（壊れた版へ戻していないか確認）。
           # 元のデプロイ失敗を隠さないため、結果に関わらずこのジョブは失敗のまま残す。

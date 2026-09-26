@@ -62,8 +62,7 @@ WAF ルールが ② の間消える。宣言から外したリソースの削�
 bun run infra:deploy:staging      # client をビルドして staging をデプロイ（DB がなければ作成）
 bun run infra:deploy:production   # production をデプロイ（通常は CI。ローカルからなら production 用アカウントの値だけを入れた env で）
 # ローカルからのデプロイは、稼働中の版の /api/health/live の infraCommit を手元の HEAD が含み、alchemy.run.ts 等に
-# コミットしていない変更が無いときだけ進む（古い checkout や GitHub Environment にしか無い変数の入れ忘れで、finalize が
-# リソースを削除するのを止める）。初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付ける。
+# コミットしていない変更が無いときだけ進む（古い checkout で稼働中より古い定義に上書きするのを止める）。初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付ける。
 # ローカルのデプロイは宣言から外れたリソースを削除しない（finalize しない）。リソースの削除は CI のデプロイで行われる
 bun run infra:destroy:staging     # staging のリソースを削除
 
