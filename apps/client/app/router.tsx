@@ -1,11 +1,20 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+import { createIsomorphicFn } from "@tanstack/react-start";
 
 import { DefaultNotFoundComponent } from "@/components/patterns/default-not-found";
 import { FullScreenError } from "@/components/patterns/full-screen-error";
+import { getCspNonce } from "@/shared/lib/csp-nonce";
 
 import { routeTree } from "./routeTree.gen";
+
+// サーバーでは server.ts が決めたリクエストごとの nonce を使う。ブラウザでは、SSR が付けた nonce を
+// 読み直す（nonce 属性は読み出せないが、要素の nonce プロパティは読める）。ハイドレーションで描き直す
+// スクリプトにも同じ値を付けないと、属性の食い違いになる
+const getNonce = createIsomorphicFn()
+  .server(() => getCspNonce())
+  .client(() => document.querySelector<HTMLScriptElement>("script[nonce]")?.nonce || undefined);
 
 export function getRouter() {
   const queryClient = new QueryClient({
@@ -22,6 +31,7 @@ export function getRouter() {
 
   const router = createRouter({
     routeTree,
+    ssr: { nonce: getNonce() },
     context: { queryClient },
     defaultPreload: "intent",
     scrollRestoration: true,
