@@ -131,7 +131,7 @@ apps/api-service/src/app.ts          # createApp が AppType（RPC 契約）を 
 
 ## トレードオフ・注意点
 
-- `nodejs_compat` フラグが必要（旧名 `nodejs_compat_v2`。`apps/client/wrangler.jsonc`）（`async_hooks` のため）。これは Hyperdrive 使用にも必要なので追加コストはない。
+- `nodejs_compat` フラグが必要（以前は `nodejs_compat_v2` を指定していた。`apps/client/wrangler.jsonc`）（`async_hooks` のため）。これは Hyperdrive 使用にも必要なので追加コストはない。
 - SSR からの呼び出しも api-service のアクセスログに記録される（method/path/status）。
   1画面の SSR で複数 serverFn が実行されるとログ行数はその分増える。
 - mutation は従来どおりブラウザから同一オリジンの API を直接呼ぶ（cookie 自動同送・
