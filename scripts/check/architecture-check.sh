@@ -150,6 +150,8 @@ done
 #    Guards と並列に走らせると同じ fixture パスを奪い合いフレーキーになる。
 #    並列バッチが完全に終わってから単独で実行する）
 if [ "${SKIP_SELFTEST:-0}" != "1" ]; then
+  # run_step_bg を通さず直列に走らせるので、集計の対象に自分で加える
+  STEP_NAMES+=("Selftest")
   SELFTEST_OUT=$(mktemp); SELFTEST_ERR=$(mktemp)
   if bash scripts/check/arch-guards.selftest.sh >"$SELFTEST_OUT" 2>"$SELFTEST_ERR"; then
     echo "ok" > "$STEP_RESULTS/Selftest.status"

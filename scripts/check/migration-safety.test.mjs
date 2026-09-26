@@ -24,6 +24,13 @@ describe("migration-safety", () => {
     expect(findViolations(sql)).toEqual([]);
   });
 
+  test("1 文に並べた ADD COLUMN は、別のカラムの DEFAULT で NOT NULL の追加を見逃さない", () => {
+    const sql = 'ALTER TABLE "t" ADD COLUMN "a" text NOT NULL, ADD COLUMN "b" integer DEFAULT 0;';
+    expect(findViolations(sql).map((v) => v.reason)).toContain(
+      "DEFAULT なしの NOT NULL カラムの追加",
+    );
+  });
+
   test("理由を書いた allow マーカーがあれば通す", () => {
     const sql = '-- migration-safety: allow 0010 で expand 済み\nALTER TABLE "t" DROP COLUMN "c";';
     expect(findViolations(sql)).toEqual([]);

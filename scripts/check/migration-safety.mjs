@@ -29,11 +29,21 @@ const RULES = [
   { pattern: /\brename\s+(column\b|to\b)/i, reason: "リネーム" },
   { pattern: /\bset\s+data\s+type\b|\balter\s+column\s+"?[\w]+"?\s+type\b/i, reason: "型の変更" },
   { pattern: /\bset\s+not\s+null\b/i, reason: "既存カラムへの NOT NULL の追加" },
-  {
-    pattern: /\badd\s+column\b(?![^;]*\bdefault\b)[^;]*\bnot\s+null\b/i,
-    reason: "DEFAULT なしの NOT NULL カラムの追加",
-  },
 ];
+
+// ADD COLUMN は 1 文に複数並べられる（ADD COLUMN a ... NOT NULL, ADD COLUMN b ... DEFAULT 0）。DEFAULT の有無は
+// カラムごとに見る（文全体で見ると、別のカラムの DEFAULT で NOT NULL の追加を見逃す）
+const ADD_COLUMN_NOT_NULL_REASON = "DEFAULT なしの NOT NULL カラムの追加";
+function addColumnWithoutDefault(statement) {
+  return statement
+    .split(/,(?=\s*add\s+column\b)/i)
+    .some(
+      (clause) =>
+        /\badd\s+column\b/i.test(clause) &&
+        /\bnot\s+null\b/i.test(clause) &&
+        !/\bdefault\b/i.test(clause),
+    );
+}
 
 // SQL の行コメントを外してから文ごとに分ける（コメントの中の語で誤検出しない）
 function statementsOf(sql) {
@@ -52,12 +62,13 @@ export function findViolations(sql) {
   }
   const violations = [];
   for (const statement of statementsOf(sql)) {
+    const summary = statement.replace(/\s+/g, " ").slice(0, 160);
+    if (addColumnWithoutDefault(statement)) {
+      violations.push({ reason: ADD_COLUMN_NOT_NULL_REASON, statement: summary });
+    }
     for (const rule of RULES) {
       if (rule.pattern.test(statement)) {
-        violations.push({
-          reason: rule.reason,
-          statement: statement.replace(/\s+/g, " ").slice(0, 160),
-        });
+        violations.push({ reason: rule.reason, statement: summary });
       }
     }
   }
