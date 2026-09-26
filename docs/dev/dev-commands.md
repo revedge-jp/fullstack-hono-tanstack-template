@@ -8,12 +8,12 @@ push 前の統合チェックを一括実行します。
 
 - 実行内容（Lint/Type/Test/Architecture を常時実行。Lint/Type/Test は turbo filter により差分限定）
   - Lint（oxlint + oxfmt --check）: `turbo run lint`
-  - Typecheck（TypeScript）: `turbo run typecheck`
+  - Typecheck（TypeScript）: `turbo run typecheck`、`alchemy.run.ts` は `bun run typecheck:infra`
   - Tests: `TEST_DATABASE_URL` の DB に drizzle-kit migrate を当てた上で `turbo run test` を実行（api-service は
     integration も実行されるので DB が必要）
   - Architecture: FSD（steiger）・循環/孤立（madge）・dependency-cruiser・arch-guards・knip（`SKIP_KNIP=1` で省略。
     pre-push は省略している）
-  - その他: ファイル名（kebab-case）・migration journal の順序・api-service の `process.env` 直参照・`scripts/` のテスト・
+  - その他: 文書の表現（`bun run lint:prose`）・ファイル名（kebab-case）・migration journal の順序・api-service の `process.env` 直参照・`scripts/` のテスト・
     非推奨コードの検索（警告のみ）
 - 既定の変更影響フィルタ: `...[origin/main]`（turbo filter）
 - どのゲートが pre-push / CI のどちらで実行されるかは [品質ゲート ガイド](quality-gates.md) を参照

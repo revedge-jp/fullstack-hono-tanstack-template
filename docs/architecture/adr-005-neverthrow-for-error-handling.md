@@ -88,7 +88,7 @@ return okAsync(input)
 | 範囲 | 方針 |
 |------|------|
 | **api-service（全層）** | neverthrow を使用。層をまたぐエラーは `Result` で伝播させる |
-| **client の Server Fn（mutation）** | `{ ok: true } \| { ok: false; message: string }` 型を使用（事実上の Result 型）。フォームの pending 状態管理と整合 |
+| **client の mutation（`features/*/actions`）** | API 呼び出しの結果を `toActionResult` で `{ ok: true } \| { ok: false; message: string }`（事実上の Result 型）に変換して返す。フォームの pending 状態管理と整合（`.claude/rules/client.md`） |
 | **client の loader / Server Fn（read）** | `throw` を継続使用し、TanStack Start のルート `errorComponent` に委譲する |
 
 ### client に neverthrow を導入しない理由
@@ -98,7 +98,7 @@ return okAsync(input)
 - loader の `throw` は TanStack Start の error boundary に乗せる正しい作法であり、`Result` で包むと
   フレームワークの仕組みを殺してしまう。
 - 将来 client 側で複数 API を連結する複雑なロジックが出てきた場合に限り、
-  その Server Fn 内での局所的な導入を再検討する。
+  その action / query 内での局所的な導入を再検討する。
 
 ---
 

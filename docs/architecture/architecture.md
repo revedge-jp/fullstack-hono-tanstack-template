@@ -58,7 +58,7 @@ graph TB
 ## データベース
 
 - **PostgreSQL**（外部マネージドDB。標準は PlanetScale — [ADR-002](./adr-002-hyperdrive-config.md)。プレーンな Postgres として扱うため他のマネージド Postgres にも差し替え可能）
-- **接続**: `DATABASE_URL`（本番は Workers Secret）。ローカルは Docker（`bun run db:up`）
+- **接続**: 本番の Worker は Hyperdrive のバインディング（`HYPERDRIVE`）経由で接続する。`DATABASE_URL` はローカル（Docker、`bun run db:up`）と CI のマイグレーション用（`alchemy.run.ts` の provision 段が CI に渡す）
 - **マイグレーション**: drizzle-kit（`bun run db:generate` / `db:migrate`）
 
 ## デプロイフロー

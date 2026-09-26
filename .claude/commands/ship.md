@@ -24,7 +24,7 @@ git diff origin/main...HEAD
 - セキュリティ: 認証・認可の抜け、OWASP Top 10
 - テスト: 変更に対応するテストが存在するか
 - ROP エラー型: Usecase → Presentation で全エラーケースが網羅されているか
-- Value Object: `make` / `change` / `reconstitute` の使い分けが正しいか
+- Value Object: `make`（入力の検証）/ `reconstitute`（DB の信頼できる値）/ 状態遷移の関数（`advanceTaskStatus` 等）の使い分けが正しいか
 
 問題があれば以下の形式で報告する：
 ```

@@ -1,6 +1,6 @@
 # ドメインモデル指針 (DMMF)
 
-このドキュメントは、api-service の Presentation 層（`zValidator` スキーマ）と Application 層の DTO を軸に、主要コンテキストの状態遷移を整理したものです。DDDおよびDomain Model Management Framework(DMMF)の成果物として、実装・テスト・ドキュメント間のトレーサビリティを維持します。
+このドキュメントは、api-service の Presentation 層（`zValidator` スキーマ）と Application 層の DTO を軸に、主要コンテキストの状態遷移を整理したものです。DDD と DMMF（書籍『Domain Modeling Made Functional』の型駆動のモデリング）の考え方に沿った成果物として、実装・テスト・ドキュメント間のトレーサビリティを維持します。
 
 ## Tasks コンテキスト（参照実装）
 

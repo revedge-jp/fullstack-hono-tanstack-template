@@ -45,8 +45,8 @@ gh auth login          # 未認証の場合
 - **merge queue は public リポジトリか Enterprise Cloud の private でしか使えない**（Team プランの
   private は `merge_queue` ルールが 422 で拒否される）。`setup-github.sh` はその場合 queue ルールだけ
   外して再適用し、queue なしの auto-merge 運用にする。最新化必須は無効のままなので、古い main で緑だった
-  PR が最新 main と組み合わさって失敗するケースは、マージ後の main の CI と `notify-main-failure`
-  （Slack）で検出する（staging デプロイは main の CI 成功後にしか実行されない）。public 化 / プラン変更後に
+  PR が最新 main と組み合わさって失敗するケースは、マージ後の main の CI の失敗で検出する（通知は GitHub の
+  Actions 通知。staging デプロイは main の CI 成功後にしか実行されない）。public 化 / プラン変更後に
   スクリプトを再実行すれば queue が有効になる
 - PR は Draft で作り、`/code-review` が CONFIRMED ゼロで収束してから `gh pr ready` と
   `gh pr merge --auto --squash` を打つ（`.claude/commands/ship.md`）。`Review converged`
@@ -162,7 +162,7 @@ https://github.com/{owner}/{repo}/settings/security_analysis
 ### PRがマージできない
 
 1. **CIが失敗している**: Actions タブでエラーを確認
-2. **ブランチが古い**: `Update branch` ボタンで main と同期
+2. **main と衝突している**: rebase して push し直す（merge queue が最新の main に積んで CI を回すので、衝突が無ければ最新化は不要）
 3. **レビューが不足**: 必要なレビュー数を確認（現在は0名）
 
 ### Rulesetが適用されない

@@ -212,6 +212,9 @@ pino の場合、Node ビルドは stream 引数を渡さない限り内部で S
 
 #### 症状: `BETTER_AUTH_SECRET should be at least 32 characters` 警告
 
+`.env.example` のダミー値（`your-secret-here`）のままだと dev でも出る。ダミーは本番で拒否させるために意図的に短く
+してあるので、dev では無視してよい。本番（`NODE_ENV=production`）では `config.ts` が 32 文字未満を拒否する。
+
 ```bash
 # 強固なシークレットを生成して .env に設定
 openssl rand -base64 32
@@ -252,14 +255,16 @@ gh variable list --env staging
 
 ### 症状: worktreeが削除できない
 
-```bash
-# 強制削除
-git worktree remove --force ../<worktree-dir>
+`git worktree remove --force` や `rm -rf` で消さない。未コミットの変更を確認なしに消すうえ、ポートの登録と
+`wt_*` DB が残る。Claude Code の worktree（`.claude/worktrees/<name>`）は、作ったセッションなら `ExitWorktree`
+（remove）で、前のセッションで残したものは main のルートから削除フックを流して消す:
 
-# それでも失敗する場合
-rm -rf ../<worktree-dir>
-git worktree prune
+```bash
+echo '{"worktree_path":"<worktree の絶対パス>"}' | bash .claude/hooks/worktree-remove.sh
 ```
+
+フックが止まったときは表示された理由（未コミットの変更・どのブランチにも乗っていないコミット）を確かめる。
+詳細は [git worktree ガイド](git-worktree.md) の「Q: worktree が削除できない」。
 
 ### 症状: `already checked out` エラー
 
@@ -280,8 +285,7 @@ worktreeごとに完全な`node_modules`が必要なため、初回は時間が�
 
 1. **ログを確認**: ターミナル、ブラウザコンソール、Cloudflare ダッシュボード
 2. **ドキュメントを確認**: 関連するドキュメントを再読
-3. **チームに質問**: Slackの関連チャンネル
-4. **Issueを作成**: 再現手順とエラーメッセージを含める
+3. **Issueを作成**: 再現手順とエラーメッセージを含める
 
 ---
 

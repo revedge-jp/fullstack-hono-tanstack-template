@@ -17,6 +17,7 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
   `.claude/rules/package-management.md` を読む**（Git 安全運用・`bun add` 必須・ログ規約の要点など、最初に
   破りやすい規約はそこにある）。パススコープのルールは各アプリの AGENTS.md と `general.md` の案内から辿る
 - `REVIEW.md`: コードレビューの採否基準。Claude Code の `/code-review` と Claude Code Review が読む
+- `.claude/skills/web-design-guidelines`: UI のレビュー（アクセシビリティ・UX）に使うスキル（Vercel の Web Interface Guidelines）。client の画面を変えたときに使う
 
 ## Stack
 

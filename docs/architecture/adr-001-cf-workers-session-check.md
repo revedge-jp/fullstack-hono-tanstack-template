@@ -82,7 +82,7 @@ server.ts (fetch handler)
   RPC 契約のみ
 - ✅ テストヘルパー（`createFakeApp` + `hc` with `app.request`）と同じ確立された
   パターン
-- ✅ `AsyncLocalStorage` は CF Workers (`nodejs_compat_v2`) で正式サポート
+- ✅ `AsyncLocalStorage` は CF Workers（`nodejs_compat`） で正式サポート
 - ✅ ALS 未設定の環境（素の vite / node 実行）では同一オリジン HTTP ループバックに
   フォールバック（`getApiClient` が吸収し、serverFn のコードは1通りのまま）
 - ⚠️ Request/Response の生成と JSON シリアライズのコストが乗るが、SSR read 1回あたり
@@ -131,7 +131,7 @@ apps/api-service/src/app.ts          # createApp が AppType（RPC 契約）を 
 
 ## トレードオフ・注意点
 
-- `nodejs_compat_v2` フラグが必要（`async_hooks` のため）。これは Hyperdrive 使用にも必要なので追加コストはない。
+- `nodejs_compat` フラグが必要（旧名 `nodejs_compat_v2`。`apps/client/wrangler.jsonc`）（`async_hooks` のため）。これは Hyperdrive 使用にも必要なので追加コストはない。
 - SSR からの呼び出しも api-service のアクセスログに記録される（method/path/status）。
   1画面の SSR で複数 serverFn が実行されるとログ行数はその分増える。
 - mutation は従来どおりブラウザから同一オリジンの API を直接呼ぶ（cookie 自動同送・
