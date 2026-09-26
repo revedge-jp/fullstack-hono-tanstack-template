@@ -15,6 +15,15 @@ const numberEnv = (defaultValue: number) =>
     z.coerce.number().int().positive().default(defaultValue),
   );
 
+// 既定値が無い数値・文字列の env も "" を未設定として扱う。素のままだと API_PORT="" は 0 になって
+// `?? 8080` を素通りし、CORS_ORIGIN="" は本番の必須検証も開発の既定値もすり抜ける
+const emptyAsUndefined = (v: unknown) => (v === "" ? undefined : v);
+const optionalPortEnv = z.preprocess(
+  emptyAsUndefined,
+  z.coerce.number().int().positive().optional(),
+);
+const optionalStringEnv = z.preprocess(emptyAsUndefined, z.string().optional());
+
 const ConfigSchema = z
   .object({
     // 既定は production(fail-closed)。development に倒すと、デプロイ経路で NODE_ENV の
@@ -24,13 +33,13 @@ const ConfigSchema = z
     NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
     LOG_PRETTY: z.string().optional(),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
-    CORS_ORIGIN: z.string().optional(),
-    API_PORT: z.coerce.number().optional(),
-    PORT: z.coerce.number().optional(),
+    CORS_ORIGIN: optionalStringEnv,
+    API_PORT: optionalPortEnv,
+    PORT: optionalPortEnv,
     DATABASE_URL: z.string().min(1),
     BETTER_AUTH_SECRET: z.string().min(1),
-    BETTER_AUTH_URL: z.string().optional(),
-    BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
+    BETTER_AUTH_URL: optionalStringEnv,
+    BETTER_AUTH_TRUSTED_ORIGINS: optionalStringEnv,
     GOOGLE_CLIENT_ID: z.string().min(1),
     GOOGLE_CLIENT_SECRET: z.string().min(1),
     // リクエストタイムアウト（ミリ秒）。ハングしたハンドラが接続を占有し続けるのを防ぐ。

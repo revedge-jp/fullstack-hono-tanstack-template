@@ -61,13 +61,13 @@ describe("makeVerifySession — getSession が reject したとき", () => {
     const result = await makeVerifySession(auth, spy.logger)(await requestWithSessionCookie());
 
     expect(result._unsafeUnwrapErr()).toBe("Unexpected");
-    const unexpected = spy.error.filter(
+    const unexpected = spy.warn.filter(
       ([, message]) => message === "verifySession unexpected error",
     );
     expect(unexpected).toEqual([
       [
         {
-          err: "Failed to get session",
+          detail: "Failed to get session",
           causeCode: undefined,
           name: "APIError",
           apiStatus: "INTERNAL_SERVER_ERROR",
@@ -81,7 +81,7 @@ describe("makeVerifySession — getSession が reject したとき", () => {
     expect(JSON.stringify([...spy.error, ...spy.warn, ...spy.info])).not.toContain(SESSION_TOKEN);
   });
 
-  test("APIError(UNAUTHORIZED): 障害ではなく Unauthorized にし、error ログを出さない", async () => {
+  test("APIError(UNAUTHORIZED): 障害ではなく Unauthorized にし、ログを出さない", async () => {
     const error = APIError.from("UNAUTHORIZED", {
       code: "FAILED_TO_GET_SESSION",
       message: "Failed to get session",
@@ -91,6 +91,7 @@ describe("makeVerifySession — getSession が reject したとき", () => {
 
     expect((await result)._unsafeUnwrapErr()).toBe("Unauthorized");
     expect(spy.error).toHaveLength(0);
+    expect(spy.warn).toHaveLength(0);
   });
 
   test("DrizzleQueryError が包まれずに届いても: バインド値を載せず、SQL と cause の code だけを出す", async () => {
@@ -106,21 +107,23 @@ describe("makeVerifySession — getSession が reject したとき", () => {
     const { spy, result } = verifyWith(error);
 
     expect((await result)._unsafeUnwrapErr()).toBe("Unexpected");
-    expect(spy.error).toEqual([
+    expect(spy.warn).toEqual([
       [
-        { err: `Failed query: ${SESSION_QUERY}`, causeCode: "ECONNREFUSED" },
+        { detail: `Failed query: ${SESSION_QUERY}`, causeCode: "ECONNREFUSED" },
         "verifySession unexpected error",
       ],
     ]);
-    expect(JSON.stringify(spy.error)).not.toContain(SESSION_TOKEN);
+    // Errors は呼び出し側の toHttp（500）が 1 件だけ数える
+    expect(spy.error).toHaveLength(0);
+    expect(JSON.stringify(spy.warn)).not.toContain(SESSION_TOKEN);
   });
 
   test("cause の無い例外: message を err に出し、causeCode は undefined", async () => {
     const { spy, result } = verifyWith(new Error("boom"));
 
     expect((await result)._unsafeUnwrapErr()).toBe("Unexpected");
-    expect(spy.error).toEqual([
-      [{ err: "boom", causeCode: undefined }, "verifySession unexpected error"],
+    expect(spy.warn).toEqual([
+      [{ detail: "boom", causeCode: undefined }, "verifySession unexpected error"],
     ]);
   });
 });

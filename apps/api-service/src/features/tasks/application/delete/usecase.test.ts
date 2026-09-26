@@ -35,4 +35,12 @@ describe("tasks.delete usecase", () => {
       expect(r.error).toBe("NotFound");
     }
   });
+
+  test("異常: リポジトリの Unexpected（DB 障害）をそのまま返す", async () => {
+    const tasksRepository = buildRepo({ delete: () => errAsync("Unexpected" as const) });
+    const usecase = makeDeleteTask({ tasksRepository });
+
+    const r = await usecase({ id: "task-1", ownerId: "user-1" });
+    expect(r._unsafeUnwrapErr()).toBe("Unexpected");
+  });
 });
