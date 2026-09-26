@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { reportHandledError } from "@/shared/lib/report-client-error";
 
-import { signInWithGoogle } from "../actions/sign-in";
+import { signInErrorMessage, signInWithGoogle } from "../actions/sign-in";
 
 export function GoogleSignInButton() {
   const [isPending, setIsPending] = useState(false);
@@ -18,7 +18,7 @@ export function GoogleSignInButton() {
       // Better Auth のエラー文言（英語）や fetch の失敗（Failed to fetch）をそのまま画面に出さない。
       // 元のエラーは通報に残し、画面には次の操作が分かる文言を出す（sign-out-button.tsx と同じ形）
       reportHandledError(e, "signIn failed");
-      setError("サインインを開始できませんでした。通信状況を確かめて、もう一度お試しください");
+      setError(signInErrorMessage(e));
       setIsPending(false);
     }
   }

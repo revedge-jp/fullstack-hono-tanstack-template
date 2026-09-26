@@ -26,18 +26,23 @@ export function TaskList({ items }: { items: TaskItem[] }) {
   async function run(task: TaskItem, action: (input: { id: string }) => Promise<ActionResult>) {
     setPendingIds((current) => new Set(current).add(task.id));
     setMessage(null);
-    const result = await action({ id: task.id });
-    setPendingIds((current) => {
-      const next = new Set(current);
-      next.delete(task.id);
-      return next;
-    });
-    if (!result.ok) {
-      // どのタスクの失敗かが分かるように、タイトルを添える
-      setMessage(`「${task.title}」: ${result.message}`);
-      return;
+    try {
+      const result = await action({ id: task.id });
+      if (!result.ok) {
+        // どのタスクの失敗かが分かるように、タイトルを添える
+        setMessage(`「${task.title}」: ${result.message}`);
+        return;
+      }
+      // 一覧を取り直すまで送信中のままにする。先に戻すと、古い表示（未着手）のまま押し直せて
+      // API は更新後の状態（進行中）から進めるので、2 段進む
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    } finally {
+      setPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
     }
-    await queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 
   if (items.length === 0) {
