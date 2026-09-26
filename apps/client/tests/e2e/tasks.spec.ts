@@ -95,7 +95,7 @@ test.describe("tasks シナリオ", () => {
     await page.goto("/");
     await expect(page.getByText(user.email)).toBeVisible();
 
-    await page.getByRole("link", { name: "tasks" }).click();
+    await page.getByRole("link", { name: "タスク", exact: true }).click();
     await page.waitForURL("**/tasks");
     await expect(page.getByRole("heading", { name: "タスク" })).toBeVisible();
 

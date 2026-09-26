@@ -107,13 +107,43 @@ export function createApiMock(overrides: Partial<ApiMockState> = {}) {
   };
 }
 
-// createServerFn のチェーン(.validator().handler(fn) / .handler(fn))をハンドラ関数の
-// 素通しに置き換える。serverFn を直接呼び出してテストするための最小実装。
+// createServerFn のチェーン(.validator().handler(fn) / .handler(fn))を、validator を通してから
+// ハンドラを呼ぶ関数に置き換える。serverFn を直接呼び出してテストするための最小実装。
+// validator を捨てると、入力スキーマの誤り（必須の欠落・型の食い違い）がテストで一度も通らない。
+type ServerFnHandler = (ctx: { data?: unknown }) => unknown;
+
+function hasParse(value: unknown): value is { parse: (input: unknown) => unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "parse" in value &&
+    typeof value.parse === "function"
+  );
+}
+
+function validate(validator: unknown, data: unknown): unknown {
+  if (hasParse(validator)) {
+    return validator.parse(data);
+  }
+  if (typeof validator === "function") {
+    return validator(data);
+  }
+  return data;
+}
+
 export const reactStartModule = () => ({
   createServerFn: () => {
+    let validator: unknown;
     const chain = {
-      validator: () => chain,
-      handler: (fn: unknown) => fn,
+      validator: (next: unknown) => {
+        validator = next;
+        return chain;
+      },
+      handler:
+        (fn: ServerFnHandler) =>
+        // 本物の serverFn は Promise を返すので、validator の失敗も reject にする
+        async (ctx: { data?: unknown } = {}) =>
+          fn({ ...ctx, data: validate(validator, ctx.data) }),
     };
     return chain;
   },

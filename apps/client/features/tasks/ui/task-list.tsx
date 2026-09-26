@@ -1,11 +1,10 @@
-"use client";
-
 import { useQueryClient } from "@tanstack/react-query";
 import { ListTodo } from "lucide-react";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/patterns/empty-state";
 import { Button } from "@/components/ui/button";
+import type { ActionResult } from "@/shared/lib/action-error";
 
 import { advanceTask } from "../actions/advance-task";
 import { deleteTask } from "../actions/delete-task";
@@ -19,28 +18,23 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function TaskList({ items }: { items: TaskItem[] }) {
   const queryClient = useQueryClient();
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  // 送信中のタスクを行ごとに持つ。1 つの ID で持つと、A の送信中に B を押した時点で A のボタンが押せるように
+  // 戻り（二重送信で todo → done まで進む）、先に終わった方がもう片方の送信中の表示も解除する
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [message, setMessage] = useState<string | null>(null);
 
-  async function handleAdvance(id: string) {
-    setPendingId(id);
+  async function run(task: TaskItem, action: (input: { id: string }) => Promise<ActionResult>) {
+    setPendingIds((current) => new Set(current).add(task.id));
     setMessage(null);
-    const result = await advanceTask({ id });
-    setPendingId(null);
+    const result = await action({ id: task.id });
+    setPendingIds((current) => {
+      const next = new Set(current);
+      next.delete(task.id);
+      return next;
+    });
     if (!result.ok) {
-      setMessage(result.message);
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: ["tasks"] });
-  }
-
-  async function handleDelete(id: string) {
-    setPendingId(id);
-    setMessage(null);
-    const result = await deleteTask({ id });
-    setPendingId(null);
-    if (!result.ok) {
-      setMessage(result.message);
+      // どのタスクの失敗かが分かるように、タイトルを添える
+      setMessage(`「${task.title}」: ${result.message}`);
       return;
     }
     await queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -80,8 +74,8 @@ export function TaskList({ items }: { items: TaskItem[] }) {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={pendingId === task.id}
-                  onClick={() => handleAdvance(task.id)}
+                  disabled={pendingIds.has(task.id)}
+                  onClick={() => run(task, advanceTask)}
                 >
                   次へ進める
                 </Button>
@@ -89,8 +83,8 @@ export function TaskList({ items }: { items: TaskItem[] }) {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={pendingId === task.id}
-                onClick={() => handleDelete(task.id)}
+                disabled={pendingIds.has(task.id)}
+                onClick={() => run(task, deleteTask)}
               >
                 削除
               </Button>

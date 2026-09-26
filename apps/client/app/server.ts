@@ -1,3 +1,4 @@
+import { readCauseCode, stringifyErrorSafe, stripBindParamsFromStack } from "@repo/logging";
 import { createStartHandler, defaultRenderHandler } from "@tanstack/react-start/server";
 
 import { createInProcessApiClient, runWithApiClient } from "@/shared/lib/api-client";
@@ -22,20 +23,27 @@ if (typeof globalThis.addEventListener === "function") {
         event.preventDefault();
         return;
       }
+      // DB 由来の Error（DrizzleQueryError）は message・stack・cause にバインド値を持つので、そのまま出さない
+      // （.claude/rules/logging.md）。api-service の onError と同じく切り落とした文字列と SQLSTATE だけにする
       serverLogger.error(
         {
-          err: { name: reason.name, message: reason.message, stack: reason.stack },
-          cause: "cause" in reason ? String(reason.cause) : undefined,
+          err: stringifyErrorSafe(reason),
+          causeCode: readCauseCode(reason),
+          stack: safeStack(reason),
         },
         "unhandled rejection",
       );
     } else {
-      serverLogger.error({ err: String(reason) }, "unhandled rejection (non-Error)");
+      serverLogger.error({ err: stringifyErrorSafe(reason) }, "unhandled rejection (non-Error)");
     }
   });
 }
 
 type CFContext = { waitUntil: (p: Promise<unknown>) => void } | undefined;
+function safeStack(e: unknown): string | undefined {
+  return e instanceof Error && e.stack ? stripBindParamsFromStack(e.stack, e.message) : undefined;
+}
+
 type CFBindings = Record<string, string | { connectionString: string } | undefined>;
 
 // 未設定は本番扱い（api-service の config.ts と同じ fail-closed）。開発扱いに倒すと、NODE_ENV を
@@ -235,12 +243,17 @@ export default {
     // DB 接続の解放はレスポンスボディの完了後(releaseAfterResponse)。
     // ctx?.waitUntil ?? void p の分岐は、テストランナー等 fetch(request, env) の2引数のみで
     // 呼ばれる呼び出し元(ctx省略)向けのフォールバック。
-    const { app: honoApp, end } = initHonoApp(env ?? {});
-    const cleanup = () => end().catch(() => undefined);
+    // initHonoApp は設定の検証（loadConfig）で throw しうるので try の中で呼ぶ。外にあると設定不備のとき
+    // requestId 付きのログもセキュリティヘッダーも無いまま、Cloudflare の 1101 エラーページになる
+    let end: (() => Promise<unknown>) | undefined;
+    const cleanup = () => (end ? end().catch(() => undefined) : Promise.resolve(undefined));
     const waitUntil = (p: Promise<unknown>) => ctx?.waitUntil(p) ?? void p;
     const isProd = isProductionEnv(env);
 
     try {
+      const initialized = initHonoApp(env ?? {});
+      const honoApp = initialized.app;
+      end = initialized.end;
       // /api/* は直接 Hono にディスパッチし、TanStack Start を完全にバイパスする。
       if (url.pathname.startsWith("/api/")) {
         const response = await honoApp.fetch(request);
@@ -260,16 +273,12 @@ export default {
       waitUntil(cleanup());
       // API 側の pino ログと突き合わせられるよう、requestId 付きの構造化ログで出力する
       serverLogger.error(
-        {
-          requestId,
-          err: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
-          stack: e instanceof Error ? e.stack : undefined,
-        },
+        { requestId, err: stringifyErrorSafe(e), causeCode: readCauseCode(e), stack: safeStack(e) },
         "ssr unhandled error",
       );
       const body = isProd
         ? `Internal Server Error (requestId: ${requestId})`
-        : `Error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}`;
+        : `Error: ${safeStack(e) ?? stringifyErrorSafe(e)}`;
       return withSecurityHeaders(new Response(body, { status: 500 }), isProd, requestId);
     }
   },

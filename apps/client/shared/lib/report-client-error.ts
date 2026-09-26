@@ -61,7 +61,7 @@ function reasonMessage(reason: unknown): string {
     return "";
   }
   if (typeof reason === "object") {
-    const message = (reason as { message?: unknown }).message;
+    const message = "message" in reason ? reason.message : undefined;
     return typeof message === "string" ? message : "[object]";
   }
   // ここに来るのは string/number/boolean/symbol/bigint/function だけ(object は上で除外済み)
@@ -161,7 +161,8 @@ function reportClientError(input: {
 // ブラウザの console に書くだけだと開発者の手元にしか残らないため、この経路に寄せる
 // (サーバー側は /api/client-errors が pino で記録する)。
 export function reportHandledError(error: unknown, context: string): void {
-  const message = error instanceof Error ? error.message || String(error) : String(error);
+  // String(error) だと Error 以外のオブジェクトが "[object Object]" になる。unhandledrejection と同じ取り出し方にする
+  const message = (error instanceof Error ? error.message : reasonMessage(error)) || String(error);
   reportClientError({
     kind: "error",
     message: `${context}: ${message}`,
