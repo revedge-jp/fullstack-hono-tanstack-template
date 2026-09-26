@@ -107,6 +107,19 @@ describe("migration-safety", () => {
     expect(findViolations(sql).map((v) => v.reason)).toEqual(["テーブルの削除"]);
   });
 
+  test("ドル引用の中も文ごとに見る（別の文の DEFAULT で見逃さない）", () => {
+    const sql =
+      "DO $$ BEGIN ALTER TABLE t ADD COLUMN required text NOT NULL; ALTER TABLE t ADD COLUMN optional integer DEFAULT 0; END $$;";
+    expect(findViolations(sql).map((v) => v.reason)).toEqual([
+      "DEFAULT なしの NOT NULL カラムの追加",
+    ]);
+  });
+
+  test("ドル引用の中のコメントを SQL として数えない", () => {
+    const sql = "DO $$ BEGIN\n-- DROP TABLE t;\nALTER TABLE t ADD COLUMN optional text;\nEND $$;";
+    expect(findViolations(sql)).toEqual([]);
+  });
+
   // Node 22 は import.meta.main が無く、起動パスで判定する。node -e から import したときは argv[1] が無い
   test("node -e から import しても例外にならない", () => {
     const modulePath = fileURLToPath(new URL("./migration-safety.mjs", import.meta.url));

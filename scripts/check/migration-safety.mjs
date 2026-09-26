@@ -53,10 +53,12 @@ function addColumnWithoutDefault(statement) {
 // 文字列中の `--`、drizzle の区切り（`--> statement-breakpoint`。`;` が無いこともある）のどれかで文の境界がずれ、
 // 別の文の DEFAULT を見て違反を見逃す（近似を直すたびに別の形で見逃しが出たので、字句を読む形にした）。
 // 照合用の文（normalized）では文字列を '' に、引用符付きの識別子を "x" に置き換える（DEFAULT 'drop column' や
-// "default" という名前のカラムを規則の語として数えない）。ドル引用（DO $$ ... $$）の中身は SQL なので残し、中の `;` で
-// 文を分けないことだけを守る。表示には元の文を使う
+// "default" という名前のカラムを規則の語として数えない）。ドル引用（DO $$ ... $$）の中身は SQL なので、同じ読み方で
+// 文に分けて別の文として検査する（中の別の文の DEFAULT やコメントを混ぜない）。EXECUTE に渡す文字列で組み立てた SQL は
+// 見ない。表示には元の文を使う
 function scanSql(sql) {
   const statements = [];
+  const nestedStatements = [];
   const comments = [];
   let raw = "";
   let normalized = "";
@@ -118,8 +120,11 @@ function scanSql(sql) {
       const tag = /^\$(?:[A-Za-z_]\w*)?\$/.exec(sql.slice(index))[0];
       const close = sql.indexOf(tag, index + tag.length);
       const stop = close === -1 ? sql.length : close + tag.length;
+      const body = scanSql(sql.slice(index + tag.length, close === -1 ? sql.length : close));
+      nestedStatements.push(...body.statements);
+      comments.push(...body.comments);
       raw += sql.slice(index, stop);
-      normalized += sql.slice(index, stop);
+      normalized += "$$$$";
       index = stop;
     } else if (char === ";") {
       flush();
@@ -131,7 +136,7 @@ function scanSql(sql) {
     }
   }
   flush();
-  return { statements, comments };
+  return { statements: [...statements, ...nestedStatements], comments };
 }
 
 export function findViolations(sql) {
