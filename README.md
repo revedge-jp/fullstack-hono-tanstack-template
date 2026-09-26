@@ -112,9 +112,10 @@ bun run check-all     # まとめて検証（lint/type/test/arch）
 
 ```sh
 bun run db:up         # Postgres を起動
-bun run db:down       # Postgres を停止/削除
+bun run db:down       # Postgres を停止（データは残る）
+bun run db:reset      # Postgres をデータごと削除（確認あり）
 bun run db:up:test    # テスト用DBのみ起動
-bun run db:down:test  # テスト用DBのみ停止/削除
+bun run db:down:test  # テスト用DBのみ停止/削除（テスト DB は volume を持たない）
 bun run db:studio     # Drizzle Studio
 bun run db:generate   # マイグレーションファイル生成（drizzle-kit generate）
 bun run db:migrate    # マイグレーション適用（drizzle-kit migrate）

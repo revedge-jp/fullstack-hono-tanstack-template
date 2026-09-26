@@ -33,7 +33,7 @@ services:
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
       # SERVER_MODE=False（認証なし）のため、ループバック限定公開は特に重要
-      - "127.0.0.1:5050:80"
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     depends_on:

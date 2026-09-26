@@ -17,6 +17,7 @@
     "test:watch": "turbo run test -- --watch",
     "db:up": "bash scripts/dev/db-compose.sh up",
     "db:down": "bash scripts/dev/db-compose.sh down",
+    "db:reset": "bash scripts/dev/db-compose.sh reset",
     "db:up:test": "bash scripts/dev/db-compose.sh up-test",
     "db:down:test": "bash scripts/dev/db-compose.sh down-test",
     "db:up:all": "bash scripts/dev/db-compose.sh up-all",

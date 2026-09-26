@@ -21,7 +21,7 @@
 | 変数名 | 説明 | 例 |
 |--------|------|-----|
 | `DATABASE_URL` | 本番/開発用データベース接続 URL | `postgresql://postgres:postgres@localhost:5432/app_db` |
-| `BETTER_AUTH_SECRET` | Better Auth のセッション署名鍵（本番はランダムな強い値） | `your-secret-here`（ダミー可） |
+| `BETTER_AUTH_SECRET` | Better Auth のセッション署名鍵（本番はランダムな強い 32 文字以上。32 文字未満は本番の起動時に拒否される） | `your-secret-here`（ダミー可。dev では長さの警告が出る） |
 | `GOOGLE_CLIENT_ID` | Google OAuth クライアント ID | `your-google-client-id`（ダミー可） |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット | `your-google-client-secret`（ダミー可） |
 
@@ -41,7 +41,7 @@
 | `CORS_ORIGIN` | CORS 許可オリジン | 本番必須。開発/テスト時は未設定時 `http://localhost:3000` |
 | `LOG_PRETTY` | ログ整形出力のつもりで置いた変数。現状は `config.ts` が読むだけで、ロガーには渡しておらず出力は変わらない | （未設定） |
 | `LOG_LEVEL` | ログレベル（fatal/error/warn/info/debug/trace/silent） | 未設定時は環境別デフォルト（開発: debug、本番: info） |
-| `BETTER_AUTH_URL` | Better Auth のベース URL | （未設定） |
+| `BETTER_AUTH_URL` | Better Auth のベース URL。OAuth のコールバック URL の基準になる。dev は client のオリジン（`http://localhost:3000`）にする | （未設定） |
 | `BETTER_AUTH_TRUSTED_ORIGINS` | Better Auth の信頼オリジン（カンマ区切り） | （空） |
 
 ### Client（apps/client）
@@ -61,15 +61,16 @@ SSR からの API 呼び出しは同一 Worker 内のインプロセス呼び出
 | `PGADMIN_CONTAINER_NAME` | pgAdmin コンテナ名 | `app_pgadmin` |
 | `POSTGRES_VOLUME_NAME` | Postgres データボリューム名 | `app-postgres-data` |
 | `PGADMIN_VOLUME_NAME` | pgAdmin データボリューム名 | `app-pgadmin-data` |
-| `DATABASE_PORT` | Postgres ポート | `5432` |
-| `TEST_DATABASE_PORT` | テスト用 Postgres ポート | `5433` |
+| `DATABASE_PORT` | Postgres ポート。変えたら `DATABASE_URL` のポートも合わせる | `5432` |
+| `TEST_DATABASE_PORT` | テスト用 Postgres ポート。変えたら `TEST_DATABASE_URL` のポートも合わせる | `5433` |
+| `PGADMIN_PORT` | pgAdmin のポート | `5050` |
 
 > **コンテナ名と volume 名はプロジェクトごとに一意にする。** 既定値（`app_*`）はこのテンプレートから
 > 作った全プロジェクトで共通で、Docker の named volume は compose プロジェクトを跨いで共有される。
-> 同じ名前のままだと `db:up` は他プロジェクトの DB の volume をマウントし（データ破損）、`db:down` は
+> 同じ名前のままだと `db:up` は他プロジェクトの DB の volume をマウントし（データ破損）、`db:reset` は
 > 消しうる。`scripts/init-template.sh` が `.env.example` の5つをアプリ名入りに書き換え、`bun run db:up` /
 > `db:down` 系（`scripts/dev/db-compose.sh`）は別プロジェクトの持ち物と衝突していたら compose を動かさずに
-> 止まる。既に動いている環境の名前を変えると空の volume で起動するので、変えるなら `db:down` してから
+> 止まる。既に動いている環境の名前を変えると空の volume で起動するので、変えるなら `db:reset` してから
 > （データは消える）。
 >
 > テスト用 Postgres（`postgres-test`）は使い捨てで named volume を持たないため、

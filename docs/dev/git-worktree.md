@@ -12,9 +12,17 @@
 - **WorktreeCreate**（`.claude/hooks/worktree-create.sh`）: `origin/main` から `claude/<name>` を
   分岐 → CLIENT/API ポートの割り当て → main の共有 Postgres（postgres / postgres-test）内に
   `wt_<name>` DB を作成 → main の `.env` をコピーして worktree 固有の値に書き換え → `bun install` →
-  マイグレーション（dev/test）。DB まで用意できたときだけ `.env` に `WORKTREE_DB_READY=1` を書く
+  マイグレーション（dev/test）。DB まで用意できたときだけ `.env` に `WORKTREE_DB_READY=1` を書く。
+  DB 名は name が英小文字・数字・`_` だけならそのまま `wt_<name>`、`-` などを含む・長い・末尾が `_<16進6桁>` の
+  ときは `wt_<変換した name>_<ハッシュ 6 桁>` になる（`feat-x` と `feat_x` が同じ DB を指さないようにするため）。
+  この規則より前に作った worktree（`feat-x` → `wt_feat_x`）と名前が重なるときもハッシュ付きにする。
+  実際の名前は worktree の `.env` の `DATABASE_URL` にある
 - **WorktreeRemove**（`.claude/hooks/worktree-remove.sh`）: `git worktree remove` → `wt_<name>` DB の
-  DROP → ポート割り当ての解放。ブランチは消さない（未 push の作業を守るため）
+  DROP → ポート割り当ての解放。ブランチは消さない（未 push の作業を守るため）。DB 名は `.env` から読むが、
+  その worktree の名前から求めうる名前でないとき（別の worktree の `.env` をコピーした等）は消さない。
+  他の worktree の `.env` が同じ DB を指しているときも DROP しない
+- DB 名・ポート割り当ては worktree の名前で管理しているので、`git worktree move` での改名には対応していない。
+  改名した worktree でフックを再実行すると、`.env` の DB 名を直すよう案内して止まる
 
 ### フックの性質（編集するときに読む）
 
@@ -36,7 +44,7 @@ volume が積み上がる。共有コンテナ内に DB を1つ切る方式な�
 - worktree から `db:up` / `db:down` を実行しない（compose プロジェクトが別になりポートを奪い合う）。
   `.env` のコンテナ名・volume 名は一意なダミーに書き換えてあるので、誤って実行しても main の
   volume は巻き込まない
-- **main で `db:down` すると全 worktree の `wt_*` DB が消える**。worktree のルートで
+- **main で `db:reset` すると全 worktree の `wt_*` DB が消える**（`db:down` は volume を残す）。worktree のルートで
   `bash scripts/agent-worktree-setup.sh` を実行すれば作り直せる
 - main の `.env` のコンテナ名・volume 名が、このテンプレートから作った他プロジェクトと同じ既定値
   （`app_postgres` / `app-postgres-data` 等）だと衝突する。フックは既存のコンテナ・volume が別の compose

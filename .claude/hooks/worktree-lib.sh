@@ -32,11 +32,95 @@ API_PORT_BASE=8082
 log() { printf '  %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-# worktree 名 → PostgreSQL のデータベース名（英小文字/数字/アンダースコア、63バイト上限）
+# worktree 名 → PostgreSQL のデータベース名（英小文字/数字/アンダースコア、63バイト上限）。
+# 大文字小文字・記号を丸めたときや長さで切ったときは、元の名前の短いハッシュを付けて一意にする。
+# 丸めるだけだと feat-x と feat_x が同じ wt_feat_x になり、片方の worktree を消すともう片方の DB が
+# DROP されていた（作成側も「既に存在します」で黙って同じ DB を共有する）。
+# 末尾が _<16進6桁> の名前はそのまま使わずハッシュを付ける。そのまま使うと、ハッシュを付けた別の名前
+# （feat-x → wt_feat_x_ce2db9）と、worktree 名 feat_x_ce2db9 が同じ DB 名になる
 db_name_for() {
   local raw="$1" s
   s="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g')"
-  printf 'wt_%s' "$s" | cut -c1-63
+  if [ "$s" = "$raw" ] && [ "${#s}" -le 60 ] && ! [[ "$s" =~ _[0-9a-f]{6}$ ]]; then
+    printf 'wt_%s' "$s"
+  else
+    hashed_db_name_for "$raw"
+  fi
+}
+
+hashed_db_name_for() {
+  local raw="$1" s
+  s="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g')"
+  printf 'wt_%s_%s' "$(printf '%s' "$s" | cut -c1-53)" "$(printf '%s' "$raw" | git hash-object --stdin | cut -c1-6)"
+}
+
+# ハッシュを付ける前の命名規則。これより前に作った worktree の .env はこの名前を指している
+legacy_db_name_for() {
+  printf 'wt_%s' "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g')" | cut -c1-63
+}
+
+# worktree が使う DB 名。DB 名もポート割り当ても worktree の名前で管理する（git worktree move での改名は
+# 非対応）。.env の名前は、この worktree の名前から求めうるもの（今の規則・名前が重なったときのハッシュ付き・
+# 以前の規則）のときだけ使う。別の worktree の .env をコピーした・手で別の DB に向けたときに、その DB を
+# 自分のものとして DROP しない
+db_name_for_worktree() {
+  local wt_path="$1" name="$2" from_env
+  from_env="$(db_name_from_env "$wt_path")"
+  if [ -n "$from_env" ] &&
+    { [ "$from_env" = "$(db_name_for "$name")" ] || [ "$from_env" = "$(hashed_db_name_for "$name")" ] ||
+      [ "$from_env" = "$(legacy_db_name_for "$name")" ]; }; then
+    printf '%s' "$from_env"
+  else
+    db_name_for "$name"
+  fi
+}
+
+physical_path() {
+  if [ -d "$1" ]; then (cd "$1" && pwd -P); else printf '%s' "${1%/}"; fi
+}
+
+# git に登録された worktree と .claude/worktrees/ の下のディレクトリ（登録が外れた残り）。
+# git は GIT_* を外して呼ぶ（git フックから起動されたとき GIT_DIR を引き継ぎ、別のリポジトリを答えるため）
+list_worktree_dirs() {
+  (
+    for var in $(compgen -e | grep '^GIT_' || true); do unset "$var"; done
+    git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p'
+  )
+  local dir
+  for dir in "$MAIN_ROOT"/.claude/worktrees/*/; do
+    [ -d "$dir" ] && printf '%s\n' "${dir%/}"
+  done
+  return 0
+}
+
+# 他の worktree の .env が同じ DB を指していれば、その worktree のパスを出す。以前の規則で作った
+# worktree（feat-x → wt_feat_x）と今の規則の名前（feat_x → wt_feat_x）は同じ名前になりうる。
+# .claude/worktrees/ の外に置いた worktree も見る
+worktree_using_db() {
+  local db="$1" self dir
+  self="$(physical_path "$2")"
+  while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
+    [ -f "$dir/.env" ] || continue
+    [ "$(physical_path "$dir")" = "$self" ] && continue
+    if [ "$(db_name_from_env "$dir")" = "$db" ]; then
+      printf '%s' "$dir"
+      return 0
+    fi
+  done < <(list_worktree_dirs)
+  return 1
+}
+
+# worktree の .env の DATABASE_URL から、その worktree が作った DB の名前を読む（wt_ で始まるものだけ）。
+# 削除は作ったときの名前をそのまま使う（命名規則が変わっても、以前に作った worktree の DB を取り違えない）
+db_name_from_env() {
+  local url db
+  url="$(env_file_value "$1/.env" DATABASE_URL)"
+  db="${url##*/}"
+  db="${db%%\?*}"
+  if [[ "$db" =~ ^wt_[a-z0-9_]+$ ]]; then
+    printf '%s' "$db"
+  fi
 }
 
 # .env から値を1つ取り出す（無ければ既定値）
@@ -224,7 +308,8 @@ database_exists() {
 #
 # psql は既定（ON_ERROR_STOP=0）だと SQL エラーでも exit 0 を返すため `|| log` では失敗を検出
 # できない。文言一致は locale 依存になるので、存在確認を先に行い、CREATE は ON_ERROR_STOP=1 で
-# 実行して exit code を信頼する。$db は db_name_for() で [a-z0-9_] に正規化済み。
+# 実行して exit code を信頼する。$db は SQL に埋め込むので、db_name_for() 系で [a-z0-9_] に正規化した値か、
+# db_name_from_env() の ^wt_[a-z0-9_]+$ 検査を通った値だけを渡す。
 create_database_with() {
   local label="$1" db="$2" psql_fn="$3" out
   if database_exists "$db" "$psql_fn"; then

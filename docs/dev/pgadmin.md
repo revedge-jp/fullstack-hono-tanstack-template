@@ -14,7 +14,7 @@
 # 起動（postgres + pgAdmin）
 bun run db:up
 
-# 停止
+# 停止（データと pgAdmin の設定は残る）
 bun run db:down
 ```
 
@@ -27,6 +27,8 @@ pgAdmin は postgres の healthcheck 完了後に自動起動します（`depend
 ```
 http://localhost:5050
 ```
+
+5050 が使用中なら `.env` の `PGADMIN_PORT` で変える。
 
 ## 初回セットアップ
 
@@ -93,7 +95,7 @@ pgadmin:
     PGADMIN_DEFAULT_PASSWORD: admin
     PGADMIN_CONFIG_SERVER_MODE: "False"
   ports:
-    - "5050:80"
+    - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
   volumes:
     - pgadmin-data:/var/lib/pgadmin
   depends_on:
