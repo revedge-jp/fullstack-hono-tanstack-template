@@ -34,6 +34,9 @@
     "curly": "warn",
     "typescript/no-namespace": "error",
     "typescript/consistent-type-imports": "error",
+    // verbatimModuleSyntax では import { type X } from "m" が import "m" として残り、m がバンドルに入る
+    // （dependency-cruiser は型だけの import として扱うので、client-browser-no-server-modules を素通りする）
+    "typescript/no-import-type-side-effects": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/no-explicit-any": "error",
     "react/rules-of-hooks": "error",

@@ -88,10 +88,12 @@ action は `okAsync(input).andThen(step)` だけになる（`get` / `delete`）�
   (method/path/status/durationMs + requestId) are emitted automatically for every request
 - **認証必須ルーター**: `createAuthedApp()`（`src/factory.ts`）と `.use(requireAuth(deps.getSession))`
   （`src/middlewares/require-auth.ts`）を**必ずセットで**使う。ハンドラでは `c.get("user")` が
-  non-null で型付けされる。requireAuth の付け忘れは `arch:guards` が機械的に検出する。
+  non-null で型付けされる。requireAuth の付け忘れは `arch:guards` が同じファイル内の対で、
+  `__tests__/contract/route-auth.contract.test.ts` が実際のルート一覧で検出する（公開してよいルートはそのテストの
+  `PUBLIC_ROUTES` に理由を添えて足す。ここに無いルートはセッションが無ければ 401 でなければ落ちる）。
   実例: `features/tasks/presentation/router.ts`
   ```typescript
-  export function createXxxRouter(deps: { xxx: XxxService; getSession: ReturnType<typeof makeGetSession> }) {
+  export function createXxxRouter(deps: { xxx: XxxService; getSession: GetSession }) {
     return createAuthedApp()
       .use(requireAuth(deps.getSession))
       .get("/", async (c) => {
@@ -104,7 +106,7 @@ action は `okAsync(input).andThen(step)` だけになる（`get` / `delete`）�
 ### Feature-to-feature integration (ports + adapter + DI)
 
 **A feature must never `import` another feature directly** (`dependency-cruiser` enforces this per-feature —
-`server-application-cross-features-{feature}` rules in `dependency-cruiser.config.cjs`; the feature list is
+`server-cross-features-{feature}` rules in `dependency-cruiser.config.cjs`; the feature list is
 auto-derived from the `features/` directory, so new features are covered automatically). When feature A needs
 feature B's behavior:
 

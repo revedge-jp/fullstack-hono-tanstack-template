@@ -1,14 +1,10 @@
 import { createAuthedApp } from "@app/factory";
-import type { makeGetSession } from "@app/features/auth/application/get-session/usecase";
-import { requireAuth } from "@app/middlewares/require-auth";
+import { type GetSession, requireAuth } from "@app/middlewares/require-auth";
 import { toHttp } from "@app/shared/http/to-http";
 
 import type { ActivityService } from "../application/service";
 
-export function createActivityRouter(deps: {
-  activity: ActivityService;
-  getSession: ReturnType<typeof makeGetSession>;
-}) {
+export function createActivityRouter(deps: { activity: ActivityService; getSession: GetSession }) {
   return createAuthedApp()
     .use(requireAuth(deps.getSession))
     .get("/", async (c) => {

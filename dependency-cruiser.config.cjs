@@ -26,12 +26,14 @@ const CLIENT_FEATURE_DIRS = listFeatureDirs("apps/client/features");
 const npmPackagePath = (pkg) => `(^|/)node_modules/.*/${pkg}/`;
 
 const serverCrossFeatureRules = SERVER_FEATURE_DIRS.map((feature) => ({
-  name: `server-application-cross-features-${feature}`,
+  name: `server-cross-features-${feature}`,
   severity: "error",
   comment:
     "feature 間の直接依存禁止。連携が必要な場合は自 feature の application/ports.ts に" +
     "抽象ポート型を定義し、実装(アダプタ)は integrations/composition に置き、container.ts で配線する。",
-  from: { path: `^apps/api-service/src/features/${feature}/application/` },
+  // application だけでなく domain / infrastructure / presentation からの越境も止める（以前は application だけで、
+  // infrastructure 同士を直接つなぐ実装が全ゲートを通っていた）
+  from: { path: `^apps/api-service/src/features/${feature}/` },
   to: { path: `^apps/api-service/src/features/(?!${feature}/)` },
 }));
 
@@ -99,6 +101,23 @@ module.exports = {
       to: { path: "^apps/client/features/" },
     },
     ...clientCrossFeatureRules,
+    // client: 画面（ブラウザで動くコード）からサーバー専用モジュールを参照しない
+    {
+      name: "client-browser-no-server-modules",
+      severity: "error",
+      comment:
+        "api-client（in-process の Hono RPC・AsyncLocalStorage）・hono-app（api-service 一式と DB）・server-logger は SSR 専用。" +
+        "UI / actions / ルートの component から import すると、DB や Better Auth がブラウザのバンドルに入るか実行時に落ちる。" +
+        "SSR の取得は features/*/queries の createServerFn の中で、ブラウザからは browser-api-client を使う。",
+      from: { path: "^apps/client/(components/|features/[^/]+/(ui|actions)/|app/routes/)" },
+      // import type（SessionUser 等）はバンドルに入らないので許す。import { type X } の形は型だけでも副作用の import が
+      // 残るが、ここでは区別できない（どちらも type-only）ので oxlint の no-import-type-side-effects で止めている
+      // （components/ui は shadcn の生成物で oxlint の対象外。手で書き換えない前提）
+      to: {
+        path: "^apps/client/shared/lib/(api-client|hono-app|server-logger)\\.ts$",
+        dependencyTypesNot: ["type-only"],
+      },
+    },
     // server: domain 層で DB 直参照禁止
     // @repo/db は tsconfig paths でワークスペース内ファイルに解決されるため、
     // to.path は解決後のファイルパス（packages/database/）にマッチさせる
@@ -165,7 +184,7 @@ module.exports = {
         "domain は最下層。application/infrastructure/presentation の型が必要に見えたら、その型を domain/models.ts に移す(DTO なら application に留めて domain には渡さない)。",
       from: { path: "^apps/api-service/src/features/[^/]+/domain/" },
       to: {
-        path: "^apps/api-service/src/(features/[^/]+/(application|infrastructure|presentation)/|routes/|integration/)",
+        path: "^apps/api-service/src/(features/[^/]+/(application|infrastructure|presentation)/|routes/|integrations?/)",
       },
     },
     // server: domain 層でフレームワーク/検証/HTTP/SDK の直参照禁止
