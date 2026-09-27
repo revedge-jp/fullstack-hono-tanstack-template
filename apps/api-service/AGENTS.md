@@ -163,7 +163,10 @@ feature の切り方そのものを見直す:
   activity は **in-memory リポジトリ上の本物のサービス**、セッションはデフォルトで「認証済み」。
   返り値は Hono アプリそのものなので `app.request(...)` で直接叩けるし、`hc<AppType>` に
   `fetch: app.request.bind(app)` で注入もできる。
-- Exported from `api-service/test-helpers`（`src/test-helpers/create-fake-app.ts`）
+- api-service の中のテストは `@app/test-helpers/create-fake-app` から import する（`src/test-helpers/create-fake-app.ts`）。
+  パッケージ名の `api-service/test-helpers` は型を `dist` から読むので、自分のパッケージのテストで使うと、build していない・
+  古い `dist` のときに typecheck が落ちる（または古い型で通る）。パッケージ名の export は他のパッケージから使う用
+
 - tasks / activity の in-memory リポジトリは `src/test-helpers/in-memory-repositories.ts`。**Drizzle 実装と
   同じ振る舞いであること**を `__tests__/integration/repository-conformance.int.test.ts` が両方に同じテストを
   流して検証する（fake↔real 適合テスト）。contract テストは in-memory 上で緑になるので、ずれると本番だけ
@@ -175,7 +178,7 @@ feature の切り方そのものを見直す:
 
 ### Test patterns
 ```typescript
-import { createFakeApp } from "api-service/test-helpers";
+import { createFakeApp } from "@app/test-helpers/create-fake-app";
 
 // zero-config: 認証済み・in-memory tasks/activity で本物のミドルウェアを通す
 const app = createFakeApp();

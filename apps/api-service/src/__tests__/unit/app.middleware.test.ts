@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createFakeApp } from "api-service/test-helpers";
+import { createFakeApp } from "@app/test-helpers/create-fake-app";
 
 import { createLoggerSpy } from "../../test-helpers/create-logger-spy";
 

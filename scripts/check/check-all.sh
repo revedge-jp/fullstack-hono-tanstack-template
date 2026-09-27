@@ -112,8 +112,9 @@ fi
 # migration journal の when 順序チェック（詳細は check-migration-journal-order.mjs 冒頭）
 if [ "${SKIP_MIGRATION_ORDER:-}" != "1" ]; then
   run_step_bg "MigrationOrder" bun run check:migration-order
-  run_step_bg "MigrationSafety" bun run check:migration-safety
 fi
+# 順序チェックを飛ばすときも、expand / contract の検査は止めない
+run_step_bg "MigrationSafety" bun run check:migration-safety
 
 # Architecture 個別チェック（SKIP_ARCH=1 のときはすべてスキップ）
 if [ "${SKIP_ARCH:-}" != "1" ]; then

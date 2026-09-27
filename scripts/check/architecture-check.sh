@@ -106,11 +106,12 @@ fi
 # 7) migration journal の when 順序（詳細は check-migration-journal-order.mjs 冒頭）
 if [ "${SKIP_MIGRATION_ORDER:-0}" != "1" ]; then
   run_step_bg "MigrationOrder" bun run check:migration-order
-  # 旧コードを壊すスキーマ変更（削除・リネーム・型変更・NOT NULL の追加）を 1 本に入れていないか（expand / contract）
-  run_step_bg "MigrationSafety" bun run check:migration-safety
 else
   warn "migration journal 順序チェックは SKIP_MIGRATION_ORDER=1 によりスキップ"
 fi
+# 旧コードを壊すスキーマ変更（削除・リネーム・型変更・NOT NULL の追加）を 1 本に入れていないか（expand / contract）。
+# 順序チェックを飛ばすときも止めない（以前は SKIP_MIGRATION_ORDER=1 で一緒に止まり、警告にも出なかった）
+run_step_bg "MigrationSafety" bun run check:migration-safety
 
 # 8) 指示ファイル(AGENTS.md / .claude/rules 等)の参照が実在するか(詳細は instruction-files.mjs 冒頭)
 if [ "${SKIP_INSTRUCTIONS:-0}" != "1" ]; then

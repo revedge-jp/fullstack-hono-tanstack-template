@@ -83,8 +83,8 @@ server.ts (fetch handler)
 - ✅ テストヘルパー（`createFakeApp` + `hc` with `app.request`）と同じ確立された
   パターン
 - ✅ `AsyncLocalStorage` は CF Workers（`nodejs_compat`） で正式サポート
-- ✅ ALS 未設定の環境（素の vite / node 実行）では同一オリジン HTTP ループバックに
-  フォールバック（`getApiClient` が吸収し、serverFn のコードは1通りのまま）
+- ✅ ALS 未設定の環境では `getApiClient` が例外を投げる（当初は同一オリジン HTTP ループバックへ
+  フォールバックしていたが、どのモードでも発火しないことを確かめて削除した。下の追記を参照）
 - ⚠️ Request/Response の生成と JSON シリアライズのコストが乗るが、SSR read 1回あたり
   マイクロ秒〜ミリ秒オーダーで実害なし
 

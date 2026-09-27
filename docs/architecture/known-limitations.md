@@ -24,6 +24,10 @@
 | 古い行の削除 | 期限切れのセッション・検証トークン・activity を消す仕組みが無い | Cron Trigger で定期削除する |
 | Logpush の混在 | `LogPushJob` に filter が無く、staging と production が同じアカウントにあると、両方のログが同じ転送先に入る | stage ごとにデータセットか filter を分ける |
 | 依存の自動更新 | Renovate の lockFileMaintenance は自動マージ（範囲内の新しい版が staging まで入る） | 本番依存の更新も人が見るなら `automerge: false` にする |
+| デプロイ後の smoke | HTTP のステータスだけを見て、応答が新しい版（`/api/health/live` の `commit`）かは確かめない（ロールバック後の確認は commit を比べる） | smoke の前に `commit` が今回の `GIT_SHA` になるまで待つ |
+| 古い版へのロールバック | #157 より前の commit に戻すと `/api/health/live` が `infraCommit` を返さず、手動の手順とローカルのガードは `commit` を代わりに使う | 戻した後に一度 CI でデプロイし直して `infraCommit` を出す |
+| workers.dev の URL | カスタムドメインを足すデプロイで、ドメインの応答を待ち切れなかったときは次のデプロイまで開いたまま。版ごとのプレビュー URL（`previews_enabled`）を閉じているかは確かめていない | 閉じたことを deploy の後に確かめる |
+| `wrangler.jsonc` と `alchemy.run.ts` | ローカル開発（wrangler / vite）と本番（alchemy）の Worker の設定が別々に書かれていて、ずれを検出しない | 互換日付・フラグ・binding 名を比べるチェックを足す |
 
 ## アプリ（設計の追加が要るもの）
 
@@ -36,6 +40,11 @@
 | `x-request-id` | SSR 側は受け取った値をそのままログと応答に使う | 形（英数字とハイフン・長さ）を確かめてから使う |
 | dev サインイン | 有効にする条件は `NODE_ENV !== "production"` だけ（`NODE_ENV` の既定は production なので、渡し忘れても無効側に倒れる） | 環境変数での明示的な有効化を足す |
 | `/api/client-errors` | 認証なしで warn / error のログを出せる（レート制限あり） | サインイン後だけ受け付けるか、error を warn に落とす |
+| データ取得の形（未確認） | tasks は loader（serverFn）と `useQuery({ initialData })` を併用している。一度見たページに戻ると、loader が新しいデータを取っても古いキャッシュが出るという指摘がある（確かめていない） | 派生プロダクトで確かめ、当たっていれば loader で `queryClient.ensureQueryData` する形に直して `apps/client/AGENTS.md` も直す |
+| root のエラー画面（未確認） | `__root.tsx` に `shellComponent` が無く、root でエラーが起きると `<html>` の外に描画されて CSS もハイドレーションも無い、という指摘がある（確かめていない） | 派生プロダクトで確かめ、当たっていれば `shellComponent` に `<html>` を移す |
+| SSR のエラーのログ | loader・serverFn の中で投げた例外がサーバーのログに残らない | TanStack Start のエラーのフックで serverLogger に出す |
+| serverFn の CSRF | 今は TanStack Start が設定なしで CSRF を防いでいるが、`createStart` を足して設定を書くと、その守りが外れる | `createStart` を足すときに CSRF の設定を明示する |
+| 本番のセキュリティヘッダーの E2E | prod-shape の E2E も `NODE_ENV=development` で動くので、本番の `connect-src` と HSTS は E2E で確かめない | prod-shape を `NODE_ENV=production` で動かす（dev サインインが使えなくなるので、サインインの代わりを用意する） |
 
 ## ゲート・ツール
 
@@ -47,6 +56,15 @@
 | api-service の `test:unit` | ディレクトリを列挙しているので、新しい場所（`src/routes/` 等）に置いたテストは CI で実行されない（ローカルの `bun run test` と pre-push では実行される） | 列挙をやめて除外で指定する |
 | カバレッジ | どのテストも import していないファイルは数えない | カバレッジの対象ファイルの一覧を明示する |
 | migration journal の順序 | journal 内の `when` の並びだけを見て、本番に適用済みの状態とは比べない | デプロイ前に `__drizzle_migrations` の適用済みの一覧と比べる |
+| migration-safety の範囲 | `ADD CONSTRAINT ... CHECK (c IS NOT NULL)` と `DELETE FROM` は止めない。`-- migration-safety: allow` は作者が自分で書け、検証器の変更の審査を通らない（理由が差分に出るのでレビューで判断する設計） | 印を付けたファイルに理由の書式や承認者を求める |
+| client のサーバー専用モジュール | depcruise の規則は ui・actions・routes からの直接の import だけを見る。`features/*/lib/` を経由した import・`index.ts` からの re-export・`await import()` は通る。`app/` の直下のファイルも対象外 | 規則を「ブラウザに入るモジュールから到達できるか」に変える（depcruise の `reachable`） |
+| domain の依存 | domain から `middlewares/`・`shared/`・`config`・`container` への import を止めていない | `server-domain-no-upward` の to に加える |
+| tooling だけの PR | `turbo.json`・`bunfig.toml` 等だけを変えた PR では unit / contract テストが 1 件も実行されない | tooling の変更で全パッケージのテストを回す |
+| route-auth の抜け | `app.mount` / `app.all` で中身が 404 を返す形と、本番のときだけ登録するルートは検出しない | 本番の設定で組み立てたアプリも回す |
+| arch-guard の抜け | `middlewares/` という名前のディレクトリの中の throw、1 行の `() => class {}`、`await import("cloudflare:workers")` 経由の env は止めない | 見つかったら規則を足す（正規表現で読み分けを増やすと誤検出が増えるので、oxlint のルールで書けるものはそちらに寄せる） |
+| mutation-diff の対象 | contract テストだけを変えた PR は、対応する実装を対象に加えない | contract テストの変更で、その feature の application を対象にする |
+| depcruise の対象 | テストファイルを解析から外している（テストから本番コードの内部への import は見ない） | テストにも層の規則をかける |
+| フックの jq | jq が無い環境では `.env*` の Read 等を拒否（deny）ではなく確認（ask）にする | jq を開発環境の前提にする |
 
 ## 既知の上流の挙動
 
