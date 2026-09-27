@@ -13,21 +13,35 @@ esac
 cd "$(dirname "$0")/../../packages/database"
 
 # lock_timeout は接続時のパラメータ（options）で渡す。DB の前段のプロキシがこれを拒むと、マイグレーションが毎回
-# 失敗してデプロイが止まるので、先に接続を試し、拒まれたら lock_timeout 無しで続ける（警告を出す）
+# 失敗してデプロイが止まるので、先に接続を試し、拒まれたら lock_timeout 無しで続ける（警告に理由を出す）。
+# 試すのは drizzle-kit と同じドライバ（drizzle-kit は pg があれば pg、無ければ postgres.js を使う）。ドライバが違うと
+# URL の解釈が違い（postgres.js は未知のクエリパラメータもサーバーへ送る）、試す方だけが失敗して lock_timeout が外れる
 url_with_timeout="${DATABASE_URL}${separator}options=-c%20lock_timeout%3D${LOCK_TIMEOUT}"
-if PROBE_URL="$url_with_timeout" bun -e '
-  import postgres from "postgres";
-  const sql = postgres(process.env.PROBE_URL, { max: 1, connect_timeout: 15 });
-  try { await sql`select 1`; } finally { await sql.end({ timeout: 5 }); }
-' >/dev/null 2>&1; then
+if probe_error=$(PROBE_URL="$url_with_timeout" bun -e '
+  import { createRequire } from "node:module";
+  const load = createRequire(require.resolve("drizzle-kit"));
+  let pg;
+  try { pg = load("pg"); } catch {}
+  if (pg) {
+    const client = new pg.Client({ connectionString: process.env.PROBE_URL, connectionTimeoutMillis: 15000 });
+    try { await client.connect(); await client.query("select 1"); } finally { await client.end().catch(() => {}); }
+  } else {
+    const postgres = load("postgres");
+    const sql = postgres(process.env.PROBE_URL, { max: 1, connect_timeout: 15 });
+    try { await sql`select 1`; } finally { await sql.end({ timeout: 5 }); }
+  }
+' 2>&1 >/dev/null); then
   migrate_url="$url_with_timeout"
+  failure_hint="ロックを ${LOCK_TIMEOUT} で取れなかった可能性があります。DB のログで lock timeout を確かめ、そうなら空いている時間に Deploy を rerun してください（docs/deploy/operations.md）。SQL の誤りなら直して出し直す"
 else
-  echo "::warning::lock_timeout を付けた接続に失敗したので、lock_timeout 無しでマイグレーションします（DB のプロキシが options を受け付けない可能性）"
+  probe_reason=$(printf '%s\n' "$probe_error" | grep -m1 -E '^(error|[A-Za-z]*Error):' | cut -c1-200 || true)
+  echo "::warning::lock_timeout を付けた接続に失敗したので、lock_timeout 無しでマイグレーションします（理由: ${probe_reason:-不明}）"
   migrate_url="$DATABASE_URL"
+  failure_hint="lock_timeout を付けた接続にも失敗しています（理由: ${probe_reason:-不明}）。接続先・認証・ネットワークを確かめてください"
 fi
 
 # drizzle-kit migrate は失敗の理由を表示しない（終了コードだけ）ので、ここで考えられる理由を出す
 if ! DATABASE_URL="$migrate_url" bunx drizzle-kit migrate; then
-  echo "::error::マイグレーションが失敗しました（drizzle-kit は理由を表示しない）。ロックを ${LOCK_TIMEOUT} で取れなかった可能性があります。DB のログで lock timeout を確かめ、そうなら空いている時間に Deploy を rerun してください（docs/deploy/operations.md）。SQL の誤りなら直して出し直す"
+  echo "::error::マイグレーションが失敗しました（drizzle-kit は理由を表示しない）。${failure_hint}"
   exit 1
 fi

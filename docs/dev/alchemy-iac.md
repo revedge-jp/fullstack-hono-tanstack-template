@@ -24,7 +24,7 @@
 ```
 ① bunx alchemy deploy --stage <target>   # SKIP_WORKER=1: DB / Role / Hyperdrive まで
    └─ DATABASE_URL を GITHUB_ENV へ export（::add-mask:: 済み）
-② bash scripts/deploy/migrate.sh         # ①が export した URL に lock_timeout を付けて migrate
+② bash scripts/deploy/migrate.sh         # ①が export した URL に lock_timeout を付けて migrate（付けられなければ警告）
 ③ bunx alchemy deploy --stage <target>   # Worker デプロイ（全リソース reconcile）
 ```
 
