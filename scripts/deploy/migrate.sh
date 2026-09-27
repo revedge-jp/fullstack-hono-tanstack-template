@@ -53,6 +53,11 @@ if ! reason=$(probe "$url_with_timeout"); then
     exit 1
   fi
   if ! reason=$(probe "$url_with_timeout"); then
+    # 値そのものが不正（MIGRATION_LOCK_TIMEOUT の書き間違い）なら、プロキシのせいにして外さずに止める
+    if printf '%s' "$reason" | grep -q 'invalid value for parameter "lock_timeout"'; then
+      echo "::error::MIGRATION_LOCK_TIMEOUT の値が不正です（${LOCK_TIMEOUT}。例: 5s）"
+      exit 1
+    fi
     echo "::warning::lock_timeout を付けた接続だけが失敗するので、lock_timeout 無しでマイグレーションします（理由: ${reason:-不明}。DB の前段のプロキシが options を受け付けない可能性）"
     migrate_url="$DATABASE_URL"
     lock_hint="lock_timeout を付けられなかったので、ロック待ちではありません。SQL の誤り・接続の途中の失敗を確かめてください"
@@ -61,6 +66,7 @@ fi
 
 # drizzle-kit migrate は失敗の理由を表示しない（終了コードだけ）ので、ここで考えられる理由を出す
 if ! DATABASE_URL="$migrate_url" bunx drizzle-kit migrate; then
-  echo "::error::マイグレーションが失敗しました（drizzle-kit は理由を表示しない）。${lock_hint}"
+  # drizzle-kit はスピナーを改行なしで書くので、改行してから出す（行頭の :: でないと Actions の注釈にならない）
+  printf '\n::error::マイグレーションが失敗しました（drizzle-kit は理由を表示しない）。%s\n' "$lock_hint"
   exit 1
 fi
