@@ -19,7 +19,7 @@ export function getRouter() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        // SSR（loader / initialData）で取得済みのデータを、ハイドレーション直後に
+        // SSR（loader の ensureQueryData）で取得し hydrate したデータを、ハイドレーション直後に
         // 無条件で再フェッチしない（staleTime 0 だと mount 時に必ず background refetch が走る）。
         // mutation 後の更新は明示的な invalidateQueries で行う設計のため、これで無駄な
         // API + DB 往復だけが消える。
@@ -55,7 +55,10 @@ export function getRouter() {
     defaultNotFoundComponent: DefaultNotFoundComponent,
   });
 
-  setupRouterSsrQueryIntegration({ router, queryClient });
+  // handleRedirects: false — loader の ensureQueryData の queryFn（serverFn）が投げた redirect は、loader の例外として
+  // router が履歴を置き換えて遷移する。既定（true）だと QueryCache の onError でも router.navigate（push）するので、
+  // 壊れた URL の履歴が残って戻るボタンで抜けられなくなり、リンクに hover しただけ（intent の先読み）でも遷移する
+  setupRouterSsrQueryIntegration({ router, queryClient, handleRedirects: false });
 
   return router;
 }

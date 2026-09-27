@@ -53,6 +53,7 @@ ARCH_GUARDS=(
   guard_features_no_process_env
   guard_client_features_no_process_env
   guard_client_queries_server_modules
+  guard_client_routes_no_initial_data
   guard_api_no_self_package_import
   guard_no_direct_zod_validator
   guard_no_legacy_result_api
@@ -340,6 +341,22 @@ guard_api_no_self_package_import() {
   else
     echo "違反: api-service の中では api-service/... ではなく @app/... から import してください（型を dist から読むため）"
     echo "$SELF_VIOL" | sed 's/^/  • /'
+    return 1
+  fi
+}
+
+guard_client_routes_no_initial_data() {
+  echo "[guard] client のルート・ui で loader の値を useQuery の initialData に渡さない（ensureQueryData + useSuspenseQuery を使う）"
+  # キャッシュが既にある（一度見たページに戻った）と initialData は使われず、loader が取った新しいデータを捨てて
+  # 古いキャッシュを出す（apps/client/AGENTS.md の「Data fetching」）
+  # loader の値を props で ui に渡して使う形も同じなので features/*/ui も見る。コメント行は数えない
+  INITIAL_DATA_VIOL=$(grep -rnE "\binitialData\b" apps/client/app/routes apps/client/features/*/ui --include='*.tsx' --include='*.ts' 2>/dev/null |
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)' || true)
+  if [ -z "$INITIAL_DATA_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: ルート・ui では initialData を使わず、loader で ensureQueryData・画面で useSuspenseQuery を使ってください（apps/client/AGENTS.md）"
+    echo "$INITIAL_DATA_VIOL" | sed 's/^/  • /'
     return 1
   fi
 }

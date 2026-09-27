@@ -19,13 +19,13 @@ api-service と違って `src/` は無く、`apps/client` 直下に `app/`（ル
 ```
 features/{feature}/
 ├── actions/    # Mutations: ブラウザから Hono RPC を直接呼ぶ平関数（POST/PATCH/DELETE）
-├── queries/    # Reads: createServerFn（SSR 初回表示用）+ queryOptions（mutation 後の再取得用）
+├── queries/    # Reads: createServerFn（loader が SSR とクライアント遷移の初回に取る用）+ queryOptions（queryKey と、画面・古くなったとき・mutation 後に使うブラウザ側の queryFn）
 └── ui/         # React components
 ```
 
 ### Data fetching: SSR vs client-side
 
-基本方針: **初回表示のデータはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。mutation 後の再取得はブラウザからの `useQuery` invalidate で行う。
+基本方針: **初回表示のデータはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。mutation 後の再取得はブラウザからの invalidate で行う。loader と画面は**同じ queryKey のキャッシュ**を通して受け渡す（loader は `ensureQueryData`、画面は `useSuspenseQuery`）。
 
 **mutation を `createServerFn` にしてはいけない**: mutation はユーザー操作起点で SSR 先読みが不要なので、
 サーバー関数にしても「ブラウザ → serverFn → in-process の api-service」と呼び出しが 1 段増えるだけで得るものが無い
@@ -33,7 +33,7 @@ features/{feature}/
 （cookie は同送される）。
 実例: `features/tasks/actions/create-task.ts`。
 
-**SSR（推奨）**: `loader` でサーバーサイド取得 → `Route.useLoaderData()` で参照
+**SSR（推奨）**: `loader` で `ensureQueryData`（queryFn だけサーバー関数に差し替える）→ 画面は `useSuspenseQuery`
 
 ```typescript
 // queries/get-xxx.ts — getApiClient() は server.ts が ALS 注入した in-process Hono RPC クライアント
@@ -49,19 +49,29 @@ export const getXxxServerFn = createServerFn().handler(async () => {
 
 // app/routes/xxx.tsx
 export const Route = createFileRoute("/xxx")({
-  loader: async () => {
-    const data = await getXxxServerFn();
-    return { data };
-  },
+  // キャッシュが無いときだけ取る（SSR とクライアント遷移の初回）。SSR ではブラウザ用の API クライアントが
+  // 使えないので、queryKey は xxxQueryOptions のまま queryFn だけをサーバー関数に差し替える。
+  // SSR で入れたキャッシュは setupRouterSsrQueryIntegration（app/router.tsx）がブラウザへ渡す
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData({ ...xxxQueryOptions(), queryFn: () => getXxxServerFn() }),
   component: XxxPage,
 });
 
 function XxxPage() {
-  const { data: initialData } = Route.useLoaderData(); // SSRで取得済み、ローディング不要
-  // mutation 後の invalidate で再取得できるよう、loader の結果を useQuery の初期値にする
-  const { data } = useQuery({ ...xxxQueryOptions(), initialData });
+  // loader が入れたキャッシュを読む（ローディング無し）。古くなっていれば xxxQueryOptions の queryFn で
+  // ブラウザから取り直し、mutation 後の invalidate でも同じ queryFn で取り直す
+  const { data } = useSuspenseQuery(xxxQueryOptions());
 }
 ```
+
+**`Route.useLoaderData()` の値を `useQuery({ initialData })` に渡す形にしない**: キャッシュが既にある（一度見たページに
+戻った）と `initialData` は使われないので、loader が取った新しいデータを捨てて古いキャッシュを出し、同じ一覧を無駄に 2 回取得する。
+
+loader の queryFn（serverFn）の中で `throw redirect(...)` してよい（不正な `?cursor=` の URL を最初のページへ戻す等。実例: `get-tasks.ts`）。
+`app/router.tsx` の `setupRouterSsrQueryIntegration` は `handleRedirects: false` にしてある。既定の true だと QueryCache でも
+遷移（push）して、戻るボタンで抜けられない履歴が残り、リンクへの hover（先読み）だけでも遷移する。
+その代わり、**画面の queryFn（`useSuspenseQuery` / `useQuery` が呼ぶもの）と mutation の中で投げた redirect では遷移しない**
+（エラー画面かただのエラーになる）。redirect は loader か beforeLoad で投げる。
 
 実例: `features/tasks/queries/get-tasks.ts`（401/403 を `isSsrAuthIndeterminate` で判定して空ページで返す扱いも含む。下の「Auth pattern」）と
 `app/routes/_authenticated/tasks.tsx`。レスポンスは `res.json()` をそのまま返さず、`schemas.ts` の Zod で検証している。
