@@ -332,9 +332,9 @@ guard_features_no_process_env() {
 
 guard_api_no_self_package_import() {
   echo "[guard] api-service の中で自分のパッケージ名（api-service/...）から import しない"
-  # パッケージ名の export（api-service/test-helpers 等）は型を dist から読む。api-service#typecheck は自分の build を
-  # 待たないので、build していない・古い dist のときに typecheck が落ちる（または古い型で通る）。中では @app/ を使う
-  SELF_VIOL=$(grep -rnE "from [\"']api-service/" apps/api-service/src --include='*.ts' --include='*.tsx' || true)
+  # パッケージ名の export（api-service・api-service/test-helpers）は、dist があるとそこから型を読む。api-service#typecheck は
+  # 自分の build を待たないので、古い dist のときに古い型で通る・落ちる。中では @app/ を使う
+  SELF_VIOL=$(grep -rnE "from [\"']api-service(/|[\"'])" apps/api-service/src --include='*.ts' --include='*.tsx' || true)
   if [ -z "$SELF_VIOL" ]; then
     echo "OK"
   else
