@@ -277,6 +277,24 @@ expect_guard "client のルートで loader の値を initialData に渡す" \
   'export const selftestInitialData = (loaderData: unknown) => ({ initialData: loaderData });' \
   "initialData を使わず"
 
+expect_guard "client の ui で loader の値を initialData に渡す" \
+  guard_client_routes_no_initial_data \
+  "apps/client/features/tasks/ui/__selftest-initial-data.tsx" \
+  'export const selftestInitialData = (initial: unknown) => ({ initialData: initial });' \
+  "initialData を使わず"
+
+NEG_INITIAL="apps/client/app/routes/__selftest-initial-data-comment.tsx"
+mkfix "$NEG_INITIAL" '// initialData は使わない（loader の ensureQueryData と useSuspenseQuery を使う）
+export const selftestComment = 1;'
+neg_initial_out=$(run_guard guard_client_routes_no_initial_data 2>&1)
+rm -f "$NEG_INITIAL"
+if printf '%s' "$neg_initial_out" | grep -qF "__selftest-initial-data-comment.tsx"; then
+  echo "❌ initialData のガード: コメント行を誤検出しました"
+  FAIL=1
+else
+  echo "✅ initialData のガード（コメント行は数えない）"
+fi
+
 expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
   guard_client_queries_server_modules \
   "apps/client/features/tasks/queries/__selftest-query.ts" \

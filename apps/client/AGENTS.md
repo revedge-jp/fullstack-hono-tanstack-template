@@ -19,7 +19,7 @@ api-service と違って `src/` は無く、`apps/client` 直下に `app/`（ル
 ```
 features/{feature}/
 ├── actions/    # Mutations: ブラウザから Hono RPC を直接呼ぶ平関数（POST/PATCH/DELETE）
-├── queries/    # Reads: createServerFn（SSR 初回表示用）+ queryOptions（mutation 後の再取得用）
+├── queries/    # Reads: createServerFn（loader が SSR で取る用）+ queryOptions（queryKey と、画面・古くなったとき・mutation 後に使うブラウザ側の queryFn）
 └── ui/         # React components
 ```
 
@@ -66,6 +66,10 @@ function XxxPage() {
 
 **`Route.useLoaderData()` の値を `useQuery({ initialData })` に渡す形にしない**: キャッシュが既にある（一度見たページに
 戻った）と `initialData` は使われないので、loader が取った新しいデータを捨てて古いキャッシュを出し、同じ一覧を無駄に 2 回取得する。
+
+loader の queryFn（serverFn）の中で `throw redirect(...)` してよい（不正な `?cursor=` の URL を最初のページへ戻す等。実例: `get-tasks.ts`）。
+`app/router.tsx` の `setupRouterSsrQueryIntegration` は `handleRedirects: false` にしてある。既定の true だと QueryCache でも
+遷移（push）して、戻るボタンで抜けられない履歴が残り、リンクへの hover（先読み）だけでも遷移する。
 
 実例: `features/tasks/queries/get-tasks.ts`（401/403 を `isSsrAuthIndeterminate` で判定して空ページで返す扱いも含む。下の「Auth pattern」）と
 `app/routes/_authenticated/tasks.tsx`。レスポンスは `res.json()` をそのまま返さず、`schemas.ts` の Zod で検証している。

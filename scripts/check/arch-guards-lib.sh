@@ -349,7 +349,9 @@ guard_client_routes_no_initial_data() {
   echo "[guard] client のルートで loader の値を useQuery の initialData に渡さない（ensureQueryData + useSuspenseQuery を使う）"
   # キャッシュが既にある（一度見たページに戻った）と initialData は使われず、loader が取った新しいデータを捨てて
   # 古いキャッシュを出す（apps/client/AGENTS.md の「Data fetching」）
-  INITIAL_DATA_VIOL=$(grep -rnE "\binitialData\b" apps/client/app/routes --include='*.tsx' --include='*.ts' 2>/dev/null || true)
+  # loader の値を props で ui に渡して使う形も同じなので features/*/ui も見る。コメント行は数えない
+  INITIAL_DATA_VIOL=$(grep -rnE "\binitialData\b" apps/client/app/routes apps/client/features/*/ui --include='*.tsx' --include='*.ts' 2>/dev/null |
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)' || true)
   if [ -z "$INITIAL_DATA_VIOL" ]; then
     echo "OK"
   else
