@@ -54,7 +54,7 @@ if ! reason=$(probe "$url_with_timeout"); then
   fi
   if ! reason=$(probe "$url_with_timeout"); then
     # 値そのものが不正（MIGRATION_LOCK_TIMEOUT の書き間違い）なら、プロキシのせいにして外さずに止める
-    if printf '%s' "$reason" | grep -q 'invalid value for parameter "lock_timeout"'; then
+    if printf '%s' "$reason" | grep -q 'parameter "lock_timeout"'; then
       echo "::error::MIGRATION_LOCK_TIMEOUT の値が不正です（${LOCK_TIMEOUT}。例: 5s）"
       exit 1
     fi
