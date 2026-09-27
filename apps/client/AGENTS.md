@@ -19,7 +19,7 @@ api-service と違って `src/` は無く、`apps/client` 直下に `app/`（ル
 ```
 features/{feature}/
 ├── actions/    # Mutations: ブラウザから Hono RPC を直接呼ぶ平関数（POST/PATCH/DELETE）
-├── queries/    # Reads: createServerFn（loader が SSR で取る用）+ queryOptions（queryKey と、画面・古くなったとき・mutation 後に使うブラウザ側の queryFn）
+├── queries/    # Reads: createServerFn（loader が SSR とクライアント遷移の初回に取る用）+ queryOptions（queryKey と、画面・古くなったとき・mutation 後に使うブラウザ側の queryFn）
 └── ui/         # React components
 ```
 
@@ -70,6 +70,8 @@ function XxxPage() {
 loader の queryFn（serverFn）の中で `throw redirect(...)` してよい（不正な `?cursor=` の URL を最初のページへ戻す等。実例: `get-tasks.ts`）。
 `app/router.tsx` の `setupRouterSsrQueryIntegration` は `handleRedirects: false` にしてある。既定の true だと QueryCache でも
 遷移（push）して、戻るボタンで抜けられない履歴が残り、リンクへの hover（先読み）だけでも遷移する。
+その代わり、**画面の queryFn（`useSuspenseQuery` / `useQuery` が呼ぶもの）と mutation の中で投げた redirect では遷移しない**
+（エラー画面かただのエラーになる）。redirect は loader か beforeLoad で投げる。
 
 実例: `features/tasks/queries/get-tasks.ts`（401/403 を `isSsrAuthIndeterminate` で判定して空ページで返す扱いも含む。下の「Auth pattern」）と
 `app/routes/_authenticated/tasks.tsx`。レスポンスは `res.json()` をそのまま返さず、`schemas.ts` の Zod で検証している。

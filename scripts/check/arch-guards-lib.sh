@@ -346,7 +346,7 @@ guard_api_no_self_package_import() {
 }
 
 guard_client_routes_no_initial_data() {
-  echo "[guard] client のルートで loader の値を useQuery の initialData に渡さない（ensureQueryData + useSuspenseQuery を使う）"
+  echo "[guard] client のルート・ui で loader の値を useQuery の initialData に渡さない（ensureQueryData + useSuspenseQuery を使う）"
   # キャッシュが既にある（一度見たページに戻った）と initialData は使われず、loader が取った新しいデータを捨てて
   # 古いキャッシュを出す（apps/client/AGENTS.md の「Data fetching」）
   # loader の値を props で ui に渡して使う形も同じなので features/*/ui も見る。コメント行は数えない
@@ -355,7 +355,7 @@ guard_client_routes_no_initial_data() {
   if [ -z "$INITIAL_DATA_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: ルートでは initialData を使わず、loader で ensureQueryData・画面で useSuspenseQuery を使ってください（apps/client/AGENTS.md）"
+    echo "違反: ルート・ui では initialData を使わず、loader で ensureQueryData・画面で useSuspenseQuery を使ってください（apps/client/AGENTS.md）"
     echo "$INITIAL_DATA_VIOL" | sed 's/^/  • /'
     return 1
   fi

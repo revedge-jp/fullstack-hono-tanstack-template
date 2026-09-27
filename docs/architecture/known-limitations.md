@@ -62,6 +62,7 @@
 | arch-guard の抜け | `middlewares/` という名前のディレクトリの中の throw、1 行の `() => class {}`、`await import("cloudflare:workers")` 経由の env は止めない | 見つかったら規則を足す（正規表現で読み分けを増やすと誤検出が増えるので、oxlint のルールで書けるものはそちらに寄せる） |
 | mutation-diff の対象 | contract テストだけを変えた PR は、対応する実装を対象に加えない | contract テストの変更で、その feature の application を対象にする |
 | depcruise の対象 | テストファイルを解析から外している（テストから本番コードの内部への import は見ない） | テストにも層の規則をかける |
+| initialData のガード | `app/routes` と `features/*/ui` だけを見る。`queries/`・`shared/` に置いた hook での使用と、行頭が `/*` の行の後ろは見ない。行末のコメント・JSX の `{/* */}` の中の語は止める側に誤検出する | 見つかったら範囲を広げる |
 | 自己参照の import のガード | api-service の中の `from "api-service..."` だけを見る。`import("api-service")`・`require`・`mock.module` は止めない | 見つかったら規則を足す |
 | フックの jq | jq が無い環境では `.env*` の Read 等を拒否（deny）ではなく確認（ask）にする | jq を開発環境の前提にする |
 
