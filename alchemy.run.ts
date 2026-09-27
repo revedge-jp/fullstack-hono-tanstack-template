@@ -510,6 +510,7 @@ if (process.env.GITHUB_ENV) {
 // ローカルでのマイグレーション/デバッグ用の取り出し口。
 // シークレットのログ漏えい防止のため、明示的に要求されたときだけ表示する。
 // CI では絶対に有効化しないこと。
+// isCi（CI === "true"）ではなく「CI に何か値があれば表示しない」で判定する。表示は漏れる側なので、CI=1 等も CI として扱う
 if (process.env.SHOW_DATABASE_URL === "1" && !process.env.CI) {
   console.info(`[alchemy] DATABASE_URL=${dbRole.connectionUrl.unencrypted}`);
 }

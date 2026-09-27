@@ -41,7 +41,6 @@
 | dev サインイン | 有効にする条件は `NODE_ENV !== "production"` だけ（`NODE_ENV` の既定は production なので、渡し忘れても無効側に倒れる） | 環境変数での明示的な有効化を足す |
 | `/api/client-errors` | 認証なしで warn / error のログを出せる（レート制限あり） | サインイン後だけ受け付けるか、error を warn に落とす |
 | データ取得の形（未確認） | tasks は loader（serverFn）と `useQuery({ initialData })` を併用している。一度見たページに戻ると、loader が新しいデータを取っても古いキャッシュが出るという指摘がある（確かめていない） | 派生プロダクトで確かめ、当たっていれば loader で `queryClient.ensureQueryData` する形に直して `apps/client/AGENTS.md` も直す |
-| root のエラー画面（未確認） | `__root.tsx` に `shellComponent` が無く、root でエラーが起きると `<html>` の外に描画されて CSS もハイドレーションも無い、という指摘がある（確かめていない） | 派生プロダクトで確かめ、当たっていれば `shellComponent` に `<html>` を移す |
 | SSR のエラーのログ | loader・serverFn の中で投げた例外がサーバーのログに残らない | TanStack Start のエラーのフックで serverLogger に出す |
 | serverFn の CSRF | 今は TanStack Start が設定なしで CSRF を防いでいるが、`createStart` を足して設定を書くと、その守りが外れる | `createStart` を足すときに CSRF の設定を明示する |
 | 本番のセキュリティヘッダーの E2E | prod-shape の E2E も `NODE_ENV=development` で動くので、本番の `connect-src` と HSTS は E2E で確かめない | prod-shape を `NODE_ENV=production` で動かす（dev サインインが使えなくなるので、サインインの代わりを用意する） |
@@ -64,6 +63,7 @@
 | arch-guard の抜け | `middlewares/` という名前のディレクトリの中の throw、1 行の `() => class {}`、`await import("cloudflare:workers")` 経由の env は止めない | 見つかったら規則を足す（正規表現で読み分けを増やすと誤検出が増えるので、oxlint のルールで書けるものはそちらに寄せる） |
 | mutation-diff の対象 | contract テストだけを変えた PR は、対応する実装を対象に加えない | contract テストの変更で、その feature の application を対象にする |
 | depcruise の対象 | テストファイルを解析から外している（テストから本番コードの内部への import は見ない） | テストにも層の規則をかける |
+| 自己参照の import のガード | api-service の中の `from "api-service..."` だけを見る。`import("api-service")`・`require`・`mock.module` は止めない | 見つかったら規則を足す |
 | フックの jq | jq が無い環境では `.env*` の Read 等を拒否（deny）ではなく確認（ask）にする | jq を開発環境の前提にする |
 
 ## 既知の上流の挙動

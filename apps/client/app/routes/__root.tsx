@@ -2,7 +2,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
   HeadContent,
-  Outlet,
   ScriptOnce,
   Scripts,
 } from "@tanstack/react-router";
@@ -57,7 +56,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: "stylesheet", href: appCss },
     ],
   }),
-  component: RootComponent,
+  // <html> は shellComponent で描く。component（エラー境界の内側）で描くと、root でエラーが起きたときに errorComponent が
+  // <html> の外に出て、CSS もハイドレーションも無い画面になる（@tanstack/react-router の Match は root の shellComponent だけを
+  // エラー境界の外に置く）。component を省くと root は <Outlet /> を描く
+  shellComponent: RootDocument,
   errorComponent: FullScreenError,
   // loader からの `throw notFound()` はここが受ける(getNotFoundBoundaryIndex は
   // 「notFoundComponent を持つ最も近い祖先(無ければ root)」を boundary に選び、子ルートは
@@ -67,14 +69,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   notFoundComponent: DefaultNotFoundComponent,
   pendingComponent: PendingComponent,
 });
-
-function RootComponent() {
-  return (
-    <RootDocument>
-      <Outlet />
-    </RootDocument>
-  );
-}
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (

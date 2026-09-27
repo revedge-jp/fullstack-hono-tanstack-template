@@ -13,11 +13,16 @@ esac
 cd "$(dirname "$0")/../../packages/database"
 
 # lock_timeout は接続時のパラメータ（options）で渡す。DB の前段のプロキシがこれを拒むと、マイグレーションが毎回
-# 失敗してデプロイが止まるので、先に接続を試し、拒まれたら lock_timeout 無しで続ける（警告に理由を出す）。
+# 失敗してデプロイが止まるので、先に接続を試し、lock_timeout だけが拒まれるなら付けずに続ける（警告に理由を出す）。
 # 試すのは drizzle-kit と同じドライバ（drizzle-kit は pg があれば pg、無ければ postgres.js を使う）。ドライバが違うと
 # URL の解釈が違い（postgres.js は未知のクエリパラメータもサーバーへ送る）、試す方だけが失敗して lock_timeout が外れる
 url_with_timeout="${DATABASE_URL}${separator}options=-c%20lock_timeout%3D${LOCK_TIMEOUT}"
-if probe_error=$(PROBE_URL="$url_with_timeout" bun -e '
+lock_hint="ロックを ${LOCK_TIMEOUT} で取れなかった可能性があります。DB のログで lock timeout を確かめ、そうなら空いている時間に Deploy を rerun してください（docs/deploy/operations.md）。SQL の誤りなら直して出し直す"
+
+# 接続を試し、失敗したら stderr の最初のエラーの行を返す（成功なら空）
+probe() {
+  local output
+  if output=$(PROBE_URL="$1" bun -e '
   import { createRequire } from "node:module";
   const load = createRequire(require.resolve("drizzle-kit"));
   let pg;
@@ -33,17 +38,35 @@ if probe_error=$(PROBE_URL="$url_with_timeout" bun -e '
     try { await sql`select 1`; } finally { await sql.end({ timeout: 5 }); }
   }
 ' 2>&1 >/dev/null); then
-  migrate_url="$url_with_timeout"
-  failure_hint="ロックを ${LOCK_TIMEOUT} で取れなかった可能性があります。DB のログで lock timeout を確かめ、そうなら空いている時間に Deploy を rerun してください（docs/deploy/operations.md）。SQL の誤りなら直して出し直す"
-else
-  probe_reason=$(printf '%s\n' "$probe_error" | grep -m1 -E '^(error|[A-Za-z]*Error):' | cut -c1-200 || true)
-  echo "::warning::lock_timeout を付けた接続に失敗したので、lock_timeout 無しでマイグレーションします（理由: ${probe_reason:-不明}）"
-  migrate_url="$DATABASE_URL"
-  failure_hint="lock_timeout を付けた接続にも失敗しています（理由: ${probe_reason:-不明}）。接続先・認証・ネットワークを確かめてください"
+    return 0
+  fi
+  printf '%s\n' "$output" | grep -m1 -E '^(error|[A-Za-z]*Error):' | cut -c1-200 || true
+  return 1
+}
+
+# lock_timeout 付きで失敗したら、付けずに試して「lock_timeout を拒まれた」のか「そもそも接続できない」のかを分ける。
+# 一時的な失敗で lock_timeout を外さないよう、付けずに通ったらもう一度付けて試す
+migrate_url="$url_with_timeout"
+if ! reason=$(probe "$url_with_timeout"); then
+  if ! plain_reason=$(probe "$DATABASE_URL"); then
+    echo "::error::DB に接続できません（理由: ${plain_reason:-不明}）。接続先・認証・ネットワークを確かめてください"
+    exit 1
+  fi
+  if ! reason=$(probe "$url_with_timeout"); then
+    # 値そのものが不正（MIGRATION_LOCK_TIMEOUT の書き間違い）なら、プロキシのせいにして外さずに止める
+    if printf '%s' "$reason" | grep -q 'parameter "lock_timeout"'; then
+      echo "::error::MIGRATION_LOCK_TIMEOUT の値が不正です（${LOCK_TIMEOUT}。例: 5s）"
+      exit 1
+    fi
+    echo "::warning::lock_timeout を付けた接続だけが失敗するので、lock_timeout 無しでマイグレーションします（理由: ${reason:-不明}。DB の前段のプロキシが options を受け付けない可能性）"
+    migrate_url="$DATABASE_URL"
+    lock_hint="lock_timeout を付けられなかったので、ロック待ちではありません。SQL の誤り・接続の途中の失敗を確かめてください"
+  fi
 fi
 
 # drizzle-kit migrate は失敗の理由を表示しない（終了コードだけ）ので、ここで考えられる理由を出す
 if ! DATABASE_URL="$migrate_url" bunx drizzle-kit migrate; then
-  echo "::error::マイグレーションが失敗しました（drizzle-kit は理由を表示しない）。${failure_hint}"
+  # drizzle-kit はスピナーを改行なしで書くので、改行してから出す（行頭の :: でないと Actions の注釈にならない）
+  printf '\n::error::マイグレーションが失敗しました（drizzle-kit は理由を表示しない）。%s\n' "$lock_hint"
   exit 1
 fi
