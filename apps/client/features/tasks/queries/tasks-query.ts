@@ -4,9 +4,10 @@ import { browserApiClient as apiClient } from "@/shared/lib/browser-api-client";
 
 import { type TasksPage, TasksListResponseSchema } from "./schemas";
 
-// クライアントサイドの再取得用 useQuery 定義。
-// 初回表示は SSR（loader + getTasksServerFn）で行い、mutation 後の更新は
-// この query の invalidate（ブラウザからの HTTP 再取得）で行う。
+// タスク一覧の query 定義（queryKey と、ブラウザから取る queryFn）。
+// loader は同じ queryKey に queryFn だけを getTasksServerFn に差し替えて ensureQueryData する（SSR ではブラウザ用の
+// API クライアントが使えないため）。画面は useSuspenseQuery でこの定義を読み、古くなったときと mutation 後の
+// invalidate では、ブラウザから同一オリジン API を直接取り直す。
 // mutation 後に loader を再実行（router.invalidate）しない理由:
 // クライアント遷移時の loader は serverFn の HTTP 呼び出しになり、
 // ブラウザから同一オリジン API を直接叩くのに比べて一往復増えるだけで利点がない。

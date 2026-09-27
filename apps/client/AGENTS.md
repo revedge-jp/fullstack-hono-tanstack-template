@@ -25,7 +25,7 @@ features/{feature}/
 
 ### Data fetching: SSR vs client-side
 
-基本方針: **初回表示のデータはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。mutation 後の再取得はブラウザからの `useQuery` invalidate で行う。
+基本方針: **初回表示のデータはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。mutation 後の再取得はブラウザからの invalidate で行う。loader と画面は**同じ queryKey のキャッシュ**を通して受け渡す（loader は `ensureQueryData`、画面は `useSuspenseQuery`）。
 
 **mutation を `createServerFn` にしてはいけない**: mutation はユーザー操作起点で SSR 先読みが不要なので、
 サーバー関数にしても「ブラウザ → serverFn → in-process の api-service」と呼び出しが 1 段増えるだけで得るものが無い
@@ -33,7 +33,7 @@ features/{feature}/
 （cookie は同送される）。
 実例: `features/tasks/actions/create-task.ts`。
 
-**SSR（推奨）**: `loader` でサーバーサイド取得 → `Route.useLoaderData()` で参照
+**SSR（推奨）**: `loader` で `ensureQueryData`（queryFn だけサーバー関数に差し替える）→ 画面は `useSuspenseQuery`
 
 ```typescript
 // queries/get-xxx.ts — getApiClient() は server.ts が ALS 注入した in-process Hono RPC クライアント
@@ -49,19 +49,23 @@ export const getXxxServerFn = createServerFn().handler(async () => {
 
 // app/routes/xxx.tsx
 export const Route = createFileRoute("/xxx")({
-  loader: async () => {
-    const data = await getXxxServerFn();
-    return { data };
-  },
+  // キャッシュが無いときだけ取る（SSR とクライアント遷移の初回）。SSR ではブラウザ用の API クライアントが
+  // 使えないので、queryKey は xxxQueryOptions のまま queryFn だけをサーバー関数に差し替える。
+  // SSR で入れたキャッシュは setupRouterSsrQueryIntegration（app/router.tsx）がブラウザへ渡す
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData({ ...xxxQueryOptions(), queryFn: () => getXxxServerFn() }),
   component: XxxPage,
 });
 
 function XxxPage() {
-  const { data: initialData } = Route.useLoaderData(); // SSRで取得済み、ローディング不要
-  // mutation 後の invalidate で再取得できるよう、loader の結果を useQuery の初期値にする
-  const { data } = useQuery({ ...xxxQueryOptions(), initialData });
+  // loader が入れたキャッシュを読む（ローディング無し）。古くなっていれば xxxQueryOptions の queryFn で
+  // ブラウザから取り直し、mutation 後の invalidate でも同じ queryFn で取り直す
+  const { data } = useSuspenseQuery(xxxQueryOptions());
 }
 ```
+
+**`Route.useLoaderData()` の値を `useQuery({ initialData })` に渡す形にしない**: キャッシュが既にある（一度見たページに
+戻った）と `initialData` は使われないので、loader が取った新しいデータを捨てて古いキャッシュを出し、同じ一覧を無駄に 2 回取得する。
 
 実例: `features/tasks/queries/get-tasks.ts`（401/403 を `isSsrAuthIndeterminate` で判定して空ページで返す扱いも含む。下の「Auth pattern」）と
 `app/routes/_authenticated/tasks.tsx`。レスポンスは `res.json()` をそのまま返さず、`schemas.ts` の Zod で検証している。

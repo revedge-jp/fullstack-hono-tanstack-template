@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -13,23 +13,27 @@ const TasksSearchSchema = z.object({
 });
 
 // データ取得の役割分担（apps/client/AGENTS.md の「Data fetching: SSR vs client-side」パターン）:
-// - 初回表示: loader + createServerFn によるサーバーサイド取得（ローディング状態なし）
+// - loader: queryClient.ensureQueryData で、キャッシュが無いときだけサーバー関数で取る（SSR とクライアント遷移の初回）。
+//   SSR ではブラウザ用の API クライアントが使えないので、queryFn だけを getTasksServerFn に差し替える
+// - 画面: 同じ queryKey を useSuspenseQuery で読む（loader が入れたキャッシュをそのまま使い、古ければブラウザから取り直す）
 // - mutation 後の更新: tasksQueryOptions の invalidate によるブラウザからの再取得
+// loader の戻り値を useQuery の初期値として渡す形にしない。キャッシュが既にあるとその初期値は使われず、
+// loader が取ったデータを捨てて古いキャッシュを出す（apps/client/AGENTS.md の「Data fetching」）
 export const Route = createFileRoute("/_authenticated/tasks")({
   head: () => ({ meta: [{ title: "タスク | {{APP_NAME}}" }] }),
   validateSearch: TasksSearchSchema,
   loaderDeps: ({ search }) => ({ cursor: search.cursor }),
-  loader: async ({ deps }) => {
-    const tasks = await getTasksServerFn({ data: { cursor: deps.cursor } });
-    return { tasks };
-  },
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureQueryData({
+      ...tasksQueryOptions(deps.cursor),
+      queryFn: () => getTasksServerFn({ data: { cursor: deps.cursor } }),
+    }),
   component: TasksPage,
 });
 
 function TasksPage() {
-  const { tasks: initialTasks } = Route.useLoaderData();
   const { cursor } = Route.useSearch();
-  const { data: tasks } = useQuery({ ...tasksQueryOptions(cursor), initialData: initialTasks });
+  const { data: tasks } = useSuspenseQuery(tasksQueryOptions(cursor));
 
   return (
     <CenteredPage>

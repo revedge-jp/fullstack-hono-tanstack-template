@@ -271,6 +271,12 @@ expect_guard "api-service の中の自分のパッケージ名の import（ル�
 export const selftestSelfImport = createApp;' \
   "@app/... から import してください"
 
+expect_guard "client のルートで loader の値を initialData に渡す" \
+  guard_client_routes_no_initial_data \
+  "apps/client/app/routes/__selftest-initial-data.tsx" \
+  'export const selftestInitialData = (loaderData: unknown) => ({ initialData: loaderData });' \
+  "initialData を使わず"
+
 expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
   guard_client_queries_server_modules \
   "apps/client/features/tasks/queries/__selftest-query.ts" \
