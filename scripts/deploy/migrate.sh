@@ -26,7 +26,9 @@ if probe_error=$(PROBE_URL="$url_with_timeout" bun -e '
     const client = new pg.Client({ connectionString: process.env.PROBE_URL, connectionTimeoutMillis: 15000 });
     try { await client.connect(); await client.query("select 1"); } finally { await client.end().catch(() => {}); }
   } else {
-    const postgres = load("postgres");
+    // Bun の require は postgres の exports の "bun" 条件（ESM）を選び、関数は default にある
+    const loaded = load("postgres");
+    const postgres = loaded.default ?? loaded;
     const sql = postgres(process.env.PROBE_URL, { max: 1, connect_timeout: 15 });
     try { await sql`select 1`; } finally { await sql.end({ timeout: 5 }); }
   }
