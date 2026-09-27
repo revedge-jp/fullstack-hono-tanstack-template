@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuthUser } from "@app/features/auth/domain/models";
 import { reconstituteTask } from "@app/features/tasks/domain/models";
-import { createFakeApp } from "api-service/test-helpers";
+import { createFakeApp } from "@app/test-helpers/create-fake-app";
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 
 const mockUser: AuthUser = {

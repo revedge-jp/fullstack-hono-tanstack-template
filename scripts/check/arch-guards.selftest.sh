@@ -257,6 +257,20 @@ else
   echo "✅ class 禁止（コメントの中の語は数えない）"
 fi
 
+expect_guard "api-service の中の自分のパッケージ名の import" \
+  guard_api_no_self_package_import \
+  "apps/api-service/src/__tests__/unit/__selftest_self_import.test.ts" \
+  'import { createFakeApp } from "api-service/test-helpers";
+export const selftestSelfImport = createFakeApp;' \
+  "@app/... から import してください"
+
+expect_guard "api-service の中の自分のパッケージ名の import（ルート）" \
+  guard_api_no_self_package_import \
+  "apps/api-service/src/__tests__/unit/__selftest_self_import.test.ts" \
+  'import { createApp } from "api-service";
+export const selftestSelfImport = createApp;' \
+  "@app/... から import してください"
+
 expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
   guard_client_queries_server_modules \
   "apps/client/features/tasks/queries/__selftest-query.ts" \

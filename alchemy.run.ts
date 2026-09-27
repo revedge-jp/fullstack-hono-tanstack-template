@@ -108,6 +108,115 @@ if (edgeRateLimitRpm !== undefined && !customDomain) {
 // secret-access-key=...）。Workers Paid プランが必要。値に資格情報を含むため secret 扱い。
 const logpushDestination = (!isPreview && process.env.LOGPUSH_DESTINATION) || undefined;
 
+// GitHub Actions は CI=true を渡す。CI=false のような値を CI 扱いにしない（ローカルのガードと finalize の判定に使う）
+const isCi = process.env.CI === "true";
+
+// Cloudflare の Workers Custom Domains の一覧で、このホスト名がこの Worker に付いているかを見る
+async function isCustomDomainAttached(hostname: string, service: string): Promise<boolean> {
+  const cfApi = await createCloudflareApi();
+  const res = await cfApi.get(
+    `/accounts/${cfApi.accountId}/workers/domains?hostname=${encodeURIComponent(hostname)}`,
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Workers Custom Domains の確認に失敗しました（HTTP ${res.status}）。CLOUDFLARE_API_TOKEN の権限を確認してください`,
+    );
+  }
+  const body: { result?: Array<{ hostname?: string; service?: string }> } = await res.json();
+  return (body.result ?? []).some(
+    (domain) => domain.hostname === hostname && domain.service === service,
+  );
+}
+
+// /api/health/live が 200 を返すまで待つ（証明書の発行・DNS の反映に数分かかることがある）
+async function waitUntilServing(origin: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    try {
+      const res = await fetch(`${origin}/api/health/live`, { signal: AbortSignal.timeout(10_000) });
+      if (res.ok) {
+        return true;
+      }
+    } catch {
+      // まだ届かない
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+  return false;
+}
+
+const ALLOW_UNVERIFIED_HINT =
+  "初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付けて実行してください";
+
+// 稼働中のインフラの定義の commit（/api/health/live の infraCommit）を、手元の HEAD が含むかを確かめる
+async function assertLocalCheckoutCoversRunningInfra(origin: string): Promise<void> {
+  let running: string | undefined;
+  try {
+    const res = await fetch(`${origin}/api/health/live`, { signal: AbortSignal.timeout(10_000) });
+    if (res.ok) {
+      const body: { infraCommit?: unknown; commit?: unknown } = await res.json();
+      const value = body.infraCommit ?? body.commit;
+      running = typeof value === "string" ? value : undefined;
+    }
+  } catch {
+    running = undefined;
+  }
+  if (running === undefined || !/^[0-9a-f]{40}$/.test(running)) {
+    throw new Error(
+      `稼働中のインフラの定義の commit を ${origin}/api/health/live から読めません` +
+        "（CUSTOM_DOMAIN 等の GitHub Environment の変数を入れ忘れた・稼働中の版を GIT_SHA 無しでデプロイした等）。" +
+        ALLOW_UNVERIFIED_HINT,
+    );
+  }
+  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
+  try {
+    git("merge-base", "--is-ancestor", running, "HEAD");
+  } catch {
+    throw new Error(
+      `手元の HEAD が稼働中のインフラの定義の commit（${running}）を含みません。git fetch して、それを含む commit ` +
+        "からデプロイしてください（古い checkout でデプロイすると、稼働中より古い定義で Worker 等が上書きされる）",
+    );
+  }
+  if (
+    git(
+      "status",
+      "--porcelain",
+      "--untracked-files=no",
+      "--",
+      "alchemy.run.ts",
+      "package.json",
+      "bun.lock",
+    )
+  ) {
+    throw new Error(
+      "alchemy.run.ts・package.json・bun.lock にコミットしていない変更があります。コミットしてからデプロイしてください",
+    );
+  }
+}
+
+// ローカル（CI 以外）から staging / production へデプロイするときは、手元の checkout が稼働中のインフラの定義を
+// 含むときだけ進める（古い checkout・作業中のブランチでデプロイすると、稼働中より古い定義で DB のサイズ・Hyperdrive・
+// Worker 等が上書きされる）。リソースを 1 つも宣言しないうちに確かめ、SKIP_WORKER=1 の段も対象にする。
+// GitHub Environment にしか無い変数の入れ忘れはここでは分からないので、ローカルでは finalize しない（ファイル末尾）。
+// 初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 で飛ばす
+if (!isCi && !isPreview && process.env.ALLOW_UNVERIFIED_LOCAL_DEPLOY !== "1") {
+  const workersDevOrigin = process.env.WORKERS_SUBDOMAIN
+    ? `https://${workerName}.${process.env.WORKERS_SUBDOMAIN}.workers.dev`
+    : undefined;
+  const configuredOrigin =
+    (customDomain && `https://${customDomain}`) || process.env.APP_ORIGIN || workersDevOrigin;
+  // ドメインを足すデプロイでは、稼働中の版はまだ workers.dev で動いている
+  const runningOrigin =
+    customDomain && !(await isCustomDomainAttached(customDomain, workerName))
+      ? workersDevOrigin
+      : configuredOrigin;
+  if (!runningOrigin) {
+    throw new Error(
+      `稼働中の版を読む URL がありません（CUSTOM_DOMAIN / APP_ORIGIN / WORKERS_SUBDOMAIN）。${ALLOW_UNVERIFIED_HINT}`,
+    );
+  }
+  await assertLocalCheckoutCoversRunningInfra(runningOrigin);
+}
+
 // ---- PlanetScale (DB + Role) -------------------------------------------
 // 認証はサービストークン（PLANETSCALE_SERVICE_TOKEN_ID / PLANETSCALE_SERVICE_TOKEN）。
 // プロバイダは環境変数を暗黙参照するが、エラーを早期化するためここで検証する。
@@ -204,88 +313,6 @@ const HYPERDRIVE_ORIGIN_CONNECTION_LIMIT = 15;
   );
 }
 
-// Cloudflare の Workers Custom Domains の一覧で、このホスト名がこの Worker に付いているかを見る
-async function isCustomDomainAttached(hostname: string, service: string): Promise<boolean> {
-  const cfApi = await createCloudflareApi();
-  const res = await cfApi.get(
-    `/accounts/${cfApi.accountId}/workers/domains?hostname=${encodeURIComponent(hostname)}`,
-  );
-  if (!res.ok) {
-    throw new Error(
-      `Workers Custom Domains の確認に失敗しました（HTTP ${res.status}）。CLOUDFLARE_API_TOKEN の権限を確認してください`,
-    );
-  }
-  const body: { result?: Array<{ hostname?: string; service?: string }> } = await res.json();
-  return (body.result ?? []).some(
-    (domain) => domain.hostname === hostname && domain.service === service,
-  );
-}
-
-// /api/health/live が 200 を返すまで待つ（証明書の発行・DNS の反映に数分かかることがある）
-async function waitUntilServing(origin: string): Promise<boolean> {
-  for (let attempt = 0; attempt < 18; attempt += 1) {
-    try {
-      const res = await fetch(`${origin}/api/health/live`, { signal: AbortSignal.timeout(10_000) });
-      if (res.ok) {
-        return true;
-      }
-    } catch {
-      // まだ届かない
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
-  }
-  return false;
-}
-
-const ALLOW_UNVERIFIED_HINT =
-  "初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 を付けて実行してください";
-
-// 稼働中のインフラの定義の commit（/api/health/live の infraCommit）を、手元の HEAD が含むかを確かめる
-async function assertLocalCheckoutCoversRunningInfra(origin: string): Promise<void> {
-  let running: string | undefined;
-  try {
-    const res = await fetch(`${origin}/api/health/live`, { signal: AbortSignal.timeout(10_000) });
-    if (res.ok) {
-      const body: { infraCommit?: unknown; commit?: unknown } = await res.json();
-      const value = body.infraCommit ?? body.commit;
-      running = typeof value === "string" ? value : undefined;
-    }
-  } catch {
-    running = undefined;
-  }
-  if (running === undefined || !/^[0-9a-f]{40}$/.test(running)) {
-    throw new Error(
-      `稼働中のインフラの定義の commit を ${origin}/api/health/live から読めません` +
-        "（CUSTOM_DOMAIN 等の GitHub Environment の変数を入れ忘れた・稼働中の版を GIT_SHA 無しでデプロイした等）。" +
-        ALLOW_UNVERIFIED_HINT,
-    );
-  }
-  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
-  try {
-    git("merge-base", "--is-ancestor", running, "HEAD");
-  } catch {
-    throw new Error(
-      `手元の HEAD が稼働中のインフラの定義の commit（${running}）を含みません。git fetch して、それを含む commit ` +
-        "からデプロイしてください（古い checkout でデプロイすると、稼働中より古い定義で Worker 等が上書きされる）",
-    );
-  }
-  if (
-    git(
-      "status",
-      "--porcelain",
-      "--untracked-files=no",
-      "--",
-      "alchemy.run.ts",
-      "package.json",
-      "bun.lock",
-    )
-  ) {
-    throw new Error(
-      "alchemy.run.ts・package.json・bun.lock にコミットしていない変更があります。コミットしてからデプロイしてください",
-    );
-  }
-}
-
 // ---- Worker ------------------------------------------------------------
 // vite build（@cloudflare/vite-plugin）の成果物をそのままデプロイする。
 // noBundle: true — dist/server/ 以下の .js チャンクは既に CF Workers 向けにバンドル済み。
@@ -324,19 +351,6 @@ if (process.env.SKIP_WORKER !== "1") {
   const customDomainAttached = customDomain
     ? await isCustomDomainAttached(customDomain, workerName)
     : false;
-  const workersDevOrigin = process.env.WORKERS_SUBDOMAIN
-    ? `https://${workerName}.${process.env.WORKERS_SUBDOMAIN}.workers.dev`
-    : undefined;
-
-  // ローカル（CI 以外）から staging / production へデプロイするときは、手元の checkout が稼働中のインフラの定義を
-  // 含むときだけ進める（古い checkout・作業中のブランチでデプロイすると、稼働中より古い定義で Worker 等が上書きされる）。
-  // GitHub Environment にしか無い変数の入れ忘れはここでは分からないので、ローカルでは finalize しない（ファイル末尾）。
-  // 初回デプロイなど稼働中の版が無いときだけ ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 で飛ばす
-  if (!process.env.CI && !isPreview && process.env.ALLOW_UNVERIFIED_LOCAL_DEPLOY !== "1") {
-    // ドメインを足すデプロイでは、稼働中の版はまだ workers.dev で動いている
-    const runningOrigin = customDomain && !customDomainAttached ? workersDevOrigin : appOrigin;
-    await assertLocalCheckoutCoversRunningInfra(runningOrigin ?? appOrigin);
-  }
 
   // WAF の上書きガードは Worker を更新する前に確かめる（後で止めると、新しいコードだけが公開されたまま smoke を通らない）
   const ruleMarker = `[alchemy:${workerName}]`;
@@ -509,7 +523,7 @@ if (process.env.SHOW_DATABASE_URL === "1" && !process.env.CI) {
 // （EDGE_RATE_LIMIT_RPM・LOGPUSH_DESTINATION 等）を入れ忘れると、その宣言が外れて finalize が稼働中のリソースを
 // 削除する。宣言から外したリソースの削除は、Environment の変数でデプロイする CI に限る
 if (process.env.SKIP_WORKER !== "1") {
-  if (process.env.CI) {
+  if (isCi) {
     await app.finalize();
   } else {
     console.info(

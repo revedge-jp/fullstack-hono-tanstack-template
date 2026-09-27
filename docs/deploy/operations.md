@@ -35,9 +35,10 @@ git fetch origin --tags
 running_sha=$(curl -fsS "$SMOKE_BASE_URL/api/health/live" | jq -r '.infraCommit // .commit')
 
 # 方法1: 過去の成功した Deploy run を GitHub 上で rerun する（その commit が再デプロイされる）
-# rerun はその commit の alchemy.run.ts でデプロイする。稼働中のインフラより後にリソースを足していたら削除されるので、
+# rerun はその commit の alchemy.run.ts・deploy.yml・依存でデプロイする。稼働中のインフラより後にリソースを足していた、
+# または deploy.yml が alchemy に渡す環境変数を足していたら（rerun では空になり宣言が外れる）削除されるので、
 # 次のコマンドの出力が空のときだけ使う（空でなければ方法2）
-git diff <good-sha> "$running_sha" -- alchemy.run.ts
+git diff <good-sha> "$running_sha" -- alchemy.run.ts .github/workflows/deploy.yml package.json bun.lock
 # 戻りたい run を特定する
 gh run list --workflow Deploy
 gh run rerun <run-id>
@@ -85,7 +86,7 @@ deploy.yml は「infra provision → migrate → Worker deploy」の順で実行
 
 | フェーズ | やってよい変更 | 例 |
 |---|---|---|
-| **expand**（先行リリース） | 追加のみ。旧コードを壊さない | カラム追加（NULL 許容 or DEFAULT 付き）、テーブル追加、インデックス追加 |
+| **expand**（先行リリース） | 追加のみ。旧コードを壊さない | カラム追加（NULL 許容 or DEFAULT 付き）、テーブル追加、インデックス追加（下の注意） |
 | **migrate**（コード側） | 新旧両対応のコードをデプロイし、新カラムへ書き込み・バックフィル | |
 | **contract**（後続リリース） | 旧コードが参照しなくなったものを削除 | カラム削除、NOT NULL 化、リネームの旧名削除 |
 
@@ -97,6 +98,13 @@ expand 済みのリリースの後の contract なら、そのファイルの先
 このチェックが読むのは drizzle-kit が出すテーブル・カラム・制約・index・enum の変更の形だけで、それ以外（`DO $$ ... $$`・
 ブロックコメント・`COLUMN` を省いた `ALTER TABLE`・sequence / policy / role の変更・関数の作成など）は「読まない書き方」として止める。手書きの SQL は別のマイグレーションファイルに分け、同じ印に理由を書く。
 0007 以前はガードより前に適用済みの履歴なので対象外（0007 は backfill と SET NOT NULL を 1 本で行っている）。
+
+**ロックの待ち時間**: デプロイのマイグレーション（`scripts/deploy/migrate.sh`）は `lock_timeout=5s` で実行する（DB の前段の
+プロキシが接続時のパラメータを拒むときは、警告に理由を出して lock_timeout 無しで実行する。警告が出ていないかを見る）。ALTER TABLE 等が
+ロックを待つ間は、同じテーブルへの後続のクエリがすべてその後ろに並ぶため、時間のかかるクエリの後ろで待つと本番が止まる。5 秒待っても
+取れなければマイグレーションが失敗し、Worker はデプロイされない（旧版のまま動く）。空いている時間に Deploy を rerun する。
+`CREATE INDEX` はインデックスを作り終えるまで、そのテーブルへの書き込みを止める（drizzle のマイグレーションはトランザクションの中で
+動くので `CONCURRENTLY` は使えない）。行数の多いテーブルに足すときは、アクセスの少ない時間にデプロイする。
 
 ## 障害通知
 

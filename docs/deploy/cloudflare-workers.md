@@ -95,10 +95,11 @@ main に push するだけでよい（DB がなければ Alchemy が作り、CI 
 
 ```bash
 # .env に Infra セクション（.env.example 参照）を設定した上で
-# 1) DB / Hyperdrive だけを作り、接続 URL を表示する（CI では表示しない。ログに残さないこと）
-SKIP_WORKER=1 SHOW_DATABASE_URL=1 bun run infra:deploy:staging
-# 2) 表示された DATABASE_URL でマイグレーションする
-(cd packages/database && DATABASE_URL='<表示された URL>' bunx drizzle-kit migrate)
+# 1) DB / Hyperdrive だけを作り、接続 URL を表示する（CI では表示しない。ログに残さないこと）。
+#    初回は稼働中の版が無いので、ローカルデプロイの照合を飛ばす（docs/dev/alchemy-iac.md）
+ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 SKIP_WORKER=1 SHOW_DATABASE_URL=1 bun run infra:deploy:staging
+# 2) 表示された DATABASE_URL でマイグレーションする（CI と同じく lock_timeout を付ける）
+DATABASE_URL='<表示された URL>' bash scripts/deploy/migrate.sh
 # 3) Worker をデプロイする（初回は稼働中の版が無いので、ローカルデプロイの照合を飛ばす。docs/dev/alchemy-iac.md）
 ALLOW_UNVERIFIED_LOCAL_DEPLOY=1 bun run infra:deploy:staging
 ```
@@ -168,7 +169,8 @@ OAuth コールバック後に Better Auth が未 await のバックグラウン
 ### ログインができない（session check で 401）
 
 → PlanetScale ダッシュボード（Console タブ）で `auth_sessions` テーブルにレコードが作成されているか確認。
-ある場合は Hyperdrive のキャッシュが原因の可能性。Cloudflare ダッシュボードで Hyperdrive のキャッシュを一時的に無効化して確認。
+ある場合は、Hyperdrive のキャッシュが有効になっていないかを Cloudflare ダッシュボードで確かめる（`alchemy.run.ts` は
+`caching: { disabled: true }` で作る。ダッシュボードで手で有効にしていると、古いセッションの行が返る）。
 
 ### `Timed out while waiting for a message from another Hyperdrive node`
 

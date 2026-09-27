@@ -57,15 +57,19 @@ const client = postgres(connectionString, {
 ### 3. per-request クライアント + ctx.waitUntil(end())
 
 CF Workers では、リクエストのレスポンスを返した後も Event Loop を生かし続けるために `ctx.waitUntil()` が必要。
+接続を閉じるのはレスポンスのボディを送り終えた後にする（`Response` を返した時点で閉じると、ストリーミング応答の裏で
+実行中のクエリの接続が閉じられ、`CONNECTION_ENDED` の 500 になる）。
 
 ```typescript
-// apps/client/app/server.ts
-const { app, end, auth } = initHonoApp(env);
-const cleanup = () => end().catch(() => undefined);
-
-const result = await handler(request);
-ctx.waitUntil(cleanup());  // レスポンス送信後に接続をドレイン
-return result;
+// apps/client/app/server.ts（releaseAfterResponse の要点）
+const { readable, writable } = new TransformStream();
+waitUntil(
+  response.body
+    .pipeTo(writable)
+    .catch(() => undefined)
+    .then(() => cleanup()), // ボディの送信が終わって（またはキャンセルされて）から接続をドレイン
+);
+return new Response(readable, response);
 ```
 
 `cleanup()` を呼ばずに Worker が終了すると、postgres.js の接続が正常にクローズされず、次のリクエストで不安定になる場合がある。

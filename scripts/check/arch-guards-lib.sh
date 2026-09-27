@@ -53,6 +53,7 @@ ARCH_GUARDS=(
   guard_features_no_process_env
   guard_client_features_no_process_env
   guard_client_queries_server_modules
+  guard_api_no_self_package_import
   guard_no_direct_zod_validator
   guard_no_legacy_result_api
   guard_usecase_result_chain
@@ -329,6 +330,20 @@ guard_features_no_process_env() {
   fi
 }
 
+guard_api_no_self_package_import() {
+  echo "[guard] api-service の中で自分のパッケージ名（api-service/...）から import しない"
+  # パッケージ名の export（api-service・api-service/test-helpers）は、dist があるとそこから型を読む。api-service#typecheck は
+  # 自分の build を待たないので、古い dist のときに古い型で通る・落ちる。中では @app/ を使う
+  SELF_VIOL=$(grep -rnE "from [\"']api-service(/|[\"'])" apps/api-service/src --include='*.ts' --include='*.tsx' || true)
+  if [ -z "$SELF_VIOL" ]; then
+    echo "OK"
+  else
+    echo "違反: api-service の中では api-service/... ではなく @app/... から import してください（型を dist から読むため）"
+    echo "$SELF_VIOL" | sed 's/^/  • /'
+    return 1
+  fi
+}
+
 guard_client_queries_server_modules() {
   echo "[guard] client の queries でサーバー専用モジュール（api-client・hono-app・server-logger）を使うのは createServerFn のファイルだけ"
   # dependency-cruiser の client-browser-no-server-modules は ui / actions / routes からの直接の import を止めるが、
@@ -363,8 +378,16 @@ guard_client_features_no_process_env() {
   # app/server.ts は Worker の env（bindings）を引数で受け取るので process.env を使わない。features 以外も同じく見る
   CLIENT_ENV_VIOL=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
     xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env" -- || true)
-  CLIENT_ENV_IMPORTS=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
-    xargs -0 bash scripts/check/env-import-scan.sh)
+  # 無いディレクトリを find に渡すと非 0 になり、pipefail で理由を出さずに落ちるので、ある分だけを渡す
+  local client_dirs=()
+  for dir in apps/client/app apps/client/features apps/client/shared apps/client/components; do
+    [ -d "$dir" ] && client_dirs+=("$dir")
+  done
+  CLIENT_ENV_IMPORTS=""
+  if [ "${#client_dirs[@]}" -gt 0 ]; then
+    CLIENT_ENV_IMPORTS=$(find "${client_dirs[@]}" -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
+      xargs -0 bash scripts/check/env-import-scan.sh)
+  fi
   CLIENT_ENV_VIOL=$(printf '%s\n%s\n' "$CLIENT_ENV_VIOL" "$CLIENT_ENV_IMPORTS" | grep -v '^$' || true)
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"

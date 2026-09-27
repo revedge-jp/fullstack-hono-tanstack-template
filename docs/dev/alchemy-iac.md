@@ -24,7 +24,7 @@
 ```
 ① bunx alchemy deploy --stage <target>   # SKIP_WORKER=1: DB / Role / Hyperdrive まで
    └─ DATABASE_URL を GITHUB_ENV へ export（::add-mask:: 済み）
-② bun run db:migrate                     # ①が export した URL を使用
+② bash scripts/deploy/migrate.sh         # ①が export した URL に lock_timeout を付けて migrate（付けられなければ警告）
 ③ bunx alchemy deploy --stage <target>   # Worker デプロイ（全リソース reconcile）
 ```
 
@@ -66,8 +66,9 @@ bun run infra:deploy:production   # production をデプロイ（通常は CI。
 # ローカルのデプロイは宣言から外れたリソースを削除しない（finalize しない）。リソースの削除は CI のデプロイで行われる
 bun run infra:destroy:staging     # staging のリソースを削除
 
-# ローカルでマイグレーションを流したい時: 接続 URL の取り出し口
-SHOW_DATABASE_URL=1 bun run infra:deploy:staging
+# ローカルでマイグレーションを流したい時: 接続 URL を取り出し、CI と同じスクリプトで流す（lock_timeout 付き）
+SKIP_WORKER=1 SHOW_DATABASE_URL=1 bun run infra:deploy:staging
+DATABASE_URL='<表示された URL>' bash scripts/deploy/migrate.sh
 ```
 
 命名は staging: `{APP_NAME}-staging`、production: `{APP_NAME}`。DB も同じ命名で stage ごとに

@@ -244,9 +244,10 @@ jobs:
           SKIP_WORKER: "1"
 
       # ② 新コードが動き出す前にスキーマを揃える
+      #    lock_timeout を付けて実行する（ロック待ちで本番のクエリが止まり続けないように。scripts/deploy/migrate.sh）
       - name: Migrate DB
         if: steps.readiness.outputs.ready == 'true'
-        run: cd packages/database && bun run db:migrate
+        run: bash scripts/deploy/migrate.sh
 
       # ③ Worker デプロイ
       - name: Deploy Worker

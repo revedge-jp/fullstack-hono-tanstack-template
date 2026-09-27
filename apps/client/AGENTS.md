@@ -27,9 +27,10 @@ features/{feature}/
 
 基本方針: **初回表示のデータはサーバーで取得する**。`loader` で取得したデータは SSR 時にレスポンスに含まれるため、初回表示でローディング状態が発生せず、ユーザーに即座にコンテンツを見せられる。mutation 後の再取得はブラウザからの `useQuery` invalidate で行う。
 
-**mutation を `createServerFn` にしてはいけない**: サーバー関数化すると実行がサーバー側になり、
-CF Workers では自オリジンへの HTTP ループバックが不可（ADR-001）。mutation はユーザー操作起点で
-SSR 先読みが不要なので、ブラウザから同一オリジン API を直接呼ぶ（cookie は同送される）。
+**mutation を `createServerFn` にしてはいけない**: mutation はユーザー操作起点で SSR 先読みが不要なので、
+サーバー関数にしても「ブラウザ → serverFn → in-process の api-service」と呼び出しが 1 段増えるだけで得るものが無い
+（エラーの形・cookie の転送・検証を serverFn 側でもう一度扱うことになる）。ブラウザから同一オリジン API を直接呼ぶ
+（cookie は同送される）。
 実例: `features/tasks/actions/create-task.ts`。
 
 **SSR（推奨）**: `loader` でサーバーサイド取得 → `Route.useLoaderData()` で参照
@@ -100,8 +101,8 @@ export function xxxQueryOptions() {
 import { browserApiClient as apiClient } from "@/shared/lib/browser-api-client";
 
 // サーバーサイド（createServerFn内）: in-process クライアント + Cookie転送
-// （HTTP ループバックは CF Workers で不可のため、server.ts が app.request を束ねた
-//  hc クライアントを AsyncLocalStorage で注入する — shared/lib/api-client.ts / ADR-001）
+// （server.ts が app.request を束ねた hc クライアントを AsyncLocalStorage で注入する。
+//  HTTP で自オリジンを呼ばないので、ネットワークを経由しない — shared/lib/api-client.ts / ADR-001）
 import { getApiClient } from "@/shared/lib/api-client";
 const res = await getApiClient().api.xxx.$get({}, {
   init: { headers: { cookie } },

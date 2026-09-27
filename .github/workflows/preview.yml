@@ -144,7 +144,7 @@ jobs:
       # ② 空の DB ブランチにスキーマを適用（2回目以降は差分のみ）
       - name: Migrate DB branch
         if: steps.readiness.outputs.ready == 'true'
-        run: cd packages/database && bun run db:migrate
+        run: bash scripts/deploy/migrate.sh
 
       # ③ Worker デプロイ
       - name: Deploy Worker

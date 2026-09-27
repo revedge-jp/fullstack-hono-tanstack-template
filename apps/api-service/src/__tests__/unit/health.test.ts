@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createFakeApp } from "api-service/test-helpers";
+import { createFakeApp } from "@app/test-helpers/create-fake-app";
 
 // 手動ロールバック（docs/deploy/operations.md）は infraCommit を読んで、どの alchemy.run.ts でデプロイするかを決める。
 // これが応答から消えると commit（アプリの版）に黙って戻り、自動ロールバックの後に新しいリソースを削除する

@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { createAuth } from "@app/integrations/external/auth";
+import { createFakeApp } from "@app/test-helpers/create-fake-app";
 import { createDb } from "@repo/db";
-import { createFakeApp } from "api-service/test-helpers";
 
 import { createLoggerSpy } from "../../test-helpers/create-logger-spy";
 
