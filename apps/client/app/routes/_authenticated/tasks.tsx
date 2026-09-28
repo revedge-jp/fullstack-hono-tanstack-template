@@ -37,7 +37,7 @@ function TasksPage() {
 
   return (
     <CenteredPage>
-      <main className="flex w-full max-w-md flex-col gap-4 p-4">
+      <main className="flex w-full max-w-md flex-col gap-6 px-4 py-6 md:p-8">
         <PageHeader title="タスク" />
         <CreateTaskForm />
         <TaskList items={tasks.items} />

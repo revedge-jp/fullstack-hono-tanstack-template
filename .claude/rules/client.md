@@ -111,7 +111,7 @@ shadcn / Base UI のままなので、SmartHR DS に出てくるコンポーネ�
 | `primary`（+ `-foreground`） | 主要操作。**1 画面で目立たせるのは 1 か所** | `MAIN` |
 | `secondary` / `accent` | 副次操作・hover の面 | `OVER_BACKGROUND` |
 | `destructive` | エラー文言・削除操作 | `DANGER`（明るさを下げた値） |
-| `border` / `input` / `ring` | 罫線・入力枠・フォーカスリング | `BORDER` / `BORDER` / `OUTLINE` |
+| `border` / `input` / `ring` | 罫線・入力枠・フォーカスリング | `BORDER` / `BORDER` / `OUTLINE`（暗くした値） |
 | `chart-1`〜`chart-5` / `sidebar-*` | グラフ系列・サイドバー専用 | `CHART_COLOR_1`〜`5` / `COLUMN` |
 
 値と、SmartHR DS の値からずらした箇所の理由（コントラスト比）は `apps/client/app/globals.css` のコメントにある。

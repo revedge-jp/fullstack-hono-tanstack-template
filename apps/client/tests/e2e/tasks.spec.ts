@@ -59,9 +59,19 @@ test.describe("tasks シナリオ", () => {
     await expect(dialog).not.toBeVisible();
     await expect(item).toBeVisible();
 
+    // 実行ボタンは二度押ししても 1 回だけ送る。閉じるアニメーションの間はダイアログが残って押せるので、
+    // 2 回目が届くと NotFound になり、削除できたのに失敗の文言が出る
+    const deleteRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "DELETE" && request.url().includes("/api/tasks/")) {
+        deleteRequests.push(request.url());
+      }
+    });
     await item.getByRole("button", { name: "削除" }).click();
-    await dialog.getByRole("button", { name: "削除", exact: true }).click();
+    await dialog.getByRole("button", { name: "削除", exact: true }).dblclick();
     await expect(item).not.toBeVisible();
+    await expect(page.getByRole("alert")).not.toBeVisible();
+    expect(deleteRequests).toHaveLength(1);
   });
 
   // Better Auth は getSession の途中で AsyncLocalStorage に置いたリクエスト状態を読む。

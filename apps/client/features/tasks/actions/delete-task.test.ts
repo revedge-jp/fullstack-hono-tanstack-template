@@ -22,7 +22,8 @@ describe("tasks.deleteTask action", () => {
     const result = await deleteTask({ id: "unknown" });
     expect(result).toEqual({
       ok: false,
-      message: "タスクが見つかりません。既に削除された可能性があります",
+      message:
+        "タスクが見つかりません。既に削除された可能性があります。ページを再読み込みして一覧を確認してください",
     });
   });
 

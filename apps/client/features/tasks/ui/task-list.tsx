@@ -59,8 +59,12 @@ export function TaskList({ items }: { items: TaskItem[] }) {
     }
   }
 
+  // 閉じるアニメーションの間はダイアログが DOM に残って押せるので、二度押しで同じ削除を 2 回送らないよう
+  // 送信中なら何もしない（2 回目は NotFound になり、削除できたのに失敗の文言が出る）
+  const deletePending = deleteTarget !== null && pendingIds.has(deleteTarget.id);
+
   function confirmDelete() {
-    if (deleteTarget === null) {
+    if (deleteTarget === null || deletePending) {
       return;
     }
     setDeleteOpen(false);
@@ -136,7 +140,11 @@ export function TaskList({ items }: { items: TaskItem[] }) {
           </dl>
           <AlertDialogFooter>
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={confirmDelete}>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deletePending}
+              onClick={confirmDelete}
+            >
               削除
             </AlertDialogAction>
           </AlertDialogFooter>
