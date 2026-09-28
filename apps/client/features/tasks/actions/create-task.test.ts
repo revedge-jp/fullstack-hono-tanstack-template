@@ -21,21 +21,30 @@ describe("tasks.createTask action", () => {
     api.state.ok = false;
     api.state.body = { ok: false, error: "Conflict" };
     const result = await createTask({ title: "Write docs" });
-    expect(result).toEqual({ ok: false, message: "同じタイトルのタスクが既にあります" });
+    expect(result).toEqual({
+      ok: false,
+      message: "同じタイトルのタスクが既にあります。別のタイトルを入力してください",
+    });
   });
 
   test("異常: エラーレスポンスの形が想定外の場合は既定メッセージ", async () => {
     api.state.ok = false;
     api.state.body = { unexpected: true };
     const result = await createTask({ title: "Write docs" });
-    expect(result).toEqual({ ok: false, message: "タスクの作成に失敗しました" });
+    expect(result).toEqual({
+      ok: false,
+      message: "タスクを追加できませんでした。時間をおいて再度お試しください",
+    });
   });
 
   test("異常: 本文が JSON でない（エッジの 502 等）場合は既定メッセージ", async () => {
     api.state.ok = false;
     api.state.jsonFails = true;
     const result = await createTask({ title: "Write docs" });
-    expect(result).toEqual({ ok: false, message: "タスクの作成に失敗しました" });
+    expect(result).toEqual({
+      ok: false,
+      message: "タスクを追加できませんでした。時間をおいて再度お試しください",
+    });
   });
 
   test("異常: 通信に失敗しても reject せず { ok: false, message } を返す", async () => {

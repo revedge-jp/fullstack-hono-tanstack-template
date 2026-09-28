@@ -8,7 +8,7 @@ import { SignOutButton } from "@/features/auth";
 const authenticatedRoute = getRouteApi("/_authenticated");
 
 export const Route = createFileRoute("/_authenticated/")({
-  head: () => ({ meta: [{ title: "ホーム | {{APP_NAME}}" }] }),
+  head: () => ({ meta: [{ title: "ホーム｜{{APP_NAME}}" }] }),
   component: HomePage,
 });
 

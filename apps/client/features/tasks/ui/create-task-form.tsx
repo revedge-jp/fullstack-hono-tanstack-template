@@ -36,17 +36,18 @@ export function CreateTaskForm() {
           id="task-title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="例: 資料を作成する"
+          placeholder="例：資料を作成する"
           maxLength={200}
           className="flex-1"
           disabled={pending}
+          aria-describedby={message ? "task-title-error" : undefined}
         />
         <Button type="submit" disabled={pending || title.trim().length === 0}>
           追加
         </Button>
       </div>
       {message && (
-        <p role="alert" className="text-sm text-destructive">
+        <p id="task-title-error" role="alert" className="text-sm text-destructive">
           {message}
         </p>
       )}

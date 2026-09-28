@@ -20,7 +20,7 @@ const TasksSearchSchema = z.object({
 // loader の戻り値を useQuery の初期値として渡す形にしない。キャッシュが既にあるとその初期値は使われず、
 // loader が取ったデータを捨てて古いキャッシュを出す（apps/client/AGENTS.md の「Data fetching」）
 export const Route = createFileRoute("/_authenticated/tasks")({
-  head: () => ({ meta: [{ title: "タスク | {{APP_NAME}}" }] }),
+  head: () => ({ meta: [{ title: "タスク｜{{APP_NAME}}" }] }),
   validateSearch: TasksSearchSchema,
   loaderDeps: ({ search }) => ({ cursor: search.cursor }),
   loader: ({ context, deps }) =>

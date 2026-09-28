@@ -30,7 +30,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
       const result = await action({ id: task.id });
       if (!result.ok) {
         // どのタスクの失敗かが分かるように、タイトルを添える
-        setMessage(`「${task.title}」: ${result.message}`);
+        setMessage(`【${task.title}】：${result.message}`);
         return;
       }
       // 一覧を取り直すまで送信中のままにする。先に戻すと、古い表示（未着手）のまま押し直せて
@@ -74,7 +74,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
                 {STATUS_LABEL[task.status] ?? task.status}
               </span>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               {task.status !== "done" && (
                 <Button
                   size="sm"

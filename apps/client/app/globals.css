@@ -9,78 +9,95 @@
   --font-weight-medium: 400;
 }
 
+/*
+ * 値は SmartHR Design System のデザイントークン（https://smarthr.design/products/design-tokens/color/）に寄せている。
+ * 各行のコメントは対応する SmartHR のトークン名。ずらした値にはずらした理由を書く（主に shadcn の
+ * コンポーネントの描き方が SmartHR と違い、そのままの値だとコントラスト比が足りない箇所）。
+ * SmartHR にはダークモードの定義が無いので、.dark は同じ色相から作った独自の値。
+ */
 :root {
-  --radius: 0.65rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
+  /* SmartHR の角丸 s / m / l（4px / 6px / 8px）が rounded-sm / rounded-md / rounded-lg に対応する */
+  --radius: 0.5rem;
+  --background: oklch(1 0 0); /* WHITE */
+  --foreground: oklch(0.252 0.008 95.36); /* TEXT_BLACK */
+  --card: oklch(1 0 0); /* WHITE */
+  --card-foreground: oklch(0.252 0.008 95.36);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  /* 白文字とのコントラスト比 4.8:1（AA の 4.5:1 以上）。明るくすると文字が読めなくなる */
-  --primary: oklch(0.532 0.157 131.589);
-  --primary-foreground: oklch(0.986 0.031 120.757);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  /* 文字色として使う（variant="destructive" は destructive/10 の背景、ホバーで destructive/20 の背景に
-     destructive の文字）。/10 で 5.5:1、/20 で 4.5:1（AA の下限）。明るくするとホバー中に AA を割る */
-  --destructive: oklch(0.485 0.22 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  /* フォーカス時の枠線（border-ring）とリンク等の既定の outline（shared-styles.css）。白背景で 11:1。
-     明るい色にすると白背景で見えなくなる */
-  --ring: oklch(0.35 0.09 131);
-  --chart-1: oklch(0.871 0.15 154.449);
-  --chart-2: oklch(0.723 0.219 149.579);
-  --chart-3: oklch(0.627 0.194 149.214);
-  --chart-4: oklch(0.527 0.154 150.069);
-  --chart-5: oklch(0.448 0.119 151.328);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.532 0.157 131.589);
-  --sidebar-primary-foreground: oklch(0.986 0.031 120.757);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.35 0.09 131);
+  --popover-foreground: oklch(0.252 0.008 95.36);
+  /* MAIN。白文字とのコントラスト比 4.7:1（AA の 4.5:1 以上）。明るくすると文字が読めなくなる。
+     Button の hover（bg-primary/80）では 3.4:1 に下がる。SmartHR は hover で暗くするが、shadcn の
+     生成物は薄くするため（生成物は書き換えない） */
+  --primary: oklch(0.557 0.152 248.462);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.959 0.002 67.802); /* OVER_BACKGROUND */
+  --secondary-foreground: oklch(0.252 0.008 95.36);
+  --muted: oklch(0.959 0.002 67.802); /* OVER_BACKGROUND */
+  /* TEXT_GREY。白で 5.2:1、muted の上で 4.6:1 */
+  --muted-foreground: oklch(0.535 0.013 89.797);
+  --accent: oklch(0.959 0.002 67.802);
+  --accent-foreground: oklch(0.252 0.008 95.36);
+  /* DANGER と同じ色相で、明るさだけ下げた値。SmartHR の Danger ボタンは赤地に白文字だが、
+     shadcn の variant="destructive" は destructive/10 の背景（hover で /20）に destructive の文字で描く。
+     DANGER のままだと /10 で 4.0:1 になり AA を割る。この値で /10 は 5.8:1、/20 は 4.8:1 */
+  --destructive: oklch(0.49 0.19 11.489);
+  --border: oklch(0.868 0.005 67.755); /* BORDER */
+  --input: oklch(0.868 0.005 67.755); /* BORDER */
+  /* OUTLINE。フォーカス時の枠線（border-ring）とリンク等の既定の outline（shared-styles.css）。
+     白背景で 4.7:1（WCAG 1.4.11 の 3:1 以上）。明るい色にすると白背景で見えなくなる */
+  --ring: oklch(0.557 0.152 248.462);
+  /* 多色チャート CHART_COLOR_1〜5 の順。1〜3 色目（青緑・黄・橙）は白背景で 1.5〜2.3:1 しかないので、
+     系列を色だけで区別させず、凡例とラベルを併記する */
+  --chart-1: oklch(0.746 0.127 200.008);
+  --chart-2: oklch(0.867 0.177 90.847);
+  --chart-3: oklch(0.759 0.177 60.637);
+  --chart-4: oklch(0.639 0.186 33.468);
+  --chart-5: oklch(0.436 0.135 265.6);
+  --sidebar: oklch(0.977 0.002 67.803); /* COLUMN */
+  --sidebar-foreground: oklch(0.252 0.008 95.36);
+  --sidebar-primary: oklch(0.557 0.152 248.462);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.959 0.002 67.802);
+  --sidebar-accent-foreground: oklch(0.252 0.008 95.36);
+  --sidebar-border: oklch(0.868 0.005 67.755);
+  --sidebar-ring: oklch(0.557 0.152 248.462);
 }
 
 .dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  /* 暗い背景では明るい primary に暗い文字（コントラスト比 7.5:1） */
-  --primary: oklch(0.768 0.233 130.85);
-  --primary-foreground: oklch(0.274 0.072 132.109);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  /* SmartHR のグレースケールと同じ黄みの色相（95）で作った暗い面 */
+  --background: oklch(0.2 0.006 95);
+  --foreground: oklch(0.977 0.002 67.803);
+  --card: oklch(0.25 0.008 95);
+  --card-foreground: oklch(0.977 0.002 67.803);
+  --popover: oklch(0.25 0.008 95);
+  --popover-foreground: oklch(0.977 0.002 67.803);
+  /* 暗い背景では明るい primary に暗い文字（コントラスト比 7.0:1、hover の primary/80 で 4.8:1） */
+  --primary: oklch(0.74 0.12 245);
+  --primary-foreground: oklch(0.252 0.008 95.36);
+  --secondary: oklch(0.3 0.008 95);
+  --secondary-foreground: oklch(0.977 0.002 67.803);
+  --muted: oklch(0.3 0.008 95);
+  --muted-foreground: oklch(0.8 0.009 78.272);
+  --accent: oklch(0.3 0.008 95);
+  --accent-foreground: oklch(0.977 0.002 67.803);
+  /* destructive/20 の背景（hover で /30）の上の文字色。/20 で 6.1:1、/30 で 4.8:1。
+     背景を今より明るくすると /30 が AA を割る */
+  --destructive: oklch(0.8 0.12 11.489);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  /* 暗い背景では明るい ring（枠線 13:1、ring/50 でも 3.8:1） */
-  --ring: oklch(0.841 0.238 128.85);
-  --chart-1: oklch(0.871 0.15 154.449);
-  --chart-2: oklch(0.723 0.219 149.579);
-  --chart-3: oklch(0.627 0.194 149.214);
-  --chart-4: oklch(0.527 0.154 150.069);
-  --chart-5: oklch(0.448 0.119 151.328);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.768 0.233 130.85);
-  --sidebar-primary-foreground: oklch(0.274 0.072 132.109);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  /* 暗い背景では明るい ring（枠線 9.8:1） */
+  --ring: oklch(0.8 0.1 245);
+  /* 5 色目は CHART_COLOR_5 だと暗い背景で 2.3:1 しかないので、CHART_COLOR_6 に替える */
+  --chart-1: oklch(0.746 0.127 200.008);
+  --chart-2: oklch(0.867 0.177 90.847);
+  --chart-3: oklch(0.759 0.177 60.637);
+  --chart-4: oklch(0.639 0.186 33.468);
+  --chart-5: oklch(0.604 0.19 258.324);
+  --sidebar: oklch(0.25 0.008 95);
+  --sidebar-foreground: oklch(0.977 0.002 67.803);
+  --sidebar-primary: oklch(0.74 0.12 245);
+  --sidebar-primary-foreground: oklch(0.252 0.008 95.36);
+  --sidebar-accent: oklch(0.3 0.008 95);
+  --sidebar-accent-foreground: oklch(0.977 0.002 67.803);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.841 0.238 128.85);
+  --sidebar-ring: oklch(0.8 0.1 245);
 }

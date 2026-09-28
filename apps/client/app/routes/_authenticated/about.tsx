@@ -4,7 +4,7 @@ import { CenteredPage } from "@/components/layout/centered-page";
 import { PageHeader } from "@/components/patterns/page-header";
 
 export const Route = createFileRoute("/_authenticated/about")({
-  head: () => ({ meta: [{ title: "このアプリについて | {{APP_NAME}}" }] }),
+  head: () => ({ meta: [{ title: "このアプリについて｜{{APP_NAME}}" }] }),
   component: AboutPage,
 });
 

@@ -7,6 +7,6 @@ export function deleteTask(input: { id: string }): Promise<ActionResult> {
     messages: {
       NotFound: "タスクが見つかりません。既に削除された可能性があります",
     },
-    fallback: "タスクの削除に失敗しました",
+    fallback: "タスクを削除できませんでした。時間をおいて再度お試しください",
   });
 }

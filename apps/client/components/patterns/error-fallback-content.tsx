@@ -31,7 +31,7 @@ export function ErrorFallbackContent(props: { error: Error; description?: string
               再読み込み
             </button>
             <Link to="/" className={buttonVariants({ variant: "outline" })}>
-              ホームへ戻る
+              ホームに戻る
             </Link>
           </div>
           {/* 生のエラーメッセージは内部情報を含みうるため開発時のみ表示する。
