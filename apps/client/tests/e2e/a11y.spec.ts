@@ -43,8 +43,14 @@ test.describe("アクセシビリティ (axe-core, WCAG 2.2 AA)", () => {
         await expect(addButton).toBeEnabled({ timeout: 1000 });
       }).toPass();
       await addButton.click();
-      await expect(page.locator("li", { hasText: title })).toBeVisible();
+      const item = page.locator("li", { hasText: title });
+      await expect(item).toBeVisible();
 
+      expect(await scanPage(page)).toEqual([]);
+
+      // 削除の確認ダイアログを開いた状態（フォーカスの閉じ込め・ダイアログの名前・コントラスト）
+      await item.getByRole("button", { name: "削除" }).click();
+      await expect(page.getByRole("alertdialog", { name: "タスクの削除" })).toBeVisible();
       expect(await scanPage(page)).toEqual([]);
     } finally {
       await user?.cleanup();

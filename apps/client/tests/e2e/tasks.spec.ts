@@ -51,8 +51,16 @@ test.describe("tasks シナリオ", () => {
     await expect(item.getByText("完了")).toBeVisible();
     await expect(item.getByRole("button", { name: "次へ進める" })).not.toBeVisible();
 
-    // 削除
+    // 削除: 確認ダイアログで対象を見せてから消す。キャンセルでは消えない
     await item.getByRole("button", { name: "削除" }).click();
+    const dialog = page.getByRole("alertdialog", { name: "タスクの削除" });
+    await expect(dialog.getByText(title)).toBeVisible();
+    await dialog.getByRole("button", { name: "キャンセル" }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(item).toBeVisible();
+
+    await item.getByRole("button", { name: "削除" }).click();
+    await dialog.getByRole("button", { name: "削除", exact: true }).click();
     await expect(item).not.toBeVisible();
   });
 

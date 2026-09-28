@@ -180,7 +180,9 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 
 - `components/ui/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
   手で書き換えない。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
-  Base UI 前提。Radix 前提の例をそのまま貼らない）。**手書きのコンポーネントをここに置かない**（`components/ui` は
+  Base UI 前提。Radix 前提の例をそのまま貼らない）。CLI が `import { cn } from "cn"` を書き、依存に npm の `cn`
+  （無関係のパッケージ）を足すことがある（2026-09 時点の registry の不具合）。そのときは依存の追加を取り消し、
+  import を `@/shared/lib/utils` に直す。**手書きのコンポーネントをここに置かない**（`components/ui` は
   lint・スタイルガード・knip の対象外なので、置くと規約違反が検出されない）
 - `components/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
 - `components/layout/`: ページ枠（`CenteredPage`）・常駐バナー・テーマ切り替え（`ThemeToggle`）
@@ -197,7 +199,7 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 - 元に戻せない削除: 確認ダイアログを挟む（SmartHR DS の「削除ダイアログ」）。タイトルは「{対象}の削除」、本文は
   「以下の{対象}を削除しますか？　この操作は元に戻せません。」、削除対象の名前を示し、ボタンは右に
   `<Button variant="destructive">` の「削除」、左に「キャンセル」。削除後に元に戻せる操作なら確認は要らない。
-  `features/tasks` の削除はまだ確認を挟んでいない
+  実例は `features/tasks/ui/task-list.tsx`（`components/ui/alert-dialog.tsx` を使う）
 
 ### 文章を中央揃えにしない — 塊は中央、文字は左
 
