@@ -180,9 +180,10 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 
 - `components/ui/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
   手で書き換えない。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
-  Base UI 前提。Radix 前提の例をそのまま貼らない）。CLI が `import { cn } from "cn"` を書き、依存に npm の `cn`
-  （無関係のパッケージ）を足すことがある（2026-09 時点の registry の不具合）。そのときは依存の追加を取り消し、
-  import を `@/shared/lib/utils` に直す。**手書きのコンポーネントをここに置かない**（`components/ui` は
+  Base UI 前提。Radix 前提の例をそのまま貼らない）。2026-09 以降の registry は、shadcn 製の npm パッケージ
+  `cn`（`clsx` + `tailwind-merge` の置き換え）を import し、CLI が依存にも足す。既存のコンポーネントは `@/shared/lib/utils` の
+  `cn` を使っているので、足された依存は外し、import を `@/shared/lib/utils` に直してそろえる（`cn` パッケージへ移すなら、
+  `components/ui` のすべてと `utils` をまとめて移す）。**手書きのコンポーネントをここに置かない**（`components/ui` は
   lint・スタイルガード・knip の対象外なので、置くと規約違反が検出されない）
 - `components/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
 - `components/layout/`: ページ枠（`CenteredPage`）・常駐バナー・テーマ切り替え（`ThemeToggle`）
