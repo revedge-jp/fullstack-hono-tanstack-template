@@ -81,8 +81,9 @@
   --muted-foreground: oklch(0.8 0.009 78.272);
   --accent: oklch(0.3 0.008 95);
   --accent-foreground: oklch(0.977 0.002 67.803);
-  /* destructive/20 の背景（hover で /30）の上の文字色。一番明るい面（card / popover。削除の確認
-     ダイアログの地）の上で /20 が 6.3:1、/30 が 4.8:1。暗くするか面を明るくすると /30 が AA を割る */
+  /* destructive/20 の背景（hover で /30）の上の文字色。削除ボタンを置く面のうち一番明るい card / popover
+     （削除の確認ダイアログの地）の上で /20 が 6.3:1、/30 が 4.8:1。暗くすると /30 が AA を割る。
+     それより明るい muted / accent の上では /30 が 4.2:1 になるので、削除ボタンをそこに置かない */
   --destructive: oklch(0.87 0.07 11.489);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);

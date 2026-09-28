@@ -624,6 +624,12 @@ expect_guard "UI 文言: 表記の辞書（scripts/check/ui-terms.yml）" \
   'export const SelftestUi = () => <p>ログインしてください</p>;' \
   "ログイン => サインイン"
 
+expect_guard "UI 文言: 置き換え先を決められない重ねた敬語（させていただければ）" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const selftestCopy = "確認させていただければ幸いです";' \
+  "させていただ => {敬語を重ねない形}"
+
 expect_guard "UI 文言: 「？」の後に文が続くのに空白が無い" \
   guard_ui_copy \
   "apps/client/features/__selftest/ui/selftest-copy.tsx" \
