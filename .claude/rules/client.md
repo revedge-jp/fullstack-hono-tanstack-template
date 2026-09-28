@@ -195,7 +195,9 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 - 読み込み中: `Skeleton`（スピナーだけで画面を空にしない）
 - 空: `EmptyState`（「無い」ではなく次の行動を示す。`features/tasks/ui/task-list.tsx` が実例）
 - エラー: `role="alert"` + `text-destructive`
-- 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingIds` が実例。行ごとに持つ）
+- 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingIds` が実例。行ごとに持つ）。
+  確認ダイアログの実行ボタンも同じにする。ダイアログは閉じるアニメーションの間も DOM に残って押せるので、
+  `onClick` で閉じるだけでは二度押しで同じ操作が 2 回送られる（`task-list.tsx` の `deletePending` が実例）
 - 値が無い項目（表・定義リスト）: 空欄のままにする。利用者が入力できない項目だけ `-` を `text-muted-foreground` で出す
 - 元に戻せない削除: 確認ダイアログを挟む（SmartHR DS の「削除ダイアログ」）。タイトルは「{対象}の削除」、本文は
   「以下の{対象}を削除しますか？　この操作は元に戻せません。」、削除対象の名前を示し、ボタンは右に
