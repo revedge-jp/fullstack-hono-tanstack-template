@@ -3,6 +3,16 @@ import { ListTodo } from "lucide-react";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/patterns/empty-state";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import type { ActionResult } from "@/shared/lib/action-error";
 
@@ -22,6 +32,10 @@ export function TaskList({ items }: { items: TaskItem[] }) {
   // 戻り（二重送信で todo → done まで進む）、先に終わった方がもう片方の送信中の表示も解除する
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [message, setMessage] = useState<string | null>(null);
+  // 削除は元に戻せないので、確認ダイアログで対象を見せてから実行する（.claude/rules/client.md「状態を必ず作る」）。
+  // 対象は閉じても残す。閉じるアニメーションの間にタスク名が消えて見えないように
+  const [deleteTarget, setDeleteTarget] = useState<TaskItem | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   async function run(task: TaskItem, action: (input: { id: string }) => Promise<ActionResult>) {
     setPendingIds((current) => new Set(current).add(task.id));
@@ -30,7 +44,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
       const result = await action({ id: task.id });
       if (!result.ok) {
         // どのタスクの失敗かが分かるように、タイトルを添える
-        setMessage(`「${task.title}」: ${result.message}`);
+        setMessage(`【${task.title}】：${result.message}`);
         return;
       }
       // 一覧を取り直すまで送信中のままにする。先に戻すと、古い表示（未着手）のまま押し直せて
@@ -43,6 +57,18 @@ export function TaskList({ items }: { items: TaskItem[] }) {
         return next;
       });
     }
+  }
+
+  // 閉じるアニメーションの間はダイアログが DOM に残って押せるので、二度押しで同じ削除を 2 回送らないよう
+  // 送信中なら何もしない（2 回目は NotFound になり、削除できたのに失敗の文言が出る）
+  const deletePending = deleteTarget !== null && pendingIds.has(deleteTarget.id);
+
+  function confirmDelete() {
+    if (deleteTarget === null || deletePending) {
+      return;
+    }
+    setDeleteOpen(false);
+    void run(deleteTarget, deleteTask);
   }
 
   if (items.length === 0) {
@@ -74,7 +100,7 @@ export function TaskList({ items }: { items: TaskItem[] }) {
                 {STATUS_LABEL[task.status] ?? task.status}
               </span>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               {task.status !== "done" && (
                 <Button
                   size="sm"
@@ -89,7 +115,10 @@ export function TaskList({ items }: { items: TaskItem[] }) {
                 size="sm"
                 variant="ghost"
                 disabled={pendingIds.has(task.id)}
-                onClick={() => run(task, deleteTask)}
+                onClick={() => {
+                  setDeleteTarget(task);
+                  setDeleteOpen(true);
+                }}
               >
                 削除
               </Button>
@@ -97,6 +126,30 @@ export function TaskList({ items }: { items: TaskItem[] }) {
           </li>
         ))}
       </ul>
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader className="place-items-start text-left">
+            <AlertDialogTitle>タスクの削除</AlertDialogTitle>
+            <AlertDialogDescription>
+              以下のタスクを削除しますか？　この操作は元に戻せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <dl className="flex flex-col gap-1">
+            <dt className="text-xs text-muted-foreground">削除するタスク</dt>
+            <dd className="text-sm font-medium">{deleteTarget?.title}</dd>
+          </dl>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deletePending}
+              onClick={confirmDelete}
+            >
+              削除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

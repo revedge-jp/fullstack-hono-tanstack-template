@@ -7,8 +7,9 @@ export function advanceTask(input: { id: string }): Promise<ActionResult> {
     messages: {
       AlreadyDone: "このタスクは既に完了しています",
       Conflict: "他の操作でタスクの状態が変わりました。再読み込みしてからやり直してください",
-      NotFound: "タスクが見つかりません。削除された可能性があります",
+      NotFound:
+        "タスクが見つかりません。削除された可能性があります。ページを再読み込みして一覧を確認してください",
     },
-    fallback: "タスクの更新に失敗しました",
+    fallback: "タスクの状態を変更できませんでした。時間をおいて再度お試しください",
   });
 }

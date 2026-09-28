@@ -31,6 +31,7 @@ graph TB
 
 - **役割**: TanStack Start アプリケーション（SSR + CSR）
 - **技術スタック**: TanStack Start, React 19, Tailwind v4, shadcn/ui
+- **デザインの基準**: SmartHR Design System の値とガイドライン（smarthr-ui は使わない。[ADR-008](adr-008-smarthr-design-system-guidelines.md)）
 - **アーキテクチャ**: FSD (Feature-Sliced Design) ライクな構成
   - `features` 間の直接参照は禁止（dependency-cruiser で強制）。共通コンポーネントは `shared` に昇格させる。
 - **API 呼び出し**:

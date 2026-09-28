@@ -17,7 +17,7 @@
 | 構文/配置ガード（grep） | npm 依存禁止・domain 純粋性・責務の混入 | `bun run arch:guards` | ✓ | ✓ |
 | feature 構造完全性 | 必須の層・co-located テスト・配線の有無 | `bun run check:feature` | ✓（guards 内） | ✓ |
 | マイグレーションの expand / contract | 旧コードを壊すスキーマ変更（削除・リネーム・型変更・DEFAULT なしの NOT NULL 等）を 1 本のマイグレーションに入れていないか。drizzle-kit が出さない形の SQL は止める（手書きは allow の印と理由） | `bun run check:migration-safety` | ✓ | ✓（arch:check） |
-| UI 文言（textlint） | client の日本語文言に AI が書く文章に出やすい語・誇張・全角ダッシュが無いか | `bun run check:ui-copy` | ✓（guards 内） | ✓ |
+| UI 文言（textlint） | client の日本語文言に AI が書く文章に出やすい語・誇張・全角ダッシュが無いか。表記（`scripts/check/ui-terms.yml`）・和文の空白・ページの title の形・ボタンの語形が SmartHR Design System のライティングに沿っているか | `bun run check:ui-copy` | ✓（guards 内） | ✓ |
 | 文書の文体（textlint） | 指示ファイル・docs に同じ語彙・誇張・冗長な言い回しが無いか（Markdown の構造のルールは外している） | `bun run lint:prose` | ✓ | ✓（`instructions` ジョブ） |
 | FSD（steiger） | client の Feature-Sliced Design | `bun run arch:fsd` | ✓ | ✓ |
 | 未使用コード（knip） | デッドコード/依存 | `bun run knip` | ✗（lefthook が `SKIP_KNIP=1` で飛ばす） | PR コメントのみ（Unlisted binaries / Unresolved imports だけ落とす） |

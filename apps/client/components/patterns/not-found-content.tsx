@@ -24,7 +24,7 @@ export function NotFoundContent() {
             再読み込み
           </button>
           <Link to="/" className={buttonVariants({ variant: "default" })}>
-            ホームへ戻る
+            ホームに戻る
           </Link>
         </div>
       }

@@ -38,7 +38,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { title: "{{APP_NAME}}" },
       {
         name: "description",
-        content: "{{APP_NAME}} は Hono + TanStack Start で構築したフルスタックアプリです。",
+        content: "{{APP_NAME}}はHono + TanStack Startで構築したフルスタックアプリです。",
       },
     ],
     links: [
@@ -75,9 +75,10 @@ function RootDocument({ children }: { children: ReactNode }) {
     <html lang="ja">
       <head>
         {/* theme-color は media クエリで light/dark を出し分ける。name が同じ meta は
-            TanStack の HeadContent で重複排除され1つに畳まれるため、静的タグとして直接置く。 */}
+            TanStack の HeadContent で重複排除され1つに畳まれるため、静的タグとして直接置く。
+            値は globals.css の --background（:root / .dark）を 16 進にしたもの。配色を変えたら揃える */}
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#171613" media="(prefers-color-scheme: dark)" />
         <ScriptOnce>{DEFINE_NAME_HELPER}</ScriptOnce>
         <ScriptOnce>{APPLY_INITIAL_THEME}</ScriptOnce>
         <HeadContent />
@@ -96,7 +97,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 function PendingComponent() {
   return (
     <div className="p-4">
-      <p className="text-sm text-muted-foreground">読み込み中...</p>
+      <p className="text-sm text-muted-foreground">読み込み中…</p>
     </div>
   );
 }

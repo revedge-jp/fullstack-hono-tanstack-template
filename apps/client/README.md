@@ -72,6 +72,8 @@ bunx shadcn@latest add button
 
 - コンポーネントは `components/ui/` に配置、`components.json` で設定管理
 - 未使用エクスポートがありえるため knip 除外方針に準拠（`knip.json`）
+- 配色・余白・文言は SmartHR Design System に合わせる。コンポーネントは shadcn/ui のままで、smarthr-ui は入れない
+  （[ADR-008](../../docs/architecture/adr-008-smarthr-design-system-guidelines.md)、規約は `.claude/rules/client.md` の「デザイン規約」）
 
 ## 品質チェック
 

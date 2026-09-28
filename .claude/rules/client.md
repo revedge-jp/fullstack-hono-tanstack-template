@@ -94,18 +94,28 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 ガードはコメントも全規則でチェックする（絵文字を含む）。禁止クラス名や絵文字をコメントに書かない
 （「旧 `text-zinc-500` から置換」のような変更履歴は git に残る。旧実装の説明が要るなら言葉で書く）。
 
+デザインの基準は [SmartHR Design System](https://smarthr.design/)（以下 SmartHR DS）に合わせる。取り込むのは
+値（色・角丸・余白の段階）と、ライティング・アクセシビリティ・画面パターンのガイドラインで、実装ライブラリの
+smarthr-ui は使わない（理由は `docs/architecture/adr-008-smarthr-design-system-guidelines.md`）。コンポーネントは
+shadcn / Base UI のままなので、SmartHR DS に出てくるコンポーネント（`ActionDialog` / `DefinitionList` 等）は、
+同じ役割を持つ shadcn のコンポーネントで組む。この節に無いことで迷ったら、SmartHR DS の該当ページを読んで合わせる
+（原稿は GitHub の `kufu/smarthr-design-system` の `src/content/articles/` にもある）。
+
 ### 色は semantic トークンだけ
 
-| トークン | 用途 |
-|---|---|
-| `background` / `foreground` | ページの地と本文（body に適用済み。ページ側で背景を塗らない） |
-| `card` / `popover`（+ `-foreground`） | 面を分けるコンポーネントの地 |
-| `muted` / `muted-foreground` | 補助の面・補足テキスト（日付、件数、説明文） |
-| `primary`（+ `-foreground`） | 主要操作。**1 画面で目立たせるのは 1 か所** |
-| `secondary` / `accent` | 副次操作・hover の面 |
-| `destructive` | エラー文言・削除操作 |
-| `border` / `input` / `ring` | 罫線・入力枠・フォーカスリング |
-| `chart-1`〜`chart-5` / `sidebar-*` | グラフ系列・サイドバー専用 |
+| トークン | 用途 | SmartHR DS のトークン |
+|---|---|---|
+| `background` / `foreground` | ページの地と本文（body に適用済み。ページ側で背景を塗らない） | `WHITE` / `TEXT_BLACK` |
+| `card` / `popover`（+ `-foreground`） | 面を分けるコンポーネントの地 | `WHITE` |
+| `muted` / `muted-foreground` | 補助の面・補足テキスト（日付、件数、説明文） | `OVER_BACKGROUND` / `TEXT_GREY` |
+| `primary`（+ `-foreground`） | 主要操作。**1 画面で目立たせるのは 1 か所** | `MAIN` |
+| `secondary` / `accent` | 副次操作・hover の面 | `OVER_BACKGROUND` |
+| `destructive` | エラー文言・削除操作 | `DANGER`（明るさを下げた値） |
+| `border` / `input` / `ring` | 罫線・入力枠・フォーカスリング | `BORDER` / `BORDER` / `OUTLINE`（暗くした値） |
+| `chart-1`〜`chart-5` / `sidebar-*` | グラフ系列・サイドバー専用 | `CHART_COLOR_1`〜`5` / `COLUMN` |
+
+値と、SmartHR DS の値からずらした箇所の理由（コントラスト比）は `apps/client/app/globals.css` のコメントにある。
+SmartHR DS にはダークモードが無いので、`.dark` の値はこのリポジトリで作ったもの。
 
 - 【ガード】既定パレット（`text-zinc-500` / `bg-blue-600` / `text-white` …）は使えない。
   `packages/tailwind-config/shared-styles.css` で既定パレットの生成自体を止めてあるが、**未定義のクラスは
@@ -134,12 +144,34 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 
   `font-bold` は `PageHeader` の中だけに使い、`font-semibold` は使わない（shadcn のコンポーネントが `font-medium` で
   揃っているため。コンポーネントを再生成しても規約とずれない側に合わせる）。
+  SmartHR DS との違い: SmartHR DS の本文は 16px（`M`）で、13.7px（`S`）は「どうしようもない場合」に限る。ここでは
+  shadcn のコンポーネントが `text-sm`（14px）で揃っているので本文を `text-sm` にしている。ページ見出しの 24px は
+  SmartHR DS の画面タイトル（`XL`）と同じ。書体も SmartHR DS の `system-ui` ではなく LINE Seed JP を使っている。
+- 表の数値の列は右揃え（`text-right`）にして、縦に読んだときに桁を比べられるようにする。見出し（`th`）の揃えは
+  その列のデータに合わせる
 - 字間は Tailwind のスケール（`tracking-tight` / `tracking-wide` / `tracking-wider` / `tracking-widest`
   = 0.1em）から選ぶ。`tracking-[0.1em]` は `tracking-widest` と同じ値なので任意値にしない。日本語の見出し
   などでスケールに無い字間が要るなら、`apps/client/app/globals.css` の `@theme` に `--tracking-*` の
   トークンとして足し（`tracking-<名前>` で使える）、同じ値を画面ごとに書かない
 - 【ガード】並べるときの間隔は親の `flex` / `grid` + `gap-*`、コンポーネントの内側は padding で作る。margin
   （`mt-2` / `-mx-4`）と `space-y-*` / `space-x-*` は使えない（中央寄せの `mx-auto` 等 `auto` は可）
+- 【ガード】余白（`gap-*` / `p-*`）の大きさは SmartHR DS の余白トークン（16px を `1` とする）に当たる値から選ぶ。
+  Tailwind の数字は SmartHR DS の 4 倍で、使えるのは `0` / `1` / `2` / `3` / `4` / `5` / `6` / `8` / `10` / `12` / `16`
+  （`gap-1.5` / `p-7` / `gap-9` は `off-scale-spacing` が検出する）。場所ごとの基準は次のとおり【目視】:
+
+  | 場所 | クラス |
+  |---|---|
+  | セクション同士の間 | `gap-8` |
+  | セクション内の要素同士・フォームの項目同士の間 | `gap-6` |
+  | 見出しとその内容の間 | `gap-4` |
+  | ラベル・説明文と入力欄の間 | `gap-2`（説明文が複数行なら `gap-4`） |
+  | アイコン・ステータスとテキストの間 | `gap-1` か `gap-2` |
+  | ボタン同士・横に並べた入力欄の間 | `gap-2` か `gap-4` |
+  | ページ本文の外周 | `p-8`（モバイルは `px-4 py-6`） |
+  | パネル（`Card` 等）の内側 | `p-6`（モバイルは `p-4`） |
+
+  外側ほど大きく、内側ほど小さくする（関係の近い要素ほど近くに置くと、まとまりが読み取れる）。表と違う値に
+  するときは、その理由を説明できるようにする
 - 正方形は `size-*`（`w-* h-*` を並べない）、条件付きクラスは `cn()`（`@/shared/lib/utils`）で合成する
 
 ### 既存のコンポーネントを先に探す
@@ -148,7 +180,10 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 
 - `components/ui/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
   手で書き換えない。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
-  Base UI 前提。Radix 前提の例をそのまま貼らない）。**手書きのコンポーネントをここに置かない**（`components/ui` は
+  Base UI 前提。Radix 前提の例をそのまま貼らない）。2026-09 以降の registry は、shadcn 製の npm パッケージ
+  `cn`（`clsx` + `tailwind-merge` の置き換え）を import し、CLI が依存にも足す。既存のコンポーネントは `@/shared/lib/utils` の
+  `cn` を使っているので、足された依存は外し、import を `@/shared/lib/utils` に直してそろえる（`cn` パッケージへ移すなら、
+  `components/ui` のすべてと `utils` をまとめて移す）。**手書きのコンポーネントをここに置かない**（`components/ui` は
   lint・スタイルガード・knip の対象外なので、置くと規約違反が検出されない）
 - `components/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
 - `components/layout/`: ページ枠（`CenteredPage`）・常駐バナー・テーマ切り替え（`ThemeToggle`）
@@ -161,6 +196,11 @@ AI が書く UI は、1 つずつは正しく動くため typecheck・lint・tes
 - 空: `EmptyState`（「無い」ではなく次の行動を示す。`features/tasks/ui/task-list.tsx` が実例）
 - エラー: `role="alert"` + `text-destructive`
 - 送信中: 対象のボタンを `disabled` にする（`features/tasks/ui/task-list.tsx` の `pendingIds` が実例。行ごとに持つ）
+- 値が無い項目（表・定義リスト）: 空欄のままにする。利用者が入力できない項目だけ `-` を `text-muted-foreground` で出す
+- 元に戻せない削除: 確認ダイアログを挟む（SmartHR DS の「削除ダイアログ」）。タイトルは「{対象}の削除」、本文は
+  「以下の{対象}を削除しますか？　この操作は元に戻せません。」、削除対象の名前を示し、ボタンは右に
+  `<Button variant="destructive">` の「削除」、左に「キャンセル」。削除後に元に戻せる操作なら確認は要らない。
+  実例は `features/tasks/ui/task-list.tsx`（`components/ui/alert-dialog.tsx` を使う）
 
 ### 文章を中央揃えにしない — 塊は中央、文字は左
 
@@ -224,16 +264,54 @@ skill と shadcn の agent skill）。**半年を目安に見直し**、機械�
 - 全角ダッシュ（——）で文をつながない。句点で文を分ける
 - 敬体（です・ます）でそろえる。「〜することができます」は「〜できます」と書く
 
+以下は SmartHR DS の「ライティングのガイドライン」と「用字用語」から、このアプリの画面に関わるものを抜き出したもの。
+
+- エラー文言には「事象・原因・対処」を入れる。入りきらないときは原因、対処、事象の順に残す（利用者が知りたいのは直し方）
+  - NG: 「タスクの作成に失敗しました」 / OK: 「タスクを追加できませんでした。時間をおいて再度お試しください」
+- 敬語を重ねない。「ご確認いただけますようお願いいたします」は「確認してください」、「〜させていただきました」は「〜しました」
+- 格助詞を省かない。「項目名変更します」ではなく「項目名を変更します」
+- カタカナ語は、先に漢字語で言い換えられないかを考える。開発側の用語（「レコード」「フェッチ」等）を画面に出さない
+- 同じものを別の言葉で呼ばない。このアプリは「サインイン」で、「ログイン」と混ぜない
+
+語の形は置き場所で決まる（ボタンとページの `<title>` は【ガード】、ほかはレビューで見る）:
+
+| 置き場所 | 形 | 例 |
+|---|---|---|
+| 画面タイトル・見出し・項目名 | 名詞。目的語は「の」でつなぐ | 「タスクの追加」 |
+| ボタン | 動詞の終止形。「〜する」は省く。目的語は「を」でつなぐ | 「追加」「削除」「タスクを追加」「取り消す」 |
+| ダイアログ | タイトル「{対象}の{操作}」と実行ボタン「{操作}」をそろえる | 「タスクの削除」と「削除」 |
+| 説明文 | 敬体で動詞まで書く。体言止めにしない | 「上のフォームから最初のタスクを追加できます。」 |
+| リンク | 移動先が分かる言葉。「こちら」にしない | 「よくある質問」 |
+| ページの `<title>` | 「{画面名}｜{アプリ名}」。全角の縦棒で、前後に空白を入れない | 「タスク｜アプリ名」 |
+
+用字用語（置き換え先が 1 つに決まるものは【ガード】。一覧は `scripts/check/ui-terms.yml`）:
+
+- つくる操作は「追加」（「登録」「作成」は明らかにそちらが合うときだけ）。止める操作は、実行前なら「キャンセル」、
+  実行済みなら「取り消す」、実行中なら「中断」
+- ボタンは「押す」、リンクは「開く」と書き、「クリック」「タップ」は使わない。外へ出す操作は「書き出す」、
+  外から入れる操作は「取り込む」
+- 移動先が具体的な場所なら「に」、相対的な位置なら「へ」を使う（「ホームに戻る」「前へ」）
+- 数字は半角の算用数字で、3 桁ごとに半角カンマを入れる（「1,000件」）。日付は `YYYY/MM/DD`、時刻は 24 時間制の
+  `hh:mm`、期間は「〜」でつなぐ
+- 画面の文言では記号を全角にする（「、」「。」「（）」「：」「｜」）。数字・英字の前後に空白を入れない（「PDFファイル」
+  「2026年」）。「？」「！」の後に文が続くときは全角の空白を入れる。三点リーダーは「…」を 1 つだけ使う
+- 括弧は用途で使い分ける。画面の文言や入力値は「」、ボタン名・項目名は［］、利用者が名前を付けたもの
+  （タスクのタイトル等）は【】、補足は（）
+- 例を示すときは「例：」と書く（「（例）」にしない）
+
 <!-- textlint-enable -->
 
 `bun run check:ui-copy`（`arch:guards` に含まれる）が client の TS / TSX から日本語の文字列を取り出して
 textlint で調べる。語彙は p1ass/textlint-rule-preset-ai-words-ja、誇張と冗長な言い回しは
 textlint-ja/textlint-rule-preset-ai-writing、プロダクト独自の語は `scripts/check/ai-words.json`、全角ダッシュは
-`scripts/check/ui-copy.mjs` の正規表現が見る。コメントは画面に出ないので対象外。Claude Code では TS / TSX を
+`scripts/check/ui-copy.mjs` の正規表現が見る。画面の文言だけに当てる規則は `scripts/check/ui-copy.textlintrc.json`
+にあり、表記の辞書（`scripts/check/ui-terms.yml`）と和文の空白（textlint-rule-preset-ja-spacing。英数字の前後に
+空白を入れない等）を見る。ボタンのラベルと `head` の `meta` の `title` は、置き場所が要るので `ui-copy.mjs` が
+AST で見る。コメントは画面に出ないので対象外。Claude Code では TS / TSX を
 編集した直後にも `.claude/hooks/on-ts-edit.sh` が整形の後に同じチェックをかけて指摘を返す。
 
-- 指摘されたら文言を直す。その語が画面の用語として必要なときだけ、`.textlintrc.json` の `allows` に足す
-  （検証器の変更なので、PR 本文の「検証器の変更理由」に理由を書く）
+- 指摘されたら文言を直す。その語が画面の用語として必要なときだけ、`.textlintrc.json` の `allows` に足すか
+  `scripts/check/ui-terms.yml` の規則を直す（検証器の変更なので、PR 本文の「検証器の変更理由」に理由を書く）
 - 辞書で拾えるのは語と言い回しだけで、「どの画面にも当てはまる文」は拾えない。画面の確認（下の節）で読む
 <!-- textlint-disable -->
 
@@ -261,6 +339,17 @@ E2E の axe スキャン（`tests/e2e/a11y.spec.ts`）が機械検証する。�
 - 色だけで状態を伝達しない（テキスト・アイコンを併用）。エラーメッセージには `role="alert"`。
 - 操作は `button`、ページ遷移は `Link`（+ `buttonVariants`）。セマンティック HTML（見出し階層・ランドマーク）を使う。
 - 画像には `alt` を付与（装飾画像は `alt=""`）。
+
+SmartHR DS のアクセシビリティのガイドラインから、上に無いものを足す。
+
+- 押せる要素は 24×24px 以上にする（できれば 44×44px）。アイコンだけのボタンは `size="icon"`（36px）以上を使い、
+  `icon-xs`（24px）は周りに余白を取れるときだけにする。文中のテキストリンクは対象外
+- 入力欄のラベルは常に見える形で置く。プレースホルダーをラベルの代わりにしない（入力を始めると消える）
+- エラーは起きた入力欄の近くに、直し方と一緒に出し、文言と入力欄を `aria-describedby` で結び付ける
+  （`features/tasks/ui/create-task-form.tsx`）。入力値が原因だと分かるエラーなら、入力欄に `aria-invalid` も付ける
+- リンクの文言だけで移動先が分かるようにする（上の「UI 文言の書き方」のリンクの行）
+- 見出しと、作業を終えるのに要る入力欄・操作は画面の左側に置く（画面を拡大して使う人は、右側にあるものに気づかないことがある）。
+  送信ボタンのように右下が定位置のものは除く
 
 ## React パフォーマンスの要点
 

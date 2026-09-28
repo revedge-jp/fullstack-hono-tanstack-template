@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/patterns/page-header";
 import { DevSignInButton, GoogleSignInButton, sessionQueryOptions } from "@/features/auth";
 
 export const Route = createFileRoute("/signin")({
-  head: () => ({ meta: [{ title: "サインイン | {{APP_NAME}}" }] }),
+  head: () => ({ meta: [{ title: "サインイン｜{{APP_NAME}}" }] }),
   // _authenticated と同じキャッシュを fetchQuery で見る（サインアウト時は queryClient.clear() で破棄され、
   // サインインは OAuth / dev ログインともページ全体の遷移なので、古い「未ログイン」は残らない）
   beforeLoad: async ({ context }) => {

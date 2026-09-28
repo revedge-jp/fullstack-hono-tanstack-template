@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
 export function DevSignInButton() {
   return (
     <a href="/api/dev/login" className={cn(buttonVariants({ variant: "secondary" }))}>
-      (dev) テストユーザーでログイン
+      （開発用）テストユーザーでサインイン
     </a>
   );
 }

@@ -26,7 +26,7 @@ export function GoogleSignInButton() {
   return (
     <div className="flex flex-col items-start gap-2">
       <Button onClick={handleClick} variant="outline" disabled={isPending}>
-        {isPending ? "リダイレクト中..." : "Google でサインイン"}
+        {isPending ? "リダイレクト中…" : "Googleでサインイン"}
       </Button>
       {error && (
         <p role="alert" className="text-sm text-destructive">

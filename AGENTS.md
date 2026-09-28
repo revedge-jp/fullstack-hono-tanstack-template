@@ -23,7 +23,7 @@ Claude Code 固有の補足だけを持つ。**ルールの追記はこのファ
 
 - **Monorepo**: Turborepo + Bun (required, no npm/yarn/pnpm)
 - **Backend** (`apps/api-service`): Hono on Bun
-- **Frontend** (`apps/client`): TanStack Start + React 19 + Tailwind v4
+- **Frontend** (`apps/client`): TanStack Start + React 19 + Tailwind v4 + shadcn/ui。デザインの基準は SmartHR Design System（値とガイドラインだけ取り込み、smarthr-ui は使わない） — see [ADR-008](docs/architecture/adr-008-smarthr-design-system-guidelines.md)
 - **Database** (`packages/database`): Drizzle ORM + PostgreSQL (via `@repo/db`)
 - **Auth**: Better Auth (Google OAuth) — server config in `api-service/src/integrations/external/auth.ts`
 - **Testing**: `bun test` (native, no vitest/jest)

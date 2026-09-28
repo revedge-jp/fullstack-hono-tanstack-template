@@ -22,7 +22,8 @@ describe("tasks.deleteTask action", () => {
     const result = await deleteTask({ id: "unknown" });
     expect(result).toEqual({
       ok: false,
-      message: "タスクが見つかりません。既に削除された可能性があります",
+      message:
+        "タスクが見つかりません。既に削除された可能性があります。ページを再読み込みして一覧を確認してください",
     });
   });
 
@@ -30,7 +31,10 @@ describe("tasks.deleteTask action", () => {
     api.state.ok = false;
     api.state.body = null;
     const result = await deleteTask({ id: "task-1" });
-    expect(result).toEqual({ ok: false, message: "タスクの削除に失敗しました" });
+    expect(result).toEqual({
+      ok: false,
+      message: "タスクを削除できませんでした。時間をおいて再度お試しください",
+    });
   });
 
   test("異常: 通信に失敗しても reject せず { ok: false, message } を返す", async () => {

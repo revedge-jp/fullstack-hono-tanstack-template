@@ -37,7 +37,10 @@ describe("tasks.advanceTask action", () => {
     api.state.ok = false;
     api.state.body = "not-json-shape";
     const result = await advanceTask({ id: "task-1" });
-    expect(result).toEqual({ ok: false, message: "タスクの更新に失敗しました" });
+    expect(result).toEqual({
+      ok: false,
+      message: "タスクの状態を変更できませんでした。時間をおいて再度お試しください",
+    });
   });
 
   test("異常: 通信に失敗しても reject せず { ok: false, message } を返す", async () => {

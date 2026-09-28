@@ -13,8 +13,8 @@ export function createTask(input: { title: string }): Promise<ActionResult> {
   return toActionResult(() => apiClient.api.tasks.$post({ json: { title: input.title } }), {
     messages: {
       Invalid: "タイトルは1〜200文字で入力してください",
-      Conflict: "同じタイトルのタスクが既にあります",
+      Conflict: "同じタイトルのタスクが既にあります。別のタイトルを入力してください",
     },
-    fallback: "タスクの作成に失敗しました",
+    fallback: "タスクを追加できませんでした。時間をおいて再度お試しください",
   });
 }

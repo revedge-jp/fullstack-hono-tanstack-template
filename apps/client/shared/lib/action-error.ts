@@ -24,9 +24,10 @@ type ErrorCodeOf<Res> = Res extends { json: () => Promise<infer Body> }
 const COMMON_MESSAGES: Record<string, string> = {
   Unexpected: "サーバーでエラーが発生しました。時間をおいて再度お試しください",
   "Internal Server Error": "サーバーでエラーが発生しました。時間をおいて再度お試しください",
-  Unauthorized: "ログインの有効期限が切れました。ページを再読み込みしてログインし直してください",
+  Unauthorized:
+    "サインインの有効期限が切れました。ページを再読み込みしてサインインし直してください",
   "Too Many Requests": "操作が集中しています。しばらく待ってから再度お試しください",
-  "Payload Too Large": "送信内容が大きすぎます",
+  "Payload Too Large": "送信内容が大きすぎます。内容を減らして再度お試しください",
 };
 
 const NETWORK_ERROR_MESSAGE = "通信に失敗しました。接続を確認して再度お試しください";
