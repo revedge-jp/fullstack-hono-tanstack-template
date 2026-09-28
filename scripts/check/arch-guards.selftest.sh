@@ -487,6 +487,18 @@ expect_guard "スタイル規約: space-y で間隔を作らない" \
   'export const SelftestUi = () => <div className="space-y-4">x</div>;' \
   "違反 [margin-spacing]"
 
+expect_guard "スタイル規約: スケール外の余白（gap-7）" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="flex md:gap-7">x</div>;' \
+  "違反 [off-scale-spacing]"
+
+expect_guard "スタイル規約: スケール外の余白（小数の p-1.5）" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  'export const SelftestUi = () => <div className="p-1.5">x</div>;' \
+  "違反 [off-scale-spacing]"
+
 expect_guard "スタイル規約: 数字始まりのバリアントが続く dark: の禁止" \
   guard_client_styles \
   "apps/client/features/__selftest/ui/selftest-style.tsx" \
@@ -606,6 +618,36 @@ expect_guard "UI 文言: 前後に空白のある全角ダッシュ" \
   'export const selftestCopy = "保存しました — 一覧に戻ります";' \
   "違反 [fullwidth-dash]"
 
+expect_guard "UI 文言: 表記の辞書（scripts/check/ui-terms.yml）" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <p>ログインしてください</p>;' \
+  "ログイン => サインイン"
+
+expect_guard "UI 文言: 「？」の後に文が続くのに空白が無い" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const selftestCopy = "削除しますか？この操作は元に戻せません。";' \
+  "「？」「！」の後に文が続くときは"
+
+expect_guard "UI 文言: 和文と英数字の間の空白（preset-ja-spacing）" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <p>PDF ファイルを保存しました</p>;' \
+  "違反 [ja-spacing/ja-space-between-half-and-full-width]"
+
+expect_guard "UI 文言: ページの title の形" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const head = () => ({ meta: [{ title: "タスク - App" }] });' \
+  "違反 [page-title]"
+
+expect_guard "UI 文言: ボタンのラベルに「する」を残す" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <Button>{pending ? "送信中…" : "追加する"}</Button>;' \
+  "違反 [button-label]"
+
 # 逆向き（誤検出）の回帰テスト: 正当なコードで client-styles.mjs が通ることを確認する。
 mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
@@ -613,12 +655,13 @@ export const C = () => <a href="https://example.com/a//b" className="p-4 data-[s
 export const D = () => <p>© 2026 → 次へ</p>;
 export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /></svg>;
 export const F = () => <div className="flex items-center justify-center text-left">x</div>;
-export const G = () => <Popover align="center">x</Popover>;'
+export const G = () => <Popover align="center">x</Popover>;
+export const H = () => <div className="gap-3 px-6 py-16 p-px size-7 md:gap-x-5">x</div>;'
 # style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
 mkfix "apps/client/components/__selftest/selftest-style-ok.tsx" \
   'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'
 if STYLE_OK_OUT=$(node scripts/check/client-styles.mjs 2>&1); then
-  echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号）を誤検出しない"
+  echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号・スケール内の余白）を誤検出しない"
 else
   echo "❌ スタイル規約: 正当なコードを誤検出しました"
   printf '%s\n' "$STYLE_OK_OUT"
@@ -633,9 +676,19 @@ mkfix "apps/client/features/__selftest/ui/selftest-copy-ok.tsx" \
 export const SelftestUi = () => <td>—</td>;
 export const selftestUnset = "未設定（—）";
 export const selftestDivider = "──── または ────";
-export const selftestRange = "1—3 件";'
+export const selftestRange = "1—3件";
+export const head = () => ({ meta: [{ title: "タスク｜{{APP_NAME}}" }] });
+export const Cancel = () => <Button>取り消す</Button>;
+export const Advance = () => <Button>{pending ? "送信中…" : "次へ進める"}</Button>;
+export const Dev = () => (
+  <a href="/x">
+    （開発用）テストユーザーでサインイン
+  </a>
+);
+export const selftestQuestion = "削除しますか？　この操作は元に戻せません。前へ";
+export const selftestPair = "本当に!?";'
 if COPY_OK_OUT=$(node scripts/check/ui-copy.mjs 2>&1); then
-  echo "✅ UI 文言: 正当なコード（コメント・文をつないでいないダッシュ）を誤検出しない"
+  echo "✅ UI 文言: 正当なコード（コメント・文をつないでいないダッシュ・title・ボタン・JSX の前後の空白・全角の空白）を誤検出しない"
 else
   echo "❌ UI 文言: 正当なコードを誤検出しました"
   printf '%s\n' "$COPY_OK_OUT"

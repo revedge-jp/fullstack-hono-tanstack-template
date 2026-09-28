@@ -155,9 +155,9 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
   トークンとして足し（`tracking-<名前>` で使える）、同じ値を画面ごとに書かない
 - 【ガード】並べるときの間隔は親の `flex` / `grid` + `gap-*`、コンポーネントの内側は padding で作る。margin
   （`mt-2` / `-mx-4`）と `space-y-*` / `space-x-*` は使えない（中央寄せの `mx-auto` 等 `auto` は可）
-- 余白の大きさは SmartHR DS の余白トークン（16px を `1` とする）に当たる値から選ぶ。Tailwind の数字は
-  SmartHR DS の 4 倍で、使えるのは `0` / `1` / `2` / `3` / `4` / `5` / `6` / `8` / `10` / `12` / `16`
-  （`gap-1.5` / `p-7` / `gap-9` は使わない）。場所ごとの基準は次のとおり【目視】:
+- 【ガード】余白（`gap-*` / `p-*`）の大きさは SmartHR DS の余白トークン（16px を `1` とする）に当たる値から選ぶ。
+  Tailwind の数字は SmartHR DS の 4 倍で、使えるのは `0` / `1` / `2` / `3` / `4` / `5` / `6` / `8` / `10` / `12` / `16`
+  （`gap-1.5` / `p-7` / `gap-9` は `off-scale-spacing` が検出する）。場所ごとの基準は次のとおり【目視】:
 
   | 場所 | クラス |
   |---|---|
@@ -270,7 +270,7 @@ skill と shadcn の agent skill）。**半年を目安に見直し**、機械�
 - カタカナ語は、先に漢字語で言い換えられないかを考える。開発側の用語（「レコード」「フェッチ」等）を画面に出さない
 - 同じものを別の言葉で呼ばない。このアプリは「サインイン」で、「ログイン」と混ぜない
 
-語の形は置き場所で決まる:
+語の形は置き場所で決まる（ボタンとページの `<title>` は【ガード】、ほかはレビューで見る）:
 
 | 置き場所 | 形 | 例 |
 |---|---|---|
@@ -281,7 +281,7 @@ skill と shadcn の agent skill）。**半年を目安に見直し**、機械�
 | リンク | 移動先が分かる言葉。「こちら」にしない | 「よくある質問」 |
 | ページの `<title>` | 「{画面名}｜{アプリ名}」。全角の縦棒で、前後に空白を入れない | 「タスク｜アプリ名」 |
 
-用字用語:
+用字用語（置き換え先が 1 つに決まるものは【ガード】。一覧は `scripts/check/ui-terms.yml`）:
 
 - つくる操作は「追加」（「登録」「作成」は明らかにそちらが合うときだけ）。止める操作は、実行前なら「キャンセル」、
   実行済みなら「取り消す」、実行中なら「中断」
@@ -301,11 +301,14 @@ skill と shadcn の agent skill）。**半年を目安に見直し**、機械�
 `bun run check:ui-copy`（`arch:guards` に含まれる）が client の TS / TSX から日本語の文字列を取り出して
 textlint で調べる。語彙は p1ass/textlint-rule-preset-ai-words-ja、誇張と冗長な言い回しは
 textlint-ja/textlint-rule-preset-ai-writing、プロダクト独自の語は `scripts/check/ai-words.json`、全角ダッシュは
-`scripts/check/ui-copy.mjs` の正規表現が見る。コメントは画面に出ないので対象外。Claude Code では TS / TSX を
+`scripts/check/ui-copy.mjs` の正規表現が見る。画面の文言だけに当てる規則は `scripts/check/ui-copy.textlintrc.json`
+にあり、表記の辞書（`scripts/check/ui-terms.yml`）と和文の空白（textlint-rule-preset-ja-spacing。英数字の前後に
+空白を入れない等）を見る。ボタンのラベルと `head` の `meta` の `title` は、置き場所が要るので `ui-copy.mjs` が
+AST で見る。コメントは画面に出ないので対象外。Claude Code では TS / TSX を
 編集した直後にも `.claude/hooks/on-ts-edit.sh` が整形の後に同じチェックをかけて指摘を返す。
 
-- 指摘されたら文言を直す。その語が画面の用語として必要なときだけ、`.textlintrc.json` の `allows` に足す
-  （検証器の変更なので、PR 本文の「検証器の変更理由」に理由を書く）
+- 指摘されたら文言を直す。その語が画面の用語として必要なときだけ、`.textlintrc.json` の `allows` に足すか
+  `scripts/check/ui-terms.yml` の規則を直す（検証器の変更なので、PR 本文の「検証器の変更理由」に理由を書く）
 - 辞書で拾えるのは語と言い回しだけで、「どの画面にも当てはまる文」は拾えない。画面の確認（下の節）で読む
 <!-- textlint-disable -->
 

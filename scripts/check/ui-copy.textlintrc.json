@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "prh": {
+      "rulePaths": ["./ui-terms.yml"]
+    },
+    "preset-ja-spacing": true
+  }
+}

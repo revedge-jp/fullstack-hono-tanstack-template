@@ -81,6 +81,19 @@ const RULES = [
       "margin（mt-2 / -mx-4 等）と space-y-* / space-x-* で間隔を作らないでください。親の flex / grid + gap-* か、部品の padding で作ってください（mx-auto 等の auto は可）",
   },
   {
+    id: "off-scale-spacing",
+    // 余白は SmartHR Design System の余白トークン（16px を 1 とする 0 / 0.25 / 0.5 / 0.75 / 1 / 1.25 / 1.5 / 2 /
+    // 2.5 / 3 / 4）に当たる値だけを使う。Tailwind の数字はその 4 倍になる。gap-1.5 / p-7 のような中間の値は
+    // 画面ごとに余白の段階が増える元になる（.claude/rules/client.md「スケールから選ぶ」）。
+    // w-* / h-* / size-* は大きさなので対象外。p-px のような数字でない値も見ない。
+    pattern: new RegExp(
+      `${CLASS_START}(?:gap(?:-[xy])?|p(?:bs|be|[trblxyse])?)-(?!(?:0|1|2|3|4|5|6|8|10|12|16)${CLASS_END})\\d+(?:\\.\\d+)?${CLASS_END}`,
+      "g",
+    ),
+    message:
+      "余白はスケールの 0 / 1 / 2 / 3 / 4 / 5 / 6 / 8 / 10 / 12 / 16 から選んでください（SmartHR Design System の余白トークンに当たる値。gap-1.5 / p-7 等は使えません）",
+  },
+  {
     id: "manual-dark-variant",
     // `{ dark: "Dark" }` のようなオブジェクトキーを拾わないよう、直後が区切りのものは除く
     // （2xl: や @md: のように数字・記号で始まるバリアントが続く形は拾う）。

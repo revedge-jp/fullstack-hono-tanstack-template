@@ -13,6 +13,9 @@
       "project": ["**/*.{ts,tsx}"]
     }
   },
+  "textlint": {
+    "config": [".textlintrc.json", "scripts/check/ui-copy.textlintrc.json"]
+  },
   "ignore": ["**/dist/**"],
   "ignoreFiles": ["steiger.config.mjs"],
   "ignoreIssues": {
