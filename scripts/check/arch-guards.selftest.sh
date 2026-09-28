@@ -648,6 +648,12 @@ expect_guard "UI 文言: ボタンのラベルに「する」を残す" \
   'export const SelftestUi = () => <Button>{pending ? "送信中…" : "追加する"}</Button>;' \
   "違反 [button-label]"
 
+expect_guard "UI 文言: ダイアログの操作ボタン（AlertDialogAction）のラベル" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  'export const SelftestUi = () => <AlertDialogAction>削除する</AlertDialogAction>;' \
+  "違反 [button-label]"
+
 # 逆向き（誤検出）の回帰テスト: 正当なコードで client-styles.mjs が通ることを確認する。
 mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };

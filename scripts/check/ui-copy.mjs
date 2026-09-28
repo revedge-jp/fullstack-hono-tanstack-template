@@ -53,6 +53,8 @@ const PAGE_TITLE_MESSAGE =
   "ページの title は「画面名｜アプリ名」の形にしてください（全角の縦棒で区切り、前後に空白を入れない）";
 // サ変動詞の「する」を残したもの・丁寧形・句点。「取り消す」「次へ進める」のような終止形は通す。
 const BUTTON_LABEL_NG = /(?:する|します|しましょう|。)$/u;
+// Button と、Button を描くダイアログの操作（components/ui/alert-dialog.tsx）
+const BUTTON_TAGS = new Set(["Button", "AlertDialogAction", "AlertDialogCancel"]);
 const BUTTON_LABEL_RULE_ID = "button-label";
 const BUTTON_LABEL_MESSAGE =
   "ボタンのラベルは動詞の終止形にし、「〜する」を省いてください（「追加する」は「追加」、「タスクを追加する」は「タスクを追加」）。句点も付けません";
@@ -139,7 +141,7 @@ function checkPlacement(file, source) {
         message: `${PAGE_TITLE_MESSAGE}: ${node.initializer.text}`,
       });
     }
-    if (ts.isJsxElement(node) && node.openingElement.tagName.getText(source) === "Button") {
+    if (ts.isJsxElement(node) && BUTTON_TAGS.has(node.openingElement.tagName.getText(source))) {
       for (const label of buttonLabelNodes(node)) {
         const text = label.text.trim();
         if (JAPANESE.test(text) && BUTTON_LABEL_NG.test(text)) {
