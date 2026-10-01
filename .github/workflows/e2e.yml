@@ -1,0 +1,153 @@
+name: E2E
+
+# Playwright E2E は PR の push ごとには回さない（GitHub Actions の費用削減）。
+#
+# 理由:
+#   - E2E は 1 回あたり課金で約 2 分×matrix 分かかり、PR の push は頻繁なので費用の大きな割合を占める
+#   - 退行が夜間の実行で 24 時間以内に見つかれば十分間に合う（main に入った翌朝に気づける）
+#   - 決済・認証・マイグレーションのような危ない PR には、作者が手で `e2e` ラベルを付けて回す
+#
+# いつ走るか:
+#   - schedule: 毎日 JST 03:00（UTC 18:00）に main で実行（main への push では回さない。夜間がその代わり）
+#   - workflow_dispatch: 手動実行（Actions タブから。ブランチも選べる）
+#   - pull_request: `e2e` ラベルが付いた PR だけ。ラベルを付けた瞬間と、付けたままの PR への push で走る
+#   - workflow_call: ci.yml の e2e-tests ジョブがバージョンタグ（v*.*.*）の push でだけ呼ぶ。
+#     deploy.yml は CI Pipeline の成功を待つので、ここが本番デプロイ前の E2E ゲートになる
+#
+# ラベル付き PR での実行は参考情報で、必須チェック（CI Pipeline）には入らない。
+# merge queue（merge_group）でも回さない — キューの待ちに E2E の所要時間を乗せないため。
+#
+# ci.yml の pull_request に labeled を足さずにワークフローを分けているのは、無関係なラベルの
+# 付け外しのたびに CI 全体（ci / integration 等）が再実行されるのを避けるため。
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    # opened / reopened も含める — ラベル付きで作成・再オープンした PR が一度も走らない状態を防ぐ
+    types: [opened, reopened, synchronize, labeled]
+
+permissions:
+  contents: read
+
+# workflow_call で呼ばれたときの github コンテキストは呼び出し元（CI Pipeline）のもの。
+# ${{ github.workflow }} を使うと呼び出し元と同じグループになりデッドロック扱いで打ち切られるため、
+# 接頭辞は固定文字列にする。キャンセルは PR だけ（手動実行が夜間の実行を打ち切らないように）。
+# E2E を走らせない PR の run（ラベルなしの push・`e2e` 以外のラベル追加）は run ごとに別グループへ
+# 逃がす。同じグループに入ると、ジョブが skip されるだけの run が実行中の E2E を取り消してしまう。
+concurrency:
+  group: e2e-${{ github.event_name }}-${{ github.ref }}-${{ (github.event_name == 'pull_request' && (!contains(github.event.pull_request.labels.*.name, 'e2e') || (github.event.action == 'labeled' && github.event.label.name != 'e2e'))) && github.run_id || 'run' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# workflow_call では呼び出し元の env は引き継がれない。ci.yml と揃えること
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+  BUN_VERSION: "1.4.0"
+
+jobs:
+  e2e-tests:
+    # dev: 開発サーバー（vite dev）に対して実行 — 失敗時のデバッグが容易。
+    # prod-shape: ビルド成果物（SSR + API が 1 Worker に同居）を workerd で起動して実行 —
+    #   dev（Bun / vite dev）と本番（workerd）のランタイム乖離を検出する（タグ push ではデプロイ前に）。
+    #   詳細は apps/client/playwright.config.ts を参照。
+    # ここでは paths-filter で対象を絞らない。走らせるかは起動条件（夜間 / 手動 / ラベル / タグ）が決める
+    name: E2E Tests (Playwright, ${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    # PR では `e2e` ラベルが付いているときだけ走らせる（schedule / 手動 / タグからの呼び出しは常に走る）。
+    # labeled はラベルが `e2e` のときだけ — 付けたままの PR に別のラベルを足しただけで再実行しない
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'e2e') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'e2e'))
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [dev, prod-shape]
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_db
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Restore Playwright browser cache
+        id: playwright-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-chromium-v2-
+
+      - uses: ./.github/actions/setup-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-playwright: 'true'
+          playwright-cache-hit: ${{ steps.playwright-cache.outputs.cache-hit }}
+
+      - name: Save Playwright browser cache
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-v2-${{ hashFiles('bun.lock') }}
+
+      - name: Run database migrations
+        working-directory: packages/database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
+        run: bunx drizzle-kit migrate
+
+      - name: Replace the APP_NAME placeholder for E2E
+        run: |
+          # init-template.sh の置換対象にならないよう、プレースホルダーは動的に組み立てる
+          placeholder='{{'APP_NAME'}}'
+          if grep -qF "$placeholder" apps/client/wrangler.jsonc; then
+            PLACEHOLDER="$placeholder" perl -pi -e 's/\Q$ENV{PLACEHOLDER}\E/template-app/g' apps/client/wrangler.jsonc
+          fi
+
+      - name: Create .dev.vars for E2E
+        run: |
+          # ポートは playwright.config.ts と揃える（dev: 3200 / prod-shape: 3100）
+          PORT=3200
+          if [ "${{ matrix.mode }}" = "prod-shape" ]; then PORT=3100; fi
+          cat > apps/client/.dev.vars << VARS
+          NODE_ENV=development
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_db
+          BETTER_AUTH_SECRET=dummy-secret-for-e2e-0123456789abcdef
+          BETTER_AUTH_URL=http://localhost:${PORT}
+          GOOGLE_CLIENT_ID=dummy-client-id
+          GOOGLE_CLIENT_SECRET=dummy-client-secret
+          VARS
+
+      - name: Run E2E tests
+        working-directory: apps/client
+        env:
+          CI: true
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_db
+          BETTER_AUTH_SECRET: dummy-secret-for-e2e-0123456789abcdef
+          E2E_PROD_SHAPE: ${{ matrix.mode == 'prod-shape' && '1' || '' }}
+        run: bunx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-${{ matrix.mode }}
+          path: apps/client/playwright-report
+          retention-days: 14

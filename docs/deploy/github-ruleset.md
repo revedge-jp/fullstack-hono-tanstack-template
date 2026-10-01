@@ -41,7 +41,7 @@ gh auth login          # 未認証の場合
 並行 PR が何本あっても最新化 → CI 再実行の連鎖が起きない。
 
 - CI 側は `.github/workflows/ci.yml` の `merge_group:` トリガーが対応する。**これが無いとキューは
-  永久に待つ**。`merge_group` では paths-filter を使わず全ジョブを回す
+  永久に待つ**。`merge_group` では paths-filter を使わず全ジョブを回す（E2E は除く。E2E は `e2e.yml` が夜間・手動・`e2e` ラベル付き PR・タグの push で実行する）
 - **merge queue は public リポジトリか Enterprise Cloud の private でしか使えない**（Team プランの
   private は `merge_queue` ルールが 422 で拒否される）。`setup-github.sh` はその場合 queue ルールだけ
   外して再適用し、queue なしの auto-merge 運用にする。最新化必須は無効のままなので、古い main で緑だった
