@@ -5,7 +5,13 @@
 # なぜ分けたか: arch-guards.selftest.sh はルールごとに既知の違反 fixture を置き、「そのルールが
 # 検出するか」を確かめる（30ケース超）。以前は毎回 arch-guards.sh をまるごと再実行しており、
 # 後ろのルールを試すたびに前の全ルールのリポジトリ全体スキャンも払っていた。関数に分ければ、
-# 自己テストは対象のルール1つだけを呼べる。
+# 自己テストは対象のルール1つだけを呼べる（さらに、同じルールのケースは fixture をまとめて置いて1回だけ呼ぶ）。
+#
+# 違反は見つけた分をすべて出してから `return 1` する（種類ごとに途中で return しない）。自己テストは
+# 同じルールの全ケースの fixture を置いて1回だけ呼ぶので、途中で return すると後ろの種類のケースを
+# 確かめられない。違反の種類ごとに見出しを「違反」で始め、違反の行は「  • 」で始めて fixture を指すパス
+# （か、検査が使う短い表記）を含める。違反の種類が複数ある検査は、まとめて呼ぶと別の種類の fixture で
+# 終了コードが非 0 になってしまうので、種類ごとに単独で失敗することを自己テストの expect_guard_alone で確かめる。
 #
 # 各関数は違反で `return 1` する（exit だと source した呼び出し元ごと終わるため）。
 #
@@ -145,18 +151,24 @@ guard_no_class_interface() {
     \( -path '*/node_modules/*' -o -path '*/dist/*' -o -path '*/.next/*' -o -path '*/build/*' -o -path '*/generated/*' -o -path '*/.output/*' \) -prune -o \
     -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 |
     xargs -0 grep -nE '^\s*(export\s+(default\s+)?)?(declare\s+)?interface\b' | grep -vE '^[^:]*\.(d|gen)\.ts:' || true)
+  # class と interface の両方の違反を出してから失敗する（自己テストは両方の fixture を置いて1回だけ呼ぶ）。
+  # 失敗は違反を出した if の中で決める（出力と失敗の条件を別々に書くと、片方だけ直したときにずれる）
+  local failed=0
   if [ -n "$CLASS_VIOL" ]; then
     echo "違反: class の使用が禁止されています"
     echo "$CLASS_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
-    return 1
+    failed=1
   fi
   if [ -n "$INTF_VIOL" ]; then
     echo "違反: interface の使用が禁止されています（.d.ts は除外）"
     echo "$INTF_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
+    failed=1
+  fi
+  if [ "$failed" = 1 ]; then
     return 1
   fi
   echo "OK"
@@ -467,19 +479,25 @@ guard_usecase_result_chain() {
     USECASE_ASYNC_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\basync\s+function\b|\basync\s*\(|\basync\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(\(|=>)' -- || true)
     USECASE_TRY_VIOL=$(echo "$USECASE_FILES" | xargs grep -nE '\btry\s*\{' -- || true)
     USECASE_NO_CHAIN=$(echo "$USECASE_FILES" | xargs grep -LE '\b(okAsync|ResultAsync)\b' -- || true)
+    # 3 種類の違反をすべて出してから失敗する（自己テストは各種類の fixture を置いて1回だけ呼ぶ）。
+    # 失敗は違反を出した if の中で決める（出力と失敗の条件を別々に書くと、片方だけ直したときにずれる）
+    local failed=0
     if [ -n "$USECASE_ASYNC_VIOL" ]; then
       echo "違反: usecase.ts で async は禁止です（okAsync().andThen() チェーンを使ってください）"
       echo "$USECASE_ASYNC_VIOL" | while IFS= read -r line; do echo "  • $line"; done
-      return 1
+      failed=1
     fi
     if [ -n "$USECASE_TRY_VIOL" ]; then
       echo "違反: usecase.ts で try/catch は禁止です（steps.ts に委譲し、Result チェーンで表現してください）"
       echo "$USECASE_TRY_VIOL" | while IFS= read -r line; do echo "  • $line"; done
-      return 1
+      failed=1
     fi
     if [ -n "$USECASE_NO_CHAIN" ]; then
       echo "違反: usecase.ts は okAsync または ResultAsync を使った Result チェーンである必要があります"
       echo "$USECASE_NO_CHAIN" | while IFS= read -r line; do echo "  • $line"; done
+      failed=1
+    fi
+    if [ "$failed" = 1 ]; then
       return 1
     fi
   fi

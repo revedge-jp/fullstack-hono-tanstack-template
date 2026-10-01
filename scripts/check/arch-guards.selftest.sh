@@ -6,7 +6,11 @@
 # （期待する違反メッセージを出す）ことを確認する。ガードが壊れて違反を見逃すと、
 # この自己テストが失敗する（= false negative の検出）。
 #
-# 各ケースは arch-guards-lib.sh の検査関数を1つだけ直接呼ぶ（自己テスト全体を速く保つため）。
+# ガードはどれもリポジトリ全体を走査するので、ケースごとに1回ずつ呼ぶと「ケース数 × ガード1回分」で
+# 時間が伸びる（派生プロダクトで自己テストだけ約117秒になった）。そこで expect_guard / expect_guard_ignores
+# はケースを登録するだけにし、run_guard_batches がガードごとに全ケースの fixture を別々のパスへ置いて、
+# そのガードを1回だけ呼ぶ。各ケースは、出力の中で自分の fixture を指す行と期待メッセージの組があるか
+# （検出）／自分の fixture を指す行が無いか（誤検出しない）で判定する。
 #
 # 背景: dependency-cruiser の feature 間依存禁止ルールが正規表現バックリファレンス
 #        （from の capture group を to で \1 参照する書き方）に依存しており、実際には
@@ -24,18 +28,9 @@ source "$ROOT/scripts/check/arch-guards-lib.sh"
 FAIL=0
 FIXTURES=()
 cleanup() {
-  local f dir
-  for f in "${FIXTURES[@]:-}"; do [ -n "$f" ] && rm -f "$f"; done
-  # mkfix の mkdir -p が作った __selftest* ディレクトリも消す(参照実装の tasks 配下に空ディレクトリが
-  # 残ると、構造を真似るエージェントの目に入る)。rmdir は空のときしか消さないので、fixture 以外は残る
-  for f in "${FIXTURES[@]:-}"; do
-    [ -n "$f" ] || continue
-    dir="$(dirname "$f")"
-    while [[ "$dir" == *__selftest* ]]; do
-      rmdir "$dir" 2>/dev/null || break
-      dir="$(dirname "$dir")"
-    done
-  done
+  # 参照実装の tasks 配下に空の __selftest* ディレクトリが残ると、構造を真似るエージェントの目に入るので
+  # ディレクトリも消す（remove_fixtures の rmdir は空のときしか消さないので、fixture 以外は残る）
+  remove_fixtures "${FIXTURES[@]:-}"
   rm -rf "apps/api-service/src/features/tasks/application/__selftest_action" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -46,22 +41,148 @@ mkfix() { # $1 path, $2 content
   FIXTURES+=("$1")
 }
 
-# 検査関数を1つだけ直接呼び、「期待する違反メッセージ」を出して失敗することを確認する。
-# 以前は arch-guards.sh をまるごと再実行していたため、後ろの検査を試すたびに前の全検査の
-# スキャンも払っていた（arch-guards-lib.sh 冒頭の説明）。
-# run_guard は条件の中で呼ばない（set -e が無効になり素通りしうる）。コマンド置換で受ける。
-expect_guard() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture内容, $5 期待メッセージ部分文字列
+CASE_LABELS=()
+CASE_GUARDS=()
+CASE_PATHS=()
+CASE_CONTENTS=()
+CASE_MESSAGES=()
+CASE_KEYS=()
+
+# 違反を検出するケースを登録する。$6 は出力の中で fixture を指す文字列（省略時は fixture のパス。
+# パスを出さず短い名前で報告する検査に使う）。$5 はその行か、行の属する見出し（直前の「  • 」でない行。
+# 検査名を出す「[guard] 」の行は除く）に含まれるはずの文字列
+expect_guard() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture内容, $5 期待メッセージ部分文字列, [$6 出力での fixture の表記]
+  CASE_LABELS+=("$1")
+  CASE_GUARDS+=("$2")
+  CASE_PATHS+=("$3")
+  CASE_CONTENTS+=("$4")
+  CASE_MESSAGES+=("$5")
+  CASE_KEYS+=("${6:-$3}")
+}
+
+# 違反にしない（誤検出しない）ケースを登録する。期待メッセージを空にして区別する
+expect_guard_ignores() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture内容, [$5 出力での fixture の表記]
+  expect_guard "$1" "$2" "$3" "$4" "" "${5:-$3}"
+}
+
+remove_fixtures() { # fixture と、mkfix の mkdir -p が作った __selftest* ディレクトリを消す
+  local f dir
+  for f in "$@"; do
+    rm -f "$f"
+    dir="$(dirname "$f")"
+    while [[ "$dir" == *__selftest* ]]; do
+      rmdir "$dir" 2>/dev/null || break
+      dir="$(dirname "$dir")"
+    done
+  done
+}
+
+# ガードの出力から、fixture の表記 $2 を含む「  • 」行を探す。$3 が空でなければ、その違反に $3 を含むものに
+# 限る。違反は「  • 」行・その後に続く説明の行（prh は置き換え先の理由を違反行の後ろに出す）・属する見出し
+# （「違反」で始まる行）からなる。表記の直後がパスの続き（英数字・. _ / -）の一致は数えない
+# （foo.ts が foo.tsx・foo.ts.bak に一致しないように）
+output_reports() { # $1 出力, $2 fixture の表記, $3 期待メッセージ（空なら問わない）
+  printf '%s\n' "$1" | awk -v key="$2" -v msg="$3" '
+    function mentions(line,    rest, pos, next_char) {
+      rest = line
+      while ((pos = index(rest, key)) > 0) {
+        next_char = substr(rest, pos + length(key), 1)
+        if (next_char !~ /[A-Za-z0-9_.\/-]/) return 1
+        rest = substr(rest, pos + 1)
+      }
+      return 0
+    }
+    /^\[guard\] / { next }
+    /^  • / {
+      count++
+      mentioned[count] = mentions($0)
+      detail[count] = $0
+      heading[count] = header
+      in_bullets = 1
+      next
+    }
+    /^違反/ { header = $0; in_bullets = 0; next }
+    {
+      if (in_bullets) detail[count] = detail[count] "\n" $0
+      else header = header "\n" $0
+    }
+    END {
+      for (i = 1; i <= count; i++) {
+        if (mentioned[i] && (msg == "" || index(detail[i], msg) || index(heading[i], msg))) exit 0
+      }
+      exit 1
+    }'
+}
+
+# 違反の種類が複数ある検査（arch-guards-lib.sh 冒頭の説明）の各種類を、その fixture だけを置いて単独で呼び、
+# 終了コードが非 0 になることを確かめる。まとめて呼ぶと別の種類の fixture で非 0 になるので、ある種類の違反を
+# 出しても失敗しない壊れ方を見逃す。grep の検査に限って使う（1回が速いので、まとめなくても時間は伸びない）
+expect_guard_alone() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture内容, $5 期待メッセージ部分文字列
   mkfix "$3" "$4"
   local out rc
   out=$(run_guard "$2" 2>&1)
   rc=$?
-  if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "$5"; then
+  if [ "$rc" -ne 0 ] && output_reports "$out" "$3" "$5"; then
     echo "✅ $1"
   else
-    echo "❌ $1: $2 が期待した違反 '$5' を検出できませんでした（ガードが壊れている可能性。exit=${rc}）"
+    echo "❌ $1: $2 が $3 の違反 '$5' だけのときに失敗しませんでした（exit=${rc}）"
+    printf '%s\n' "$out" | sed 's/^/    /'
     FAIL=1
   fi
-  rm -f "$3"
+  remove_fixtures "$3"
+}
+
+# 登録したケースをガードごとにまとめて実行する。fixture は同じガードのケース同士でパスが重ならないこと
+# （重なると後のケースが前のケースの fixture を上書きし、前のケースを確かめないまま緑になる）。
+# run_guard は条件の中で呼ばない（set -e が無効になり素通りしうる）。コマンド置換で受ける。
+run_guard_batches() {
+  local guards=() guard i j out rc batch_paths batch_failed seen
+  for guard in "${CASE_GUARDS[@]}"; do
+    seen=0
+    for j in "${guards[@]:-}"; do [ "$j" = "$guard" ] && seen=1; done
+    [ "$seen" = 0 ] && guards+=("$guard")
+  done
+  for guard in "${guards[@]}"; do
+    batch_paths=()
+    for i in "${!CASE_GUARDS[@]}"; do
+      [ "${CASE_GUARDS[$i]}" = "$guard" ] || continue
+      for j in "${batch_paths[@]:-}"; do
+        if [ "$j" = "${CASE_PATHS[$i]}" ]; then
+          echo "❌ ${CASE_LABELS[$i]}: fixture のパス ${CASE_PATHS[$i]} が同じ $guard の別のケースと重なっています（ケースごとに別のパスにしてください）"
+          FAIL=1
+          break
+        fi
+      done
+      batch_paths+=("${CASE_PATHS[$i]}")
+      mkfix "${CASE_PATHS[$i]}" "${CASE_CONTENTS[$i]}"
+    done
+    out=$(run_guard "$guard" 2>&1)
+    rc=$?
+    batch_failed=0
+    for i in "${!CASE_GUARDS[@]}"; do
+      [ "${CASE_GUARDS[$i]}" = "$guard" ] || continue
+      if [ -z "${CASE_MESSAGES[$i]}" ]; then
+        if output_reports "$out" "${CASE_KEYS[$i]}" ""; then
+          echo "❌ ${CASE_LABELS[$i]}: $guard が ${CASE_KEYS[$i]} を違反として誤検出しました"
+          FAIL=1
+          batch_failed=1
+        else
+          echo "✅ ${CASE_LABELS[$i]}"
+        fi
+      elif [ "$rc" -ne 0 ] && output_reports "$out" "${CASE_KEYS[$i]}" "${CASE_MESSAGES[$i]}"; then
+        echo "✅ ${CASE_LABELS[$i]}"
+      else
+        echo "❌ ${CASE_LABELS[$i]}: $guard が ${CASE_KEYS[$i]} の違反 '${CASE_MESSAGES[$i]}' を検出できませんでした（ガードが壊れている可能性。exit=${rc}）"
+        FAIL=1
+        batch_failed=1
+      fi
+    done
+    if [ "$batch_failed" = 1 ]; then
+      echo "    --- $guard の出力 ---"
+      printf '%s\n' "$out" | sed 's/^/    /'
+    fi
+    remove_fixtures "${batch_paths[@]}"
+  done
 }
 
 D="apps/api-service/src/features/tasks"
@@ -88,13 +209,13 @@ expect_guard "id-token: write 検出" \
 
 expect_guard "id-token: write 検出（フロー形式）" \
   guard_no_id_token_write \
-  ".github/workflows/__selftest_idtoken.yml" \
+  ".github/workflows/__selftest_idtoken_2.yml" \
   $'name: selftest\non: push\npermissions: { contents: read, id-token: write }\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
   "id-token: write が付与"
 
 expect_guard "id-token: write 検出（write-all）" \
   guard_no_id_token_write \
-  ".github/workflows/__selftest_idtoken.yml" \
+  ".github/workflows/__selftest_idtoken_3.yml" \
   $'name: selftest\non: push\npermissions: write-all\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
   "id-token: write が付与"
 
@@ -116,16 +237,10 @@ expect_guard "throw 禁止（同じ行に \`throw:\` があっても throw 文�
   "$D/application/__selftest_throw_key_same_line.ts" \
   'export function selftestThrow() { throw new Error("x"); } // throw: 後で ROP へ移す' \
   "__selftest_throw_key_same_line.ts:1:"
-THROW_KEY_NEG="$D/application/__selftest_throw_key_only.ts"
-mkfix "$THROW_KEY_NEG" 'export const selftestOptions = { throw: true };'
-throw_key_out=$(run_guard guard_no_throw 2>&1)
-if printf '%s' "$throw_key_out" | grep -qF "__selftest_throw_key_only.ts"; then
-  echo "❌ throw 禁止: プロパティキーの throw を違反として誤検出しました"
-  FAIL=1
-else
-  echo "✅ throw 禁止（プロパティキーは許容）"
-fi
-rm -f "$THROW_KEY_NEG"
+expect_guard_ignores "throw 禁止（プロパティキーは許容）" \
+  guard_no_throw \
+  "$D/application/__selftest_throw_key_only.ts" \
+  'export const selftestOptions = { throw: true };'
 
 expect_guard "class 禁止" \
   guard_no_class_interface \
@@ -196,7 +311,7 @@ expect_guard "throw 禁止（src/config.ts 以外の config.ts）" \
 
 expect_guard "GitHub Actions 未ピン留め検出（行末のコメントに : # がある）" \
   guard_actions_pinned_sha \
-  ".github/workflows/__selftest_unpinned.yml" \
+  ".github/workflows/__selftest_unpinned_2.yml" \
   $'name: selftest\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4 # pinned later, see: #123\n' \
   "commit SHA でピン留め"
 
@@ -220,13 +335,13 @@ expect_guard "client queries のサーバー専用モジュール（型の impor
 
 expect_guard "client queries のサーバー専用モジュール（コメントに createServerFn の語があるだけ）" \
   guard_client_queries_server_modules \
-  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  "apps/client/features/tasks/queries/__selftest-query_2.ts" \
   $'// createServerFn は使わない\nimport { getApiClient } from "@/shared/lib/api-client";\nexport const selftestQuery = () => getApiClient();' \
   "createServerFn のファイルだけ"
 
 expect_guard "client process.env 直接参照禁止（{ default as p } の import）" \
   guard_client_features_no_process_env \
-  "apps/client/shared/lib/__selftest_env.ts" \
+  "apps/client/shared/lib/__selftest_env_2.ts" \
   $'import { default as nodeProcess } from "node:process";\nexport const selftestEnv = nodeProcess.env.SELFTEST;' \
   "で process.env を直接参照できません"
 
@@ -237,25 +352,14 @@ expect_guard "features 配下 process.env 直接参照禁止（/* を含むコ�
   "features 配下で process.env を直接参照できません"
 
 # 誤検出しないこと: コメントの中の import / return class の語、型だけの import
-NEG_QUERY="apps/client/features/tasks/queries/__selftest-type-only.ts"
-mkfix "$NEG_QUERY" $'import { queryOptions } from "@tanstack/react-query";\n\n// 値を import するとブラウザのバンドルに入るので型だけ使う\nimport type { SessionUser } from "@/shared/lib/api-client";\nexport const selftestTypeOnly = (user: SessionUser) => queryOptions({ queryKey: [user.id] });'
-NEG_CLASS="apps/client/shared/lib/__selftest_class_comment.ts"
-mkfix "$NEG_CLASS" $'// return class names for the given variant\nexport const selftestVariant = "a";'
-neg_query_out=$(run_guard guard_client_queries_server_modules 2>&1)
-neg_class_out=$(run_guard guard_no_class_interface 2>&1)
-rm -f "$NEG_QUERY" "$NEG_CLASS"
-if printf '%s' "$neg_query_out" | grep -qF "__selftest-type-only.ts"; then
-  echo "❌ client queries: コメントの後の型だけの import を誤検出しました"
-  FAIL=1
-else
-  echo "✅ client queries（コメントの後の型だけの import は許す）"
-fi
-if printf '%s' "$neg_class_out" | grep -qF "__selftest_class_comment.ts"; then
-  echo "❌ class 禁止: コメントの中の return class を誤検出しました"
-  FAIL=1
-else
-  echo "✅ class 禁止（コメントの中の語は数えない）"
-fi
+expect_guard_ignores "client queries（コメントの後の型だけの import は許す）" \
+  guard_client_queries_server_modules \
+  "apps/client/features/tasks/queries/__selftest-type-only.ts" \
+  $'import { queryOptions } from "@tanstack/react-query";\n\n// 値を import するとブラウザのバンドルに入るので型だけ使う\nimport type { SessionUser } from "@/shared/lib/api-client";\nexport const selftestTypeOnly = (user: SessionUser) => queryOptions({ queryKey: [user.id] });'
+expect_guard_ignores "class 禁止（コメントの中の語は数えない）" \
+  guard_no_class_interface \
+  "apps/client/shared/lib/__selftest_class_comment.ts" \
+  $'// return class names for the given variant\nexport const selftestVariant = "a";'
 
 expect_guard "api-service の中の自分のパッケージ名の import" \
   guard_api_no_self_package_import \
@@ -266,7 +370,7 @@ export const selftestSelfImport = createFakeApp;' \
 
 expect_guard "api-service の中の自分のパッケージ名の import（ルート）" \
   guard_api_no_self_package_import \
-  "apps/api-service/src/__tests__/unit/__selftest_self_import.test.ts" \
+  "apps/api-service/src/__tests__/unit/__selftest_self_import_2.test.ts" \
   'import { createApp } from "api-service";
 export const selftestSelfImport = createApp;' \
   "@app/... から import してください"
@@ -283,21 +387,15 @@ expect_guard "client の ui で loader の値を initialData に渡す" \
   'export const selftestInitialData = (initial: unknown) => ({ initialData: initial });' \
   "initialData を使わず"
 
-NEG_INITIAL="apps/client/app/routes/__selftest-initial-data-comment.tsx"
-mkfix "$NEG_INITIAL" '// initialData は使わない（loader の ensureQueryData と useSuspenseQuery を使う）
+expect_guard_ignores "initialData のガード（コメント行は数えない）" \
+  guard_client_routes_no_initial_data \
+  "apps/client/app/routes/__selftest-initial-data-comment.tsx" \
+  '// initialData は使わない（loader の ensureQueryData と useSuspenseQuery を使う）
 export const selftestComment = 1;'
-neg_initial_out=$(run_guard guard_client_routes_no_initial_data 2>&1)
-rm -f "$NEG_INITIAL"
-if printf '%s' "$neg_initial_out" | grep -qF "__selftest-initial-data-comment.tsx"; then
-  echo "❌ initialData のガード: コメント行を誤検出しました"
-  FAIL=1
-else
-  echo "✅ initialData のガード（コメント行は数えない）"
-fi
 
 expect_guard "client queries のサーバー専用モジュール（createServerFn の外）" \
   guard_client_queries_server_modules \
-  "apps/client/features/tasks/queries/__selftest-query.ts" \
+  "apps/client/features/tasks/queries/__selftest-query_3.ts" \
   $'import { getApiClient } from "@/shared/lib/api-client";\nexport const selftestQuery = () => getApiClient();' \
   "createServerFn のファイルだけ"
 
@@ -337,34 +435,34 @@ export const selftestGcp = CloudTasksClient;' \
 
 expect_guard "features 配下 process.env 直接参照禁止" \
   guard_features_no_process_env \
-  "$D/application/__selftest_env.ts" \
+  "$D/application/__selftest_env_2.ts" \
   'export const selftestEnv = process.env.SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
 expect_guard "features 配下 process.env 直接参照禁止（分割代入）" \
   guard_features_no_process_env \
-  "$D/application/__selftest_env.ts" \
+  "$D/application/__selftest_env_3.ts" \
   'const { SELFTEST } = process.env;
 export const selftestEnv = SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
 expect_guard "features 配下 process.env 直接参照禁止（node:process の env）" \
   guard_features_no_process_env \
-  "$D/application/__selftest_env.ts" \
+  "$D/application/__selftest_env_4.ts" \
   'import { env } from "node:process";
 export const selftestEnv = env.SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
 expect_guard "features 配下 process.env 直接参照禁止（const { env } = process）" \
   guard_features_no_process_env \
-  "$D/application/__selftest_env.ts" \
+  "$D/application/__selftest_env_5.ts" \
   'const { env } = process;
 export const selftestEnv = env.SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
 expect_guard "features 配下 process.env 直接参照禁止（Bun.env）" \
   guard_features_no_process_env \
-  "$D/application/__selftest_env.ts" \
+  "$D/application/__selftest_env_6.ts" \
   'export const selftestEnv = Bun.env.SELFTEST;' \
   "features 配下で process.env を直接参照できません"
 
@@ -376,7 +474,7 @@ expect_guard "client features process.env 直接参照禁止" \
 
 expect_guard "client features process.env 直接参照禁止（ブラケット記法）" \
   guard_client_features_no_process_env \
-  "apps/client/features/__selftest/queries/get-x.ts" \
+  "apps/client/features/__selftest/queries/get-x-2.ts" \
   'export const selftestEnv = process.env["SELFTEST"];' \
   "で process.env を直接参照できません"
 
@@ -447,103 +545,103 @@ expect_guard "スタイル規約: 既定パレット色の禁止" \
 
 expect_guard "スタイル規約: important 付き既定パレット色の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-2.tsx" \
   'export const SelftestUi = () => <p className="text-zinc-500!">x</p>;' \
   "違反 [raw-palette]"
 
 expect_guard "スタイル規約: 任意プロパティの禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-3.tsx" \
   'export const SelftestUi = () => <p className="[color:#7c3aed]">x</p>;' \
   "違反 [arbitrary-property]"
 
 expect_guard "スタイル規約: 任意値の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-4.tsx" \
   'export const SelftestUi = () => <div className="w-[347px]">x</div>;' \
   "違反 [arbitrary-value]"
 
 expect_guard "スタイル規約: dark: 手書きの禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-5.tsx" \
   'export const SelftestUi = () => <div className="bg-card dark:bg-muted">x</div>;' \
   "違反 [manual-dark-variant]"
 
 expect_guard "スタイル規約: 子の margin で間隔を作らない" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-6.tsx" \
   'export const SelftestUi = () => <p className="sm:mt-2">x</p>;' \
   "違反 [margin-spacing]"
 
 expect_guard "スタイル規約: 論理プロパティの margin（mbs）で間隔を作らない" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-7.tsx" \
   'export const SelftestUi = () => <p className="mbs-2">x</p>;' \
   "違反 [margin-spacing]"
 
 expect_guard "スタイル規約: space-y で間隔を作らない" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-8.tsx" \
   'export const SelftestUi = () => <div className="space-y-4">x</div>;' \
   "違反 [margin-spacing]"
 
 expect_guard "スタイル規約: スケール外の余白（gap-7）" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-9.tsx" \
   'export const SelftestUi = () => <div className="flex md:gap-7">x</div>;' \
   "違反 [off-scale-spacing]"
 
 expect_guard "スタイル規約: スケール外の余白（小数の p-1.5）" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-10.tsx" \
   'export const SelftestUi = () => <div className="p-1.5">x</div>;' \
   "違反 [off-scale-spacing]"
 
 expect_guard "スタイル規約: 数字始まりのバリアントが続く dark: の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-11.tsx" \
   'export const SelftestUi = () => <div className="dark:2xl:bg-card">x</div>;' \
   "違反 [manual-dark-variant]"
 
 expect_guard "スタイル規約: グラデーション背景の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-12.tsx" \
   'export const SelftestUi = () => <div className="bg-linear-to-r from-primary to-accent">x</div>;' \
   "違反 [gradient]"
 
 expect_guard "スタイル規約: グラデーション文字の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-13.tsx" \
   'export const SelftestUi = () => <h1 className="bg-clip-text text-transparent">x</h1>;' \
   "違反 [gradient-text]"
 
 expect_guard "スタイル規約: すりガラスの禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-14.tsx" \
   'export const SelftestUi = () => <div className="backdrop-blur-md">x</div>;' \
   "違反 [glassmorphism]"
 
 expect_guard "スタイル規約: h1 の直書きの禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-15.tsx" \
   'export const SelftestUi = () => <h1 className="text-xl font-semibold">x</h1>;' \
   "違反 [raw-page-heading]"
 
 expect_guard "スタイル規約: 絵文字の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-16.tsx" \
   'export const SelftestUi = () => <p>🚀 Launch</p>;' \
   "違反 [emoji]"
 
 expect_guard "スタイル規約: style 属性の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-17.tsx" \
   'export const SelftestUi = () => <p style={{ color: "#7c3aed", marginTop: 12 }}>x</p>;' \
   "違反 [inline-style]"
 
 expect_guard "スタイル規約: SVG の fill に直接書いた色の禁止" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-18.tsx" \
   'export const SelftestUi = () => <svg><path fill="#ff0000" d="M0 0" /></svg>;' \
   "違反 [svg-raw-color]"
 
@@ -555,13 +653,13 @@ expect_guard "スタイル規約: shared/ 配下も走査する" \
 
 expect_guard "スタイル規約: 文章の中央揃え（text-center）" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-19.tsx" \
   'export const SelftestUi = () => <p className="text-sm text-center">x</p>;' \
   "違反 [centered-text]"
 
 expect_guard "スタイル規約: バリアント付きの text-center" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-20.tsx" \
   'export const SelftestUi = () => <p className="text-left md:text-center">x</p>;' \
   "違反 [centered-text]"
 
@@ -576,13 +674,13 @@ expect_guard "スタイル規約: style の textAlign で中央揃え（componen
 # 行内・行全体のどちらのコメントも検出することを確認する。
 expect_guard "スタイル規約: 行末コメント中の禁止クラス" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-21.tsx" \
   'export const SelftestUi = () => <p className="text-muted-foreground">x</p>; // 旧 text-zinc-500' \
   "違反 [raw-palette]"
 
 expect_guard "スタイル規約: 行全体のコメント中の禁止クラス" \
   guard_client_styles \
-  "apps/client/features/__selftest/ui/selftest-style.tsx" \
+  "apps/client/features/__selftest/ui/selftest-style-22.tsx" \
   '// 以前は bg-linear-to-r だった
 export const SelftestUi = () => <p className="text-muted-foreground">x</p>;' \
   "違反 [gradient]"
@@ -596,72 +694,75 @@ expect_guard "UI 文言: AI が書く文章に出やすい語（プリセット�
 
 expect_guard "UI 文言: 追加の辞書（scripts/check/ai-words.json）" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-2.tsx" \
   'export const SelftestUi = () => <p aria-label="シームレスな連携">x</p>;' \
   "\"シームレス\" は"
 
 expect_guard "UI 文言: 誇張表現" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-3.tsx" \
   'export const selftestCopy = (count: number) => `${count} 件の革命的な改善`;' \
   "違反 [@textlint-ja/ai-writing/no-ai-hype-expressions]"
 
 expect_guard "UI 文言: 全角ダッシュ" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-4.tsx" \
   'export const selftestCopy = "保存しました——一覧に戻ります";' \
   "違反 [fullwidth-dash]"
 
 expect_guard "UI 文言: 前後に空白のある全角ダッシュ" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-5.tsx" \
   'export const selftestCopy = "保存しました — 一覧に戻ります";' \
   "違反 [fullwidth-dash]"
 
 expect_guard "UI 文言: 表記の辞書（scripts/check/ui-terms.yml）" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-6.tsx" \
   'export const SelftestUi = () => <p>ログインしてください</p>;' \
   "ログイン => サインイン"
 
 expect_guard "UI 文言: 置き換え先を決められない重ねた敬語（させていただければ）" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-7.tsx" \
   'export const selftestCopy = "確認させていただければ幸いです";' \
   "させていただ => {敬語を重ねない形}"
 
 expect_guard "UI 文言: 「？」の後に文が続くのに空白が無い" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-8.tsx" \
   'export const selftestCopy = "削除しますか？この操作は元に戻せません。";' \
   "「？」「！」の後に文が続くときは"
 
 expect_guard "UI 文言: 和文と英数字の間の空白（preset-ja-spacing）" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-9.tsx" \
   'export const SelftestUi = () => <p>PDF ファイルを保存しました</p>;' \
   "違反 [ja-spacing/ja-space-between-half-and-full-width]"
 
 expect_guard "UI 文言: ページの title の形" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-10.tsx" \
   'export const head = () => ({ meta: [{ title: "タスク - App" }] });' \
   "違反 [page-title]"
 
 expect_guard "UI 文言: ボタンのラベルに「する」を残す" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-11.tsx" \
   'export const SelftestUi = () => <Button>{pending ? "送信中…" : "追加する"}</Button>;' \
   "違反 [button-label]"
 
 expect_guard "UI 文言: ダイアログの操作ボタン（AlertDialogAction）のラベル" \
   guard_ui_copy \
-  "apps/client/features/__selftest/ui/selftest-copy.tsx" \
+  "apps/client/features/__selftest/ui/selftest-copy-12.tsx" \
   'export const SelftestUi = () => <AlertDialogAction>削除する</AlertDialogAction>;' \
   "違反 [button-label]"
 
-# 逆向き（誤検出）の回帰テスト: 正当なコードで client-styles.mjs が通ることを確認する。
-mkfix "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
+# 逆向き（誤検出）の回帰テスト: 正当なコード（dark キー・URL・任意バリアント・記号・スケール内の余白）を
+# client-styles.mjs が違反にしないことを確認する。
+expect_guard_ignores "スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号・スケール内の余白）を誤検出しない" \
+  guard_client_styles \
+  "apps/client/features/__selftest/ui/selftest-style-ok.tsx" \
   'export const labels = { light: "Light", dark: "Dark" };
 export const C = () => <a href="https://example.com/a//b" className="p-4 data-[state=open]:bg-muted">x</a>;
 export const D = () => <p>© 2026 → 次へ</p>;
@@ -670,20 +771,16 @@ export const F = () => <div className="flex items-center justify-center text-lef
 export const G = () => <Popover align="center">x</Popover>;
 export const H = () => <div className="gap-3 px-6 py-16 p-px size-7 md:gap-x-5">x</div>;'
 # style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
-mkfix "apps/client/components/__selftest/selftest-style-ok.tsx" \
+expect_guard_ignores "スタイル規約: components/ の部品の中の style 属性は許す" \
+  guard_client_styles \
+  "apps/client/components/__selftest/selftest-style-ok.tsx" \
   'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'
-if STYLE_OK_OUT=$(node scripts/check/client-styles.mjs 2>&1); then
-  echo "✅ スタイル規約: 正当なコード（dark キー・URL・任意バリアント・記号・スケール内の余白）を誤検出しない"
-else
-  echo "❌ スタイル規約: 正当なコードを誤検出しました"
-  printf '%s\n' "$STYLE_OK_OUT"
-  FAIL=1
-fi
-rm -f "apps/client/features/__selftest/ui/selftest-style-ok.tsx" "apps/client/components/__selftest/selftest-style-ok.tsx"
 
 # 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、文をつないでいないダッシュ（空欄の「—」・括弧の中・
 # 区切り線・数字の範囲）では ui-copy.mjs が落ちない。ダッシュの例は日本語を含めて、ダッシュの判定まで届くようにしている。
-mkfix "apps/client/features/__selftest/ui/selftest-copy-ok.tsx" \
+expect_guard_ignores "UI 文言: 正当なコード（コメント・文をつないでいないダッシュ・title・ボタン・JSX の前後の空白・全角の空白）を誤検出しない" \
+  guard_ui_copy \
+  "apps/client/features/__selftest/ui/selftest-copy-ok.tsx" \
   '// この設定が効く（コメントは画面に出ない）
 export const SelftestUi = () => <td>—</td>;
 export const selftestUnset = "未設定（—）";
@@ -699,14 +796,6 @@ export const Dev = () => (
 );
 export const selftestQuestion = "削除しますか？　この操作は元に戻せません。前へ";
 export const selftestPair = "本当に!?";'
-if COPY_OK_OUT=$(node scripts/check/ui-copy.mjs 2>&1); then
-  echo "✅ UI 文言: 正当なコード（コメント・文をつないでいないダッシュ・title・ボタン・JSX の前後の空白・全角の空白）を誤検出しない"
-else
-  echo "❌ UI 文言: 正当なコードを誤検出しました"
-  printf '%s\n' "$COPY_OK_OUT"
-  FAIL=1
-fi
-rm -f "apps/client/features/__selftest/ui/selftest-copy-ok.tsx"
 
 expect_guard "@hono/zod-validator 直接 import 禁止" \
   guard_no_direct_zod_validator \
@@ -814,44 +903,81 @@ expect_guard "kebab-case: camelCase ファイル名は違反" \
   "ファイル名は kebab-case にしてください"
 
 # kebab-case: camelCase でも .test.ts は除外される（除外規則が実際に到達・機能する回帰テスト）。
-# expect_guard は「違反を検出する」検証なので、除外（＝違反にならない）はここで個別に検証する。
-KEBAB_NEG="apps/api-service/src/shared/__selftest/fooBarBaz.test.ts"
-mkfix "$KEBAB_NEG" 'export const x = 1;'
-kebab_out=$(run_guard guard_kebab_case 2>&1)
-if printf '%s' "$kebab_out" | grep -qF "fooBarBaz.test.ts"; then
-  echo "❌ kebab-case 除外（.test.ts）: camelCase なテストファイルが誤検出された"
-  FAIL=1
-else
-  echo "✅ kebab-case 除外（.test.ts は camelCase でも許容）"
-fi
-rm -f "$KEBAB_NEG"
+expect_guard_ignores "kebab-case 除外（.test.ts は camelCase でも許容）" \
+  guard_kebab_case \
+  "apps/api-service/src/shared/__selftest/fooBarBaz.test.ts" \
+  'export const x = 1;'
 
-SELFTEST_ACTION_DIR="$D/application/__selftest_action"
-mkdir -p "$SELFTEST_ACTION_DIR"
 # 有効な usecase.ts を置くが usecase.test.ts は作らない
-# → feature 構造チェックが「co-located テスト欠落」を検出するはず
-printf 'import { okAsync } from "neverthrow";\nexport function makeSelftestAction() {\n  return () => okAsync(null);\n}\n' >"$SELFTEST_ACTION_DIR/usecase.ts"
-st_out=$(run_guard guard_feature_structure 2>&1)
-if printf '%s' "$st_out" | grep -qF "usecase.test.ts がありません"; then
-  echo "✅ feature 構造（co-located テスト欠落）"
-else
-  echo "❌ feature 構造: co-located テスト欠落を検出できませんでした"
-  FAIL=1
-fi
+# → feature 構造チェックが「co-located テスト欠落」を検出するはず。
+# feature-structure.mjs はパスではなく「<feature>: <feature 内のパス>」で報告するので、出力での表記を渡す
+SELFTEST_ACTION_DIR="$D/application/__selftest_action"
+SELFTEST_ACTION_USECASE='import { okAsync } from "neverthrow";
+export function makeSelftestAction() {
+  return () => okAsync(null);
+}
+'
+expect_guard "feature 構造（co-located テスト欠落）" \
+  guard_feature_structure \
+  "$SELFTEST_ACTION_DIR/usecase.ts" \
+  "$SELFTEST_ACTION_USECASE" \
+  "usecase.test.ts がありません" \
+  "tasks: application/__selftest_action/usecase.test.ts"
 
 # client の actions / queries もテストが無いファイルを検出する（カバレッジは import されないファイルを数えない）
 expect_guard "feature 構造（client の actions のテスト欠落）" \
   guard_feature_structure \
   "apps/client/features/tasks/actions/__selftest-untested.ts" \
   'export const selftestUntested = 1;' \
-  "actions/__selftest-untested.ts に co-located テスト"
+  "に co-located テスト" \
+  "client/tasks: actions/__selftest-untested.ts"
 
 expect_guard "feature 構造（client の actions のサブディレクトリのテスト欠落）" \
   guard_feature_structure \
   "apps/client/features/tasks/actions/__selftest-bulk/archive.ts" \
   'export const selftestUntested = 1;' \
-  "actions/__selftest-bulk/archive.ts に co-located テスト"
-rmdir "apps/client/features/tasks/actions/__selftest-bulk" 2>/dev/null || true
+  "に co-located テスト" \
+  "client/tasks: actions/__selftest-bulk/archive.ts"
+
+echo "--- 違反の種類が複数ある検査を、種類ごとに単独で実行 ---"
+expect_guard_alone "class 禁止（class だけのとき失敗する）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_alone_class.ts" \
+  'export class SelftestAloneClass {}' \
+  "class の使用が禁止"
+expect_guard_alone "interface 禁止（interface だけのとき失敗する）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_alone_interface.ts" \
+  'export interface SelftestAloneInterface { x: number }' \
+  "interface の使用が禁止"
+expect_guard_alone "usecase.ts の async 禁止（async だけのとき失敗する）" \
+  guard_usecase_result_chain \
+  "$D/application/__selftest_alone_async/usecase.ts" \
+  'import { okAsync } from "neverthrow";
+export const selftestAloneAsync = async () => okAsync(null);' \
+  "usecase.ts で async は禁止です"
+expect_guard_alone "usecase.ts の try/catch 禁止（try だけのとき失敗する）" \
+  guard_usecase_result_chain \
+  "$D/application/__selftest_alone_try/usecase.ts" \
+  'import { okAsync } from "neverthrow";
+export function selftestAloneTry() {
+  try {
+    return okAsync(null);
+  } catch {
+    return okAsync(null);
+  }
+}' \
+  "usecase.ts で try/catch は禁止です"
+expect_guard_alone "usecase.ts は Result チェーン必須（チェーンが無いだけのとき失敗する）" \
+  guard_usecase_result_chain \
+  "$D/application/__selftest_alone_chain/usecase.ts" \
+  'export function selftestAloneChain() {
+  return Promise.resolve(null);
+}' \
+  "Result チェーンである必要があります"
+
+echo "--- 登録したケースをガードごとにまとめて実行 ---"
+run_guard_batches
 
 # **本体（arch-guards.sh）が全検査を実際に呼ぶことの検証。** 上の各ケースは検査関数を直接呼ぶので、
 # 本体から検査が抜ける・並べ忘れる・ループが失敗を握りつぶす、を捕まえられない。
@@ -875,8 +1001,9 @@ else
   echo "❌ ARCH_GUARDS の最後が $LAST_GUARD です。guard_feature_structure を最後に置き、新しい検査はその前に並べてください"
   FAIL=1
 fi
-# (3) 本体を実行し、全検査を順に呼ぶこと。この時点で置いている fixture は最後の検査（構造チェック）に
-#     だけ引っかかるので、本体は全検査を実行したうえで最後に失敗するはず
+# (3) 本体を実行し、全検査を順に呼ぶこと。最後の検査（構造チェック）にだけ引っかかる fixture を置くので、
+#     本体は全検査を実行したうえで最後に失敗するはず
+mkfix "$SELFTEST_ACTION_DIR/usecase.ts" "$SELFTEST_ACTION_USECASE"
 e2e_out=$(bash scripts/check/arch-guards.sh 2>&1)
 e2e_rc=$?
 e2e_headers=$(printf '%s\n' "$e2e_out" | grep -c '^\[guard\]')
