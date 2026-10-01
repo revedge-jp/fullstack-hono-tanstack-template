@@ -145,7 +145,7 @@ if [ -n "$ORPHAN_PIDS" ]; then
 fi
 
 # Worker（と E2E ヘルパー）が読む .dev.vars を test DB 向けに一時差し替える。
-# CI の "Create .dev.vars for E2E" ステップと同じ内容（ローカルでの自己完結用）。
+# CI（.github/workflows/e2e.yml）の "Create .dev.vars for E2E" ステップと同じ内容（ローカルでの自己完結用）。
 # dev モードもこれを使うことで、E2E が開発用 DB（.env の DATABASE_URL）に触れないようにする。
 echo "==> Writing temporary .dev.vars pointing at the test database..."
 rm -f "$DEV_VARS"
