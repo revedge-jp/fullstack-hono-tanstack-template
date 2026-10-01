@@ -41,10 +41,11 @@ export const authAccounts = pgTable(
   "auth_accounts",
   {
     id: text("id").primaryKey(),
-    // Better Auth 1.7 からアカウントの同一性は (issuer, accountId) で判定される。OAuth プロバイダは
-    // 既定で `local:oauth:<providerId>`(Google なら local:oauth:google)。列が無いと OAuth コールバックで
-    // 「field issuer does not exist」となりサインインが全滅する。既存行の backfill は 0007 マイグレーション
-    issuer: text("issuer").notNull(),
+    // Better Auth 1.7.0〜1.7.2 だけが使った列。1.7.3 で撤回され、Better Auth はもう書き込まない。
+    // NOT NULL のままだと新規登録・OAuth サインインの INSERT がすべて失敗し、1.7.3 以降は起動時の
+    // スキーマ検証も認証リクエストを拒否するので NULL 許容にしてある（issue #172）。列の削除は後続の
+    // マイグレーションで行う。それまでは新しいコードからこの列を読み書きしない。
+    issuer: text("issuer"),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
@@ -68,7 +69,7 @@ export const authAccounts = pgTable(
     // 既存データに重複ペアがあった場合に unique 制約追加のマイグレーションが失敗するリスクを避けるため
     // （新規テンプレートでは無害だが、既存 DB へ後付けする利用者を想定した安全側の選択）。
     index("auth_accounts_provider_account_idx").on(table.providerId, table.accountId),
-    // Better Auth 1.7 の findAccountByKey は (issuer, accountId) で引く
+    // 1.7.0〜1.7.2 の findAccountByKey 用。1.7.3 以降は使われない。issuer 列と一緒に削除する
     index("auth_accounts_issuer_account_idx").on(table.issuer, table.accountId),
   ],
 );
