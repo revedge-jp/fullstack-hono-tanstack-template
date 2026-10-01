@@ -101,6 +101,32 @@ unit テスト・`coverage:check`（domain/application の line coverage 85% 閾
 - `testRunner` を bun test 直接呼び出しから Stryker 公式サポートのランナーに
   移行できた場合 → `--incremental` の再検討（本 ADR とは独立の判断）
 
+## 追記（2026-10-01）: feature ごとの実行・`--bail`・contract テストは不足時だけ
+
+姉妹リポジトリ chobaco で、6 feature・1406 ミュータントの PR の mutation:diff が CI で約20分かかった。
+差分スコープでも、1回の Stryker 実行が「変更した全 feature のテスト + 各 contract テスト」の
+和集合を全ミュータントに当てていたため、1ミュータントあたりの所要時間が変更 feature 数に比例
+していた。本リポジトリの `scripts/check/mutation-diff.sh` も同じ構造だったので、同じ変更を
+入れた（決定そのもの＝差分ファイルへの絞り込みは変わらない）。
+
+1. **feature ごとに別々の Stryker 実行にする**（その feature 配下のテストだけ）。別 feature の
+   テストでしか殺されないミュータントが Survived に倒れるだけなので、ゲートは厳しくなる側。
+   対象は引き続き差分ファイルだけで、上の代替案表の「feature 単位の CI マトリクス」
+   （feature 全体の再スキャン）とは別物。
+2. **`bun test --bail`**。Killed/Survived の判定は終了コードのままで、Killed の大半が残りの
+   テストを実行せずに済む。
+3. **contract テストは1回目に含めない**。ファイルごとにアプリを組み立てるため feature の
+   単体テストより遅い。合算スコアが break を割ったときだけ contract テストを足して再実行し、
+   その結果で判定する（以前と同じテスト集合での判定に戻る）。
+4. **break はグループ単位ではなく、全グループの JSON レポートの合算スコアで判定する**
+   （小さい feature が数件の Survived で落ちる、という意味の変化を避ける）。レポートの件数が
+   グループ数と合わないときも失敗にする。
+
+計測結果: chobaco（6 feature・1406 ミュータント）で 385秒 → 40秒、スコア 93.53% → 93.39%。
+本リポジトリでは `MUTATION_DIFF_BASE=56ce158`（3 feature・162 ミュータント。ローカル・
+concurrency 4）で 11秒 → 6秒、スコアは 98.77% のまま。break を 99 にして再実行の動作も確認した
+（3 グループを contract 込みで再実行し 98.77%、exit 1）。
+
 ## 参照
 
 - [ADR-006](adr-006-ai-era-quality-strategy.md) — mutation testing を含む品質ゲート全体の設計意図
