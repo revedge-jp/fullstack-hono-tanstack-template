@@ -57,6 +57,13 @@
       "when": 1788346531178,
       "tag": "0007_fearless_mephisto",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790872061817,
+      "tag": "0008_daffy_tyrannus",
+      "breakpoints": true
     }
   ]
 }
