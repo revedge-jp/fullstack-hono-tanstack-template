@@ -33,9 +33,11 @@ permissions:
 
 # workflow_call で呼ばれたときの github コンテキストは呼び出し元（CI Pipeline）のもの。
 # ${{ github.workflow }} を使うと呼び出し元と同じグループになりデッドロック扱いで打ち切られるため、
-# 接頭辞は固定文字列にする。キャンセルは PR だけ（手動実行が夜間の実行を打ち切らないように）
+# 接頭辞は固定文字列にする。キャンセルは PR だけ（手動実行が夜間の実行を打ち切らないように）。
+# E2E を走らせない PR の run（ラベルなしの push・`e2e` 以外のラベル追加）は run ごとに別グループへ
+# 逃がす。同じグループに入ると、ジョブが skip されるだけの run が実行中の E2E を取り消してしまう。
 concurrency:
-  group: e2e-${{ github.event_name }}-${{ github.ref }}
+  group: e2e-${{ github.event_name }}-${{ github.ref }}-${{ (github.event_name == 'pull_request' && (!contains(github.event.pull_request.labels.*.name, 'e2e') || (github.event.action == 'labeled' && github.event.label.name != 'e2e'))) && github.run_id || 'run' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # workflow_call では呼び出し元の env は引き継がれない。ci.yml と揃えること
