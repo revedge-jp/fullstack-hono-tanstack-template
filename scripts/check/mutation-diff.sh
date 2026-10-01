@@ -20,8 +20,9 @@ set -euo pipefail
 # していた（Stryker の command テストランナーは --testFiles による絞り込みに未対応 —
 # node_modules/@stryker-mutator/core の CommandTestRunner が明示的にエラーを投げる)。
 # そこで、差分ファイルから影響を受ける feature 名を求め、その feature 配下のテスト
-# (usecase.test.ts 等の co-located テスト + 対応する contract テスト)だけを実行する
-# よう commandRunner.command を都度上書きした一時設定ファイルで Stryker を起動する。
+# (usecase.test.ts 等の co-located テスト。不足時だけ対応する contract テストも)だけを
+# 実行するよう commandRunner.command を都度上書きした一時設定ファイルで Stryker を起動する
+# (feature ごとの実行・再実行の詳細は後段のコメント)。
 # feature 単位のテストで十分なのは、feature 間連携が ports + integrations/composition
 # アダプタ経由に限定され(apps/api-service/AGENTS.md 参照)、ある feature の domain/application ロジックは
 # 基本的にその feature 自身の co-located テスト/contract テストでのみ検証される
@@ -69,16 +70,34 @@ fi
 echo "差分スコープで mutation testing を実行します（対象ファイル）:"
 echo "$CHANGED_FILES" | sed 's/^/  /'
 
-# stryker.config.json の mutate パターンは apps/api-service 相対のため、
-# --mutate に渡すパスもプレフィックスを除いた相対パスにする。
-MUTATE_ARG=$(echo "$CHANGED_FILES" | sed 's|^apps/api-service/||' | paste -sd, -)
 
-# 差分ファイルから影響を受ける feature 名(src/features/<feature>/...)を一意に求め、
-# その feature 配下のテストディレクトリ + 対応する contract テストファイル(存在する場合)
-# だけをテスト対象にする。
+# ミュータントは feature ごとに別々の Stryker 実行で検証する（その feature の差分ファイルを、
+# その feature 配下のテストだけで検証する）。以前は全 feature のテストの和集合(+ 各 feature の
+# contract テスト)を1回の Stryker 実行で全ミュータントに当てていたため、1ミュータントあたりの
+# 所要時間が「変更した feature の数」に比例して伸びた。
+#
+# 速くするための3点と、それぞれがゲートを緩めない理由:
+#   1. feature ごとに分ける — 別 feature のテストでしか殺されないミュータントが Survived に
+#      倒れるだけ(厳しくなる側)。
+#   2. `bun test --bail` — 最初の失敗で止まるだけで、Killed/Survived の判定(終了コードが
+#      0 か否か)は変わらない。ミュータントの大半は Killed なので残りのテストを省ける。
+#   3. contract テストは1回目に含めない — contract テストはファイルごとにアプリを組み立てる
+#      ため feature の単体テストより遅い。合算スコアが break を割ったときだけ、contract テストを
+#      足して該当グループを再実行し、その結果で判定する(contract テストでしか殺されない
+#      ミュータントの取りこぼしはこれで戻る。別 feature のテストでしか殺されないものは 1. の
+#      とおり Survived のままなので、以前ぎりぎり通っていた PR が落ちることはある)。
+#
+# break 閾値は各実行では無効化し、全グループの JSON レポートを合算したスコアで判定する。
+# グループ単位で break を掛けると、ミュータントの少ない feature が数件の Survived で
+# 閾値を割り、1回の実行で判定していた従来とゲートの意味が変わるため。
+# （docs/architecture/adr-007-mutation-testing-diff-scope.md の追記）
 FEATURES=$(echo "$CHANGED_FILES" | sed -E 's#^apps/api-service/src/features/([^/]+)/.*#\1#' | sort -u)
 
-TEST_PATHS=""
+FULL_TEST_PATHS="src/features src/__tests__/contract"
+
+# 1行1グループ: <名前> TAB <1回目のテストパス> TAB <再実行時のテストパス> TAB <mutate(カンマ区切り)>
+TAB=$'\t'
+GROUPS_SPEC=""
 while IFS= read -r feature; do
   [ -z "$feature" ] && continue
   # feature 名(= features/ 直下のディレクトリ名)は後段で Stryker の commandRunner.command に
@@ -95,39 +114,132 @@ while IFS= read -r feature; do
       exit 1
       ;;
   esac
-  TEST_PATHS="$TEST_PATHS src/features/$feature"
+  HAS_UNIT_TESTS=""
+  if [ -n "$(find "apps/api-service/src/features/$feature" -name '*.test.ts' -print -quit)" ]; then
+    HAS_UNIT_TESTS=1
+  fi
   CONTRACT_TEST="src/__tests__/contract/${feature}.contract.test.ts"
   if [ -f "apps/api-service/$CONTRACT_TEST" ]; then
-    TEST_PATHS="$TEST_PATHS $CONTRACT_TEST"
+    PRECISE_PATHS="src/features/$feature $CONTRACT_TEST"
+  elif [ -n "$HAS_UNIT_TESTS" ]; then
+    PRECISE_PATHS="src/features/$feature"
+  else
+    # テストが1本も無いと bun test が "No tests found" で失敗し Stryker の初回実行が落ちるため、
+    # フルのテストコマンドへ倒す。
+    PRECISE_PATHS="$FULL_TEST_PATHS"
   fi
+  if [ -n "$HAS_UNIT_TESTS" ]; then
+    QUICK_PATHS="src/features/$feature"
+  else
+    QUICK_PATHS="$PRECISE_PATHS"
+  fi
+  MUTATE=$(echo "$CHANGED_FILES" | grep "^apps/api-service/src/features/$feature/" |
+    sed 's|^apps/api-service/||' | paste -sd, -)
+  GROUPS_SPEC="$GROUPS_SPEC$feature$TAB$QUICK_PATHS$TAB$PRECISE_PATHS$TAB$MUTATE
+"
 done <<< "$FEATURES"
 
-echo "対象 feature: $(echo "$FEATURES" | paste -sd, -)"
-echo "テストコマンドを絞り込みます: bun test$TEST_PATHS"
+echo "feature ごとに実行します(1回目のテストコマンド):"
+printf '%s' "$GROUPS_SPEC" | awk -F'\t' '{ printf "  [%s] bun test --bail %s\n", $1, $2 }'
 
 cd apps/api-service
 
-# stryker.config.json の commandRunner.command は固定文字列のため、Stryker には
-# CLI からの直接上書きオプションが無い(--testFiles は command ランナー未対応)。
-# ベース設定を読み込み、commandRunner.command だけを差し替えた一時設定ファイルで
-# 起動する(mutate 等それ以外の設定はベースをそのまま引き継ぐ)。
-# Stryker は拡張子で config ファイルの形式を判定するため、必ず ".json" で終わる
-# パスにする必要がある。mktemp の XXXXXX 置換ルールは GNU/BSD で挙動が異なり
-# (BSD/macOS の mktemp は XXXXXX の後ろの文字列をテンプレートの一部として保持
-# せず末尾にランダム文字列を追加する)、"XXXXXX.json" のような直接指定では
-# 拡張子が壊れる。両OSで安全に ".json" 終わりにするため、一時ディレクトリを
-# 作ってその中に固定名で置く。
+# Stryker には commandRunner.command を CLI から上書きするオプションが無い
+# (--testFiles は command ランナー未対応)ため、ベース設定から一時設定ファイルを作る。
+# Stryker は拡張子で config の形式を判定するので必ず ".json" で終える。BSD/macOS の
+# mktemp は "XXXXXX.json" の拡張子を保持しないため、一時ディレクトリ内に固定名で置く。
 TMP_DIR="$(mktemp -d)"
-TMP_CONFIG="$TMP_DIR/stryker-diff.config.json"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-STRYKER_DIFF_TEST_COMMAND="bun test$TEST_PATHS" \
-  STRYKER_DIFF_TMP_CONFIG="$TMP_CONFIG" \
-  bun -e '
-    const fs = require("fs");
-    const base = JSON.parse(fs.readFileSync("stryker.config.json", "utf8"));
-    base.commandRunner = { command: process.env.STRYKER_DIFF_TEST_COMMAND };
-    fs.writeFileSync(process.env.STRYKER_DIFF_TMP_CONFIG, JSON.stringify(base, null, 2));
-  '
+run_group() {
+  local group="$1" test_paths="$2" mutate="$3"
+  echo ""
+  echo "=== [$group] bun test --bail $test_paths ==="
+  STRYKER_DIFF_TEST_COMMAND="bun test --bail $test_paths" \
+    STRYKER_DIFF_TMP_CONFIG="$TMP_DIR/$group.config.json" \
+    STRYKER_DIFF_JSON_REPORT="$TMP_DIR/$group.report.json" \
+    bun -e '
+      const fs = require("fs");
+      const base = JSON.parse(fs.readFileSync("stryker.config.json", "utf8"));
+      base.commandRunner = { command: process.env.STRYKER_DIFF_TEST_COMMAND };
+      base.thresholds = { ...base.thresholds, break: null };
+      base.reporters = ["clear-text", "json"];
+      base.jsonReporter = { fileName: process.env.STRYKER_DIFF_JSON_REPORT };
+      fs.writeFileSync(process.env.STRYKER_DIFF_TMP_CONFIG, JSON.stringify(base, null, 2));
+    '
+  rm -f "$TMP_DIR/$group.report.json"
+  bunx stryker run "$TMP_DIR/$group.config.json" --mutate "$mutate"
+}
 
-bunx stryker run "$TMP_CONFIG" --mutate "$MUTATE_ARG"
+# Stryker のスコア定義に合わせる: (Killed + Timeout) / (Killed + Timeout + Survived + NoCoverage)。
+# CompileError / RuntimeError / Ignored は分母に入れない。break を割ったら exit 1。
+check_aggregate_score() {
+  STRYKER_DIFF_TMP_DIR="$TMP_DIR" \
+    STRYKER_DIFF_GROUP_COUNT="$(printf '%s' "$GROUPS_SPEC" | grep -c .)" \
+    bun -e '
+      const fs = require("fs");
+      const path = require("path");
+      const dir = process.env.STRYKER_DIFF_TMP_DIR;
+      const breakAt = JSON.parse(fs.readFileSync("stryker.config.json", "utf8")).thresholds.break;
+      const reports = fs.readdirSync(dir).filter((name) => name.endsWith(".report.json"));
+      if (reports.length !== Number(process.env.STRYKER_DIFF_GROUP_COUNT)) {
+        console.error(`❌ JSON レポートが ${reports.length} 件しかありません(グループ数 ${process.env.STRYKER_DIFF_GROUP_COUNT})。`);
+        process.exit(2);
+      }
+      let detected = 0;
+      let undetected = 0;
+      for (const name of reports) {
+        const report = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
+        let groupDetected = 0;
+        let groupUndetected = 0;
+        for (const file of Object.values(report.files)) {
+          for (const mutant of file.mutants) {
+            if (mutant.status === "Killed" || mutant.status === "Timeout") groupDetected++;
+            if (mutant.status === "Survived" || mutant.status === "NoCoverage") groupUndetected++;
+          }
+        }
+        const total = groupDetected + groupUndetected;
+        const score = total === 0 ? 100 : (groupDetected / total) * 100;
+        console.log(`  [${name.replace(".report.json", "")}] ${score.toFixed(2)}% (${groupDetected}/${total})`);
+        detected += groupDetected;
+        undetected += groupUndetected;
+      }
+      const total = detected + undetected;
+      const score = total === 0 ? 100 : (detected / total) * 100;
+      console.log(`合算スコア: ${score.toFixed(2)}% (${detected}/${total}) — break ${breakAt}`);
+      if (typeof breakAt === "number" && score < breakAt) process.exit(1);
+    '
+}
+
+while IFS="$TAB" read -r group quick_paths _precise_paths mutate; do
+  [ -z "$group" ] && continue
+  run_group "$group" "$quick_paths" "$mutate"
+done <<< "$GROUPS_SPEC"
+
+echo ""
+echo "--- 1回目の結果 ---"
+SCORE_STATUS=0
+check_aggregate_score || SCORE_STATUS=$?
+if [ "$SCORE_STATUS" -eq 0 ]; then
+  exit 0
+fi
+if [ "$SCORE_STATUS" -ne 1 ]; then
+  exit "$SCORE_STATUS"
+fi
+
+echo ""
+echo "合算スコアが break を下回ったため、contract テストを足して該当グループを再実行します。"
+RERUN_COUNT=0
+while IFS="$TAB" read -r group quick_paths precise_paths mutate; do
+  [ -z "$group" ] && continue
+  [ "$quick_paths" = "$precise_paths" ] && continue
+  run_group "$group" "$precise_paths" "$mutate"
+  RERUN_COUNT=$((RERUN_COUNT + 1))
+done <<< "$GROUPS_SPEC"
+
+echo ""
+echo "--- 再実行後の結果（再実行したグループ: ${RERUN_COUNT}）---"
+if ! check_aggregate_score; then
+  echo "❌ 合算スコアが break 閾値を下回りました。Survived のミュータントは上の各グループの出力を参照。" >&2
+  exit 1
+fi
