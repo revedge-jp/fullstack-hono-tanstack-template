@@ -77,8 +77,9 @@ remove_fixtures() { # fixture と、mkfix の mkdir -p が作った __selftest* 
   done
 }
 
-# ガードの出力から、fixture の表記 $2 を含む「  • 」行を探す。$3 が空でなければ、その行か行の属する
-# 見出しに $3 を含むものに限る。表記の直後がパスの続き（英数字・. _ / -）の一致は数えない
+# ガードの出力から、fixture の表記 $2 を含む「  • 」行を探す。$3 が空でなければ、その違反に $3 を含むものに
+# 限る。違反は「  • 」行・その後に続く説明の行（prh は置き換え先の理由を違反行の後ろに出す）・属する見出し
+# （「違反」で始まる行）からなる。表記の直後がパスの続き（英数字・. _ / -）の一致は数えない
 # （foo.ts が foo.tsx・foo.ts.bak に一致しないように）
 output_reports() { # $1 出力, $2 fixture の表記, $3 期待メッセージ（空なら問わない）
   printf '%s\n' "$1" | awk -v key="$2" -v msg="$3" '
@@ -91,17 +92,44 @@ output_reports() { # $1 出力, $2 fixture の表記, $3 期待メッセージ�
       }
       return 0
     }
+    /^\[guard\] / { next }
     /^  • / {
+      count++
+      mentioned[count] = mentions($0)
+      detail[count] = $0
+      heading[count] = header
       in_bullets = 1
-      if (mentions($0) && (msg == "" || index($0, msg) || index(header, msg))) found = 1
       next
     }
-    /^\[guard\] / { next }
+    /^違反/ { header = $0; in_bullets = 0; next }
     {
-      if (in_bullets) { header = ""; in_bullets = 0 }
-      header = header "\n" $0
+      if (in_bullets) detail[count] = detail[count] "\n" $0
+      else header = header "\n" $0
     }
-    END { exit found ? 0 : 1 }'
+    END {
+      for (i = 1; i <= count; i++) {
+        if (mentioned[i] && (msg == "" || index(detail[i], msg) || index(heading[i], msg))) exit 0
+      }
+      exit 1
+    }'
+}
+
+# 違反の種類が複数ある検査（arch-guards-lib.sh 冒頭の説明）の各種類を、その fixture だけを置いて単独で呼び、
+# 終了コードが非 0 になることを確かめる。まとめて呼ぶと別の種類の fixture で非 0 になるので、ある種類の違反を
+# 出しても失敗しない壊れ方を見逃す。grep の検査に限って使う（1回が速いので、まとめなくても時間は伸びない）
+expect_guard_alone() { # $1 ラベル, $2 検査関数, $3 fixtureパス, $4 fixture内容, $5 期待メッセージ部分文字列
+  mkfix "$3" "$4"
+  local out rc
+  out=$(run_guard "$2" 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] && output_reports "$out" "$3" "$5"; then
+    echo "✅ $1"
+  else
+    echo "❌ $1: $2 が $3 の違反 '$5' だけのときに失敗しませんでした（exit=${rc}）"
+    printf '%s\n' "$out" | sed 's/^/    /'
+    FAIL=1
+  fi
+  remove_fixtures "$3"
 }
 
 # 登録したケースをガードごとにまとめて実行する。fixture は同じガードのケース同士でパスが重ならないこと
@@ -704,7 +732,7 @@ expect_guard "UI 文言: 「？」の後に文が続くのに空白が無い" \
   guard_ui_copy \
   "apps/client/features/__selftest/ui/selftest-copy-8.tsx" \
   'export const selftestCopy = "削除しますか？この操作は元に戻せません。";' \
-  "？ => ？"
+  "「？」「！」の後に文が続くときは"
 
 expect_guard "UI 文言: 和文と英数字の間の空白（preset-ja-spacing）" \
   guard_ui_copy \
@@ -910,6 +938,43 @@ expect_guard "feature 構造（client の actions のサブディレクトリの
   'export const selftestUntested = 1;' \
   "に co-located テスト" \
   "client/tasks: actions/__selftest-bulk/archive.ts"
+
+echo "--- 違反の種類が複数ある検査を、種類ごとに単独で実行 ---"
+expect_guard_alone "class 禁止（class だけのとき失敗する）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_alone_class.ts" \
+  'export class SelftestAloneClass {}' \
+  "class の使用が禁止"
+expect_guard_alone "interface 禁止（interface だけのとき失敗する）" \
+  guard_no_class_interface \
+  "$D/application/__selftest_alone_interface.ts" \
+  'export interface SelftestAloneInterface { x: number }' \
+  "interface の使用が禁止"
+expect_guard_alone "usecase.ts の async 禁止（async だけのとき失敗する）" \
+  guard_usecase_result_chain \
+  "$D/application/__selftest_alone_async/usecase.ts" \
+  'import { okAsync } from "neverthrow";
+export const selftestAloneAsync = async () => okAsync(null);' \
+  "usecase.ts で async は禁止です"
+expect_guard_alone "usecase.ts の try/catch 禁止（try だけのとき失敗する）" \
+  guard_usecase_result_chain \
+  "$D/application/__selftest_alone_try/usecase.ts" \
+  'import { okAsync } from "neverthrow";
+export function selftestAloneTry() {
+  try {
+    return okAsync(null);
+  } catch {
+    return okAsync(null);
+  }
+}' \
+  "usecase.ts で try/catch は禁止です"
+expect_guard_alone "usecase.ts は Result チェーン必須（チェーンが無いだけのとき失敗する）" \
+  guard_usecase_result_chain \
+  "$D/application/__selftest_alone_chain/usecase.ts" \
+  'export function selftestAloneChain() {
+  return Promise.resolve(null);
+}' \
+  "Result チェーンである必要があります"
 
 echo "--- 登録したケースをガードごとにまとめて実行 ---"
 run_guard_batches
