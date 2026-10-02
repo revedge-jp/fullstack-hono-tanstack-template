@@ -39,7 +39,7 @@ jobs:
 
       # 限界: pull_request では PR 側のワークフロー定義が動くので、同じ PR でこのステップを消す・if を
       # 書き換えると判定は外れる（旧 ci.yml の verifier-change も同じ）。このファイル自体が検証器の一覧に
-      # 入っており、検証器に触る PR は手動マージ（.claude/commands/ship.md）なので、その確認が歯止めになる。
+      # 入っているが、検証器に触る PR の手動マージは #175 で外したので、この書き換えを止める仕組みは無い。
       - name: 検証器の変更に理由があるか
         if: github.event_name == 'pull_request'
         env:

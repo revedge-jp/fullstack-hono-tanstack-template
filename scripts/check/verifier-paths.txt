@@ -1,8 +1,7 @@
 # 検証器(ゲート・ガード・CI・フック・閾値)のパス一覧。bash の case パターン、1 行 1 パターン。
-# ここが唯一の正典で、次の 2 か所が読む:
-#   - .claude/hooks/protect-verifiers.sh  (Claude Code の Edit/Write をユーザー確認にする)
-#   - .github/workflows/review-converged.yml の「検証器の変更に理由があるか」(PR 本文に「検証器の変更理由」を
-#     要求する。判定には base 側のこのファイルと is-verifier-path.sh を使う)
+# ここが唯一の正典で、.github/workflows/review-converged.yml の「検証器の変更に理由があるか」が読む
+# (PR 本文に「検証器の変更理由」を要求する。判定には base 側のこのファイルと is-verifier-path.sh を使う)。
+# Claude Code の編集時の確認(protect-verifiers.sh)は #175 で外した
 # 判定は scripts/check/is-verifier-path.sh に集約している。
 scripts/check/*
 # package.json: ルートは coverage:check* の COVERAGE_THRESHOLD や各ゲートのコマンド定義、各アプリは

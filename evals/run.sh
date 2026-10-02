@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # 評価タスクを一時 worktree で実行し、採点結果を evals/results に書く。
-# 使い方: bash evals/run.sh <task> [hook|nohook]
+# 使い方: bash evals/run.sh <task> [条件ラベル(既定 base)]
 set -euo pipefail
 TASK="${1:?task name}"
-CONDITION="${2:-hook}"
+# 条件ラベルは結果ファイル名と JSON に残すだけで、実行内容は変えない。比べたいルール・フックの変更前後で
+# ラベルを付け分ける。hook / nohook は検証器編集の ask があった頃(#175 で廃止)の記録と混ざるので使わない
+CONDITION="${2:-base}"
+case "$CONDITION" in
+  hook|nohook) echo "条件 hook / nohook は #175 で廃止しました。別のラベルを付けてください" >&2; exit 2 ;;
+esac
 # モデルは明示して固定する(~/.claude/settings.json の既定に引きずられると「評価したモデル」が
 # 記録に残らず、結果の当てはまりも判断できない)。既定は Sonnet: 安く、サブスクの利用枠を
 # 開発から奪わない。普段使うモデル(fable / opus)での測定は EVAL_MODEL で明示し、作業の合間ではなく
@@ -29,13 +34,10 @@ bun install --frozen-lockfile >/dev/null
 bash "$TASK_DIR/setup.sh"
 git add -A && git -c user.name=eval -c user.email=eval@example.com commit -q -m "chore: eval setup" # 採点で setup 分を差分から除くため
 
-# nohook は検証器編集の ask を外す(deny 系はそのまま)。フック側が環境変数を見る
-if [ "$CONDITION" = "nohook" ]; then export CLAUDE_EVAL_DISABLE_VERIFIER_ASK=1; fi
-
 START=$(date +%s)
 set +e
 # acceptEdits だけだと Bash が全部拒否され、テストもゲートも実行できないまま書くことになる。
-# 検証コマンドは許可し、検証器の編集はフック(ask → ヘッドレスでは拒否)に判定させる。
+# 検証コマンドは許可する。
 # `bun -e` / `node -e` の一行スクリプトは許可しない。ただし `bun run ./x.ts` や `bun test`(テスト
 # 本体は任意コード)でファイルを書く経路は残る。フックは Edit/Write しか見ないので、採点は git diff で行う。
 mkdir -p "$CLAUDE_OUT"
