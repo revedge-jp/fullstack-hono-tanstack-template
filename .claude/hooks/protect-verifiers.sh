@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse フック: 検証器と秘密情報をエージェントの「気軽な編集・閲覧」から守る。
-#
-# 背景: エージェントがゲートに引っかかったとき、最短経路は「コードを直す」ではなく
-# 「ゲートを緩める」(閾値を下げる・除外を足す・ガードを消す)になりがちで、lint も
-# テストも通ったまま検証能力だけが静かに落ちる。ここでは検証器の編集を「禁止」ではなく
-# 「ユーザー確認(ask)」にして、緩和が人の目を通らずに入らないようにする。
-# 対象パスは scripts/check/verifier-paths.txt が正典(CI の Review converged ジョブと共有)。
+# PreToolUse フック: 秘密情報（.env 系）をエージェントの閲覧・編集から守る。
+# 検証器の編集時の確認(ask)は廃止した（実運用で内容を見ずに許可しており、保護として機能していなかったため）。
+# 検証器の変更理由は、CI の Review converged ジョブが PR 本文の「## 検証器の変更理由」で要求する。
 #
 # `.env` 系はエージェントが読む理由が無い(config は .env.example が正)ので deny。
 # settings.json の permissions.deny ではなくここで行うのは、`.env.*` を deny しつつ
@@ -106,17 +102,4 @@ for rel in "$RAW_REL" "$REL"; do
   esac
 done
 
-case "$TOOL" in
-  Edit|Write|MultiEdit|NotebookEdit) ;;
-  *) exit 0 ;;
-esac
-
-# evals/ の A/B 比較(フックの効果測定)専用。環境変数はセッション起動時に決まり、エージェントの
-# Bash からフック自身の環境は変えられない。deny(秘密情報)には効かない
-if [ "${CLAUDE_EVAL_DISABLE_VERIFIER_ASK:-}" = "1" ]; then exit 0; fi
-
-# リンクを辿る前の名前でも判定する（検証器のファイル自体がリポジトリ外へのリンクになっていても確認を出す）
-if bash "$HOOK_DIR/../../scripts/check/is-verifier-path.sh" "$REL" "$RAW_REL" >/dev/null; then
-  emit ask "$REL は検証器(ゲート・ガード・CI・フック)です。閾値の引き下げ・除外の追加・ガードの削除はコードを直す代わりになっていないか確認してください。意図した変更なら許可し、PR 本文の「## 検証器の変更理由」に理由を書いてください(CI が要求します)"
-fi
 exit 0

@@ -110,5 +110,5 @@ gh pr merge <番号> --auto --squash
 日次で検出し、`needs-rebase` ラベルと作者へのメンションで知らせる（解消すればラベルは外れる）。
 `needs-rebase` の付いた PR は、rebase して push し直すまで CI もマージも止まっている。
 
-**例外（手動マージ）**: マイグレーション・auth・決済・検証器(`scripts/check/verifier-paths.txt`)に
+**例外（手動マージ）**: マイグレーション・auth・決済に
 触る PR は auto-merge を使わず、ユーザーの確認を待つ。
