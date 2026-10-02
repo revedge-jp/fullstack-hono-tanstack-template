@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# PreToolUse フック: 秘密情報（.env 系）をエージェントの閲覧・編集から守る。
-# 検証器の編集時の確認(ask)は廃止した（実運用で内容を見ずに許可しており、保護として機能していなかったため）。
-# 検証器の変更理由は、CI の Review converged ジョブが PR 本文の「## 検証器の変更理由」で要求する。
+# PreToolUse フック: 秘密情報(.env / .dev.vars)をエージェントの読み書き・検索から守る。
+#
+# 検証器(scripts/check/verifier-paths.txt)の編集はここでは止めない。以前はユーザー確認(ask)を出していたが、
+# 内容を見ずに許可される運用になって作業を止めるだけだったため外した(#175)。検証器の緩和は CI の
+# Review converged ジョブが PR 本文の「## 検証器の変更理由」を要求して受け止める。
 #
 # `.env` 系はエージェントが読む理由が無い(config は .env.example が正)ので deny。
 # settings.json の permissions.deny ではなくここで行うのは、`.env.*` を deny しつつ
 # `.env.example` だけ許可する例外が permissions では書けないため。
 #
-# 限界: Edit / Write / MultiEdit / NotebookEdit / Read / Grep ツールのパスだけを見る。Grep は `path` の名指しと、
+# 限界: Read / Edit / Write / MultiEdit / NotebookEdit / Grep ツールのパスだけを見る。Grep は `path` の名指しと、
 # `glob` に .env / .dev.vars を含む指定を deny する。ripgrep はホワイトリストの glob（`*` 等）が gitignore を
 # 上書きするので、`glob: "*"` のような広い指定では .env も検索対象になりうる(そこまでは塞がない)。Bash の sed / cat 経由は対象外
-# (そこまで塞ぐと作業が成立しない)。Bash 迂回・他エージェント・手編集は CI の
-# Review converged ジョブ(PR 本文に理由を要求。判定は base 側の一覧)が同じ一覧で受け止める。
+# (そこまで塞ぐと作業が成立しない)。
 set -uo pipefail
 
-# jq が無いとツールの入力を読めず、下の判定がすべて空になって .env の読み取りも検証器の編集も通ってしまう。
+# jq が無いとツールの入力を読めず、下の判定がすべて空になって .env の読み取りが通ってしまう。
 # 判定できないときは止める側に倒す（JSON は jq を使わずに出す）
 if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"jq が見つからないため、検証器・秘密情報かどうかを判定できません。jq を入れてください（brew install jq）"}}'
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"jq が見つからないため、秘密情報かどうかを判定できません。jq を入れてください（brew install jq）"}}'
   exit 0
 fi
 
 INPUT=$(cat)
-TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 GLOB=$(printf '%s' "$INPUT" | jq -r '.tool_input.glob // ""' 2>/dev/null || echo "")
 # Grep ツールは glob を空白(JS の \s)で区切り、{} を含まない部分はカンマでも区切って rg の --glob に渡す。
 # その分け方を bash で真似るのは近似にしかならず(\r・全角スペース・片側だけの { で食い違う)、並べ方で .env を
@@ -48,8 +48,8 @@ fi
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""' 2>/dev/null || echo "")
 [ -z "$FILE" ] && exit 0
 
-# `./`・`..`・シンボリックリンクを解決してから判定する。文字列の前方一致だけだと apps/../scripts/check/x.sh の
-# ような書き方で検証器・秘密情報の判定を避けられる。存在しないパス（Write の新規作成）も解決できるところまで解決する。
+# `./`・`..`・シンボリックリンクを解決してから判定する。文字列の前方一致だけだと apps/../.env の
+# ような書き方で秘密情報の判定を避けられる。存在しないパス（Write の新規作成）も解決できるところまで解決する。
 # リンクを辿る前の名前（.. だけ畳んだパス）でも判定する。辿った先の名前だけで見ると、別名のファイルへのリンクに
 # なった .env が素通りする
 resolve_path() {
@@ -84,7 +84,6 @@ to_rel() { # $1 パス、$2 root
   printf '%s' "$rel"
 }
 
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 REL=$(to_rel "$(resolve_path "$FILE")" "$(resolve_path "${CLAUDE_PROJECT_DIR:-$PWD}")")
 RAW_REL=$(to_rel "$(normalize_path "$FILE")" "$(normalize_path "${CLAUDE_PROJECT_DIR:-$PWD}")")
 
@@ -101,5 +100,4 @@ for rel in "$RAW_REL" "$REL"; do
       exit 0 ;;
   esac
 done
-
 exit 0
