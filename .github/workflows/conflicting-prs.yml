@@ -29,7 +29,7 @@ permissions: {}
 jobs:
   detect:
     name: Detect conflicting PRs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
       pull-requests: write

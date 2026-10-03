@@ -22,7 +22,7 @@ jobs:
   # テンプレート原本や未セットアップの派生リポジトリで夜間 cron を赤くしないためのガード。
   preflight:
     name: Check preview environment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
       actions: read # environments の GET は fine-grained では Actions (read) にマップされる

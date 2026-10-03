@@ -26,9 +26,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 中身が数秒のジョブ（changes と ci-status）は ubuntu-slim で回す。課金は 1 分単位の切り上げで、slim は分単価が
+  # ubuntu-latest の約 1/3（テンプレートから作るリポジトリは private なので分数が課金される）。
+  # ci・統合テストは slim（1 vCPU・ジョブ上限 15 分・サービスコンテナ不可）だと数倍遅くなるので ubuntu-latest のまま。
+  # workflow-lint は docker:// のアクションを使うので slim では動かない
   changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     # merge_group(キュー上の検証)では paths-filter の比較対象が無いので全部 true にして全ジョブを回す。
     # キューに入るのはマージ直前の 1 回だけなので、ここで絞る意味は薄い。
@@ -501,9 +505,10 @@ jobs:
   # GitHub Rulesetで "CI Pipeline" が必須チェックになっているため
   ci-status:
     name: CI Pipeline
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     needs: [changes, ci, api-service-integration-tests, e2e-tests, workflow-lint, instructions]
     if: always()
+    timeout-minutes: 5
     steps:
       - name: Check CI status
         run: |
