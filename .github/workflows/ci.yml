@@ -28,8 +28,7 @@ concurrency:
 jobs:
   # 中身が数秒のジョブ（changes と ci-status）は ubuntu-slim で回す。課金は 1 分単位の切り上げで、slim は分単価が
   # ubuntu-latest の約 1/3（テンプレートから作るリポジトリは private なので分数が課金される）。
-  # ci・統合テストは slim（1 vCPU・ジョブ上限 15 分・サービスコンテナ不可）だと数倍遅くなるので ubuntu-latest のまま。
-  # workflow-lint は docker:// のアクションを使うので slim では動かない
+  # ci・統合テストは slim（1 vCPU・ジョブ上限 15 分・サービスコンテナ不可）だと数倍遅くなるので ubuntu-latest のまま
   changes:
     name: Detect Changes
     runs-on: ubuntu-slim
@@ -132,27 +131,6 @@ jobs:
   # 検証器に触る PR に本文の「## 検証器の変更理由」を求める判定は review-converged.yml にある
   # （本文を直したとき edited で再評価させるため。ci.yml は edited で走らない）。
 
-  # ワークフローファイルの構文・式を検証する。YAML としては valid でも GitHub Actions として
-  # 無効なファイル（例: run の plain scalar 中の「: 」）は main に入って初めて
-  # 「This run likely failed because of a workflow file issue」で発覚するため、PR の段階で検出する。
-  workflow-lint:
-    name: Workflow Lint (actionlint)
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.workflows == 'true'
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-      # SC2086 は意図的な word splitting（$FILTERS 展開等）への info 警告のため除外。
-      # docker:// アクションはシェルを介さず args を渡すため、クォートは付けない（リテラルになる）
-      - name: actionlint
-        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
-        with:
-          args: -ignore SC2086
-
   # AGENTS.md / .claude/rules 等だけを変えた PR は ci ジョブが動かないので、参照整合だけをここで見る。
   # md だけの PR では ci ジョブが開かないので、指示ファイルと docs のチェックはここで行う。
   # 参照整合は依存の無い node スクリプトなので、bun install（lint:prose が使う textlint）より先に回す
@@ -195,6 +173,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
+
+      # ワークフローファイルの構文・式を検証する。YAML としては valid でも GitHub Actions として
+      # 無効なファイル（例: run の plain scalar 中の「: 」）は main に入って初めて
+      # 「This run likely failed because of a workflow file issue」で発覚するため、PR の段階で検出する。
+      # 以前は独立ジョブだったが、数秒の処理に毎回 1 分の課金が付くためこのジョブへ畳み込んだ
+      # （.github/workflows/** は tooling フィルタに入っているので、ワークフローを変えた PR ではこのジョブが必ず動く）。
+      # `uses: docker://` にしない。docker:// のイメージは if: に関係なくジョブ開始時に毎回 pull され（約 5 秒）、
+      # ワークフローを変えない PR でも課金される。step の中で docker run すれば必要なときだけ pull する。
+      # SC2086 は意図的な word splitting（$FILTERS 展開等）への info 警告のため除外
+      - name: actionlint
+        if: needs.changes.outputs.workflows == 'true'
+        run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -ignore SC2086
 
       - uses: ./.github/actions/setup-workspace
         with:
@@ -297,9 +287,18 @@ jobs:
             exit 1
           fi
 
+      # ガード自己テスト（arch-guards.selftest.sh。この step の時間の大半）は検査スクリプト自体が違反を検出できるかを
+      # 見るもので、アプリのコードだけを変えた PR では結果が変わらない。PR では検査系（tooling / deps）が変わったとき
+      # だけ回し、main への push・タグ・merge queue では常に回す（PR で飛ばした分は main で拾う）
       - name: Architecture & FSD Checks
+        env:
+          RUN_SELFTESTS: ${{ github.event_name != 'pull_request' || needs.changes.outputs.tooling == 'true' || needs.changes.outputs.deps == 'true' }}
         run: |
           echo "Running Architecture & FSD Checks..."
+          if [ "$RUN_SELFTESTS" != "true" ]; then
+            echo "::notice::検査スクリプトの変更が無いため、ガード自己テストをスキップします（main への push では実行する）"
+            export SKIP_SELFTEST=1
+          fi
           SKIP_KNIP=1 bash scripts/check/architecture-check.sh
 
       - name: Unused Code Check (Knip)
@@ -506,7 +505,7 @@ jobs:
   ci-status:
     name: CI Pipeline
     runs-on: ubuntu-slim
-    needs: [changes, ci, api-service-integration-tests, e2e-tests, workflow-lint, instructions]
+    needs: [changes, ci, api-service-integration-tests, e2e-tests, instructions]
     if: always()
     timeout-minutes: 5
     steps:
@@ -525,7 +524,6 @@ jobs:
             fail=1
           fi
           for entry in \
-            "Workflow lint:${{ needs.workflow-lint.result }}" \
             "Instruction files:${{ needs.instructions.result }}" \
             "CI checks:${{ needs.ci.result }}" \
             "Integration tests:${{ needs.api-service-integration-tests.result }}" \
