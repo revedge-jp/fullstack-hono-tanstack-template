@@ -99,8 +99,10 @@ jobs:
               - 'alchemy.run.ts'
             # ガード自己テスト（arch-guards.selftest.sh）が読む、scripts 以外のファイル。fixture はここにある実在の
             # シンボル（reconstituteActivity / signOut / advanceTask / getApiClient / tasks 等）を import し、
-            # 置き場所に feature の実ディレクトリを使い、文書フックは .textlintrc.json を読む。PR ではこれか tooling /
-            # deps が変わったときだけ自己テストを回すので、fixture に import を足したらここにも足す
+            # 置き場所に feature の実ディレクトリを使い、文書フックは .textlintrc.json を読む。参照整合の自己テストは
+            # 実在するリンク（docs/dev/testing.md）と見出し（apps/api-service/AGENTS.md の「Feature structure」）を使う。
+            # PR ではこれか tooling / deps が変わったときだけ自己テストを回すので、自己テストに実在ファイルへの依存を
+            # 足したらここにも足す
             selftestInputs:
               - 'apps/api-service/src/features/tasks/**'
               - 'apps/api-service/src/features/activity/domain/**'
@@ -110,6 +112,8 @@ jobs:
               - 'apps/client/shared/lib/api-client*'
               - 'packages/database/src/**'
               - '.textlintrc.json'
+              - 'docs/dev/testing.md'
+              - 'apps/api-service/AGENTS.md'
             # lint:prose の設定・辞書・textlint とプリセットの版を変えたら、文書をチェックし直す
             # （依存の更新だけの PR では ci ジョブの arch:guards は走るが lint:prose は走らない）
             instructions:
@@ -195,10 +199,12 @@ jobs:
       # （.github/workflows/** は tooling フィルタに入っているので、ワークフローを変えた PR ではこのジョブが必ず動く）。
       # `uses: docker://` にしない。docker:// のイメージは if: に関係なくジョブ開始時に毎回 pull され（約 5 秒）、
       # ワークフローを変えない PR でも課金される。step の中で docker run すれば必要なときだけ pull する。
+      # このジョブの checkout は persist-credentials: true で .git/config にトークンを残すので、コンテナには
+      # .github だけを読み取り専用で渡す。actionlint は .git の有無でプロジェクトの位置を決めるので空の tmpfs を置く。
       # SC2086 は意図的な word splitting（$FILTERS 展開等）への info 警告のため除外
       - name: actionlint
         if: needs.changes.outputs.workflows == 'true'
-        run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -ignore SC2086
+        run: docker run --rm -v "$PWD/.github":/repo/.github:ro --tmpfs /repo/.git -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -ignore SC2086
 
       - uses: ./.github/actions/setup-workspace
         with:
