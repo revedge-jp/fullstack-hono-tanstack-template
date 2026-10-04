@@ -22,7 +22,7 @@
 | FSD（steiger） | client の Feature-Sliced Design | `bun run arch:fsd` | ✓ | ✓ |
 | 未使用コード（knip） | デッドコード/依存 | `bun run knip` | ✗（lefthook が `SKIP_KNIP=1` で飛ばす） | PR コメントのみ（Unlisted binaries / Unresolved imports だけ落とす） |
 | 重複（jscpd） | コピペ重複（しきい値5%）。**テストコードも対象**（除外すると写経テストの増殖が測定すらされない — 派生プロダクトで計測値が20%に達した後から入れるのは困難なため、小さいうちから対象に含める） | `bun run dup:check` | ✗ | ✓ |
-| ガード自己テスト | ガード自身（PreToolUse フック含む）が正しく動くか | `bun run arch:selftest` | ✗ | ✓（PR ではガード・設定・依存を変えたときだけ。main への push では常に） |
+| ガード自己テスト | ガード自身（PreToolUse フック含む）が正しく動くか | `bun run arch:selftest` | ✗ | ✓（PR ではガード・設定・依存と、fixture が使うアプリのファイル（`ci.yml` の `selftestInputs`）を変えたときだけ。main への push では常に） |
 | 指示ファイル・ドキュメント参照整合 | AGENTS.md / `.claude/rules` / `docs/**` / README のパス・`bun run`・見出し参照・相対リンクの実在 | `bun run check:instructions` | ✗ | ✓（`instructions` ジョブ。`ci` ジョブの arch:check にも含まれる） |
 | 検証器の変更理由 | `scripts/check/verifier-paths.txt` に当たる変更が PR 本文の「## 検証器の変更理由」を持つか | — | ✗ | ✓（`Review converged` の 1 ステップ。判定は base 側の一覧で、本文の編集でも再評価。ワークフロー定義の書き換えは防げない） |
 | カバレッジ閾値（api） | domain/application の網羅（85%） | `bun run coverage:check` | ✗ | ✓ |

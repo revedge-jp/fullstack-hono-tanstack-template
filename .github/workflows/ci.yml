@@ -44,6 +44,7 @@ jobs:
       deps: ${{ github.event_name == 'merge_group' || startsWith(github.ref, 'refs/tags/') || steps.filter.outputs.deps == 'true' }}
       workflows: ${{ github.event_name == 'merge_group' || startsWith(github.ref, 'refs/tags/') || steps.filter.outputs.workflows == 'true' }}
       tooling: ${{ github.event_name == 'merge_group' || startsWith(github.ref, 'refs/tags/') || steps.filter.outputs.tooling == 'true' }}
+      selftestInputs: ${{ github.event_name == 'merge_group' || startsWith(github.ref, 'refs/tags/') || steps.filter.outputs.selftestInputs == 'true' }}
       catchall: ${{ github.event_name == 'merge_group' || startsWith(github.ref, 'refs/tags/') || steps.catchall.outputs.code == 'true' }}
       instructions: ${{ github.event_name == 'merge_group' || startsWith(github.ref, 'refs/tags/') || steps.filter.outputs.instructions == 'true' }}
     steps:
@@ -96,6 +97,19 @@ jobs:
               - '.oxfmtrc.json'
               - 'lefthook.yml'
               - 'alchemy.run.ts'
+            # ガード自己テスト（arch-guards.selftest.sh）が読む、scripts 以外のファイル。fixture はここにある実在の
+            # シンボル（reconstituteActivity / signOut / advanceTask / getApiClient / tasks 等）を import し、
+            # 置き場所に feature の実ディレクトリを使い、文書フックは .textlintrc.json を読む。PR ではこれか tooling /
+            # deps が変わったときだけ自己テストを回すので、fixture に import を足したらここにも足す
+            selftestInputs:
+              - 'apps/api-service/src/features/tasks/**'
+              - 'apps/api-service/src/features/activity/domain/**'
+              - 'apps/api-service/src/integrations/external/auth.ts'
+              - 'apps/client/features/tasks/**'
+              - 'apps/client/features/auth/actions/**'
+              - 'apps/client/shared/lib/api-client*'
+              - 'packages/database/src/**'
+              - '.textlintrc.json'
             # lint:prose の設定・辞書・textlint とプリセットの版を変えたら、文書をチェックし直す
             # （依存の更新だけの PR では ci ジョブの arch:guards は走るが lint:prose は走らない）
             instructions:
@@ -288,11 +302,12 @@ jobs:
           fi
 
       # ガード自己テスト（arch-guards.selftest.sh。この step の時間の大半）は検査スクリプト自体が違反を検出できるかを
-      # 見るもので、アプリのコードだけを変えた PR では結果が変わらない。PR では検査系（tooling / deps）が変わったとき
-      # だけ回し、main への push・タグ・merge queue では常に回す（PR で飛ばした分は main で拾う）
+      # 見るもので、検査系も fixture が使うアプリのファイルも変えていない PR では結果が変わらない。PR では
+      # tooling / deps / selftestInputs が変わったときだけ回し、main への push・タグ・merge queue では常に回す
+      # （PR で飛ばした分は main で拾う）
       - name: Architecture & FSD Checks
         env:
-          RUN_SELFTESTS: ${{ github.event_name != 'pull_request' || needs.changes.outputs.tooling == 'true' || needs.changes.outputs.deps == 'true' }}
+          RUN_SELFTESTS: ${{ github.event_name != 'pull_request' || needs.changes.outputs.tooling == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.selftestInputs == 'true' }}
         run: |
           echo "Running Architecture & FSD Checks..."
           if [ "$RUN_SELFTESTS" != "true" ]; then
