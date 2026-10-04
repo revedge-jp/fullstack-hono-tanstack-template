@@ -69,9 +69,11 @@ SmartHR DS の値をそのまま使わなかった箇所と理由:
   迷ったら SmartHR DS の該当ページを読めば決まる
 - smarthr-ui の更新を追う必要はない。一方で、SmartHR DS のガイドラインが更新されても自動では反映されない。
   `client.md` の AI slop の表と同じく、半年を目安に見直す
-- 主要ボタンの hover（shadcn の `bg-primary/80`）は、ライトで 3.4:1 と AA を割る。SmartHR DS は hover で色を
-  暗くするが、shadcn の生成物は薄くするためで、変更前の配色（3.3:1）から続いている。生成物は書き換えない規約なので、
-  この ADR では直していない
+- 主要ボタンの hover（shadcn の `bg-primary/80`）は、ライトで 3.4:1 と AA を割っていた。SmartHR DS は hover で色を
+  暗くするが、shadcn の生成物は薄くするため。当初は生成物を書き換えない規約から直さなかったが、後に
+  `--primary-hover`（ライト 6.4:1。ダークは文字との差が開く向きに明るくして 8.5:1）を足し、`button.tsx` の
+  `default` を `hover:bg-primary-hover` に書き換えた。生成物を書き換えてよいのは、**値（globals.css）だけでは直せず、
+  アクセシビリティの基準を割るもの**に限る。書き換えた箇所は `button.test.tsx` で固定し、再生成で戻ったら落ちる
 - SmartHR DS のコンポーネント（`ActionDialog` 等）は無いので、ガイドラインに出てくるコンポーネントは同じ役割の
   shadcn のコンポーネントで組む
 

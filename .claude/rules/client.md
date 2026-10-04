@@ -179,7 +179,8 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 新しい UI を書く前に、既存のコンポーネントで組めないかを確認する。
 
 - `components/ui/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
-  手で書き換えない。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
+  手で書き換えない（例外: `button.tsx` の主要ボタンの hover。値だけでは AA を割るので書き換え、`button.test.tsx` で固定している。
+  再生成したら書き換え直す。ADR-008）。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
   Base UI 前提。Radix 前提の例をそのまま貼らない）。2026-09 以降の registry は、shadcn 製の npm パッケージ
   `cn`（`clsx` + `tailwind-merge` の置き換え）を import し、CLI が依存にも足す。既存のコンポーネントは `@/shared/lib/utils` の
   `cn` を使っているので、足された依存は外し、import を `@/shared/lib/utils` に直してそろえる（`cn` パッケージへ移すなら、

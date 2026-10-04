@@ -24,10 +24,11 @@
   --card-foreground: oklch(0.252 0.008 95.36);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.252 0.008 95.36);
-  /* MAIN。白文字とのコントラスト比 4.7:1（AA の 4.5:1 以上）。明るくすると文字が読めなくなる。
-     Button の hover（bg-primary/80）では 3.4:1 に下がる。SmartHR は hover で暗くするが、shadcn の
-     生成物は薄くするため（生成物は書き換えない） */
+  /* MAIN。白文字とのコントラスト比 4.7:1（AA の 4.5:1 以上）。明るくすると文字が読めなくなる */
   --primary: oklch(0.557 0.152 248.462);
+  /* 主要ボタンの hover。SmartHR と同じく暗くする（白文字と 6.4:1）。shadcn の生成物の bg-primary/80 は
+     薄くするので 3.4:1 に下がり AA を割る（button.tsx で書き換えている。ADR-008） */
+  --primary-hover: oklch(0.48 0.152 248.462);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.959 0.002 67.802); /* OVER_BACKGROUND */
   --secondary-foreground: oklch(0.252 0.008 95.36);
@@ -72,8 +73,10 @@
   --card-foreground: oklch(0.977 0.002 67.803);
   --popover: oklch(0.25 0.008 95);
   --popover-foreground: oklch(0.977 0.002 67.803);
-  /* 暗い背景では明るい primary に暗い文字（コントラスト比 7.0:1、hover の primary/80 で 4.8:1） */
+  /* 暗い背景では明るい primary に暗い文字（コントラスト比 7.0:1） */
   --primary: oklch(0.74 0.12 245);
+  /* hover は文字との差が開く向き（明るく）にする（8.5:1） */
+  --primary-hover: oklch(0.8 0.12 245);
   --primary-foreground: oklch(0.252 0.008 95.36);
   --secondary: oklch(0.3 0.008 95);
   --secondary-foreground: oklch(0.977 0.002 67.803);

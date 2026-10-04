@@ -8,7 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        // 生成物の hover:bg-primary/80 を書き換えた（ADR-008）。薄くすると白文字と 3.4:1 で AA を割る。
+        // shadcn CLI で再生成したら書き換え直す（button.test.tsx が戻ったことを検出する）
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         outline:
           "border-border bg-background shadow-xs hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
