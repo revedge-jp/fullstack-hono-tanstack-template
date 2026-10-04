@@ -182,8 +182,9 @@ jobs:
     # Renovate の devDeps 自動マージがビルド/テストを素通りする。
     # tooling（ガード・lint/依存検査の設定・scripts・ワークフロー・フック）と catchall（除外リスト以外の変更
     # すべてで true になる受け皿。どのフィルタにも当たらない変更でも ci を開くためのもので、tooling とは別の出力）
-    # も同じ。外すとガードを壊した・消した PR が arch-check と自己テストを1度も通らずにマージできる
-    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.tooling == 'true' || needs.changes.outputs.catchall == 'true'
+    # も同じ。外すとガードを壊した・消した PR が arch-check と自己テストを1度も通らずにマージできる。
+    # selftestInputs も同じ理由で入れる（docs/dev/testing.md・.gitignore は受け皿が除外するので、ここが無いと開かない）
+    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.api-service == 'true' || needs.changes.outputs.packagesAll == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.tooling == 'true' || needs.changes.outputs.catchall == 'true' || needs.changes.outputs.selftestInputs == 'true'
     steps:
       # fetch-depth: 0（フル履歴）+ persist-credentials: true は mutation testing の
       # diff スコープ算出（git diff origin/main...HEAD、ADR-007）に必要。
