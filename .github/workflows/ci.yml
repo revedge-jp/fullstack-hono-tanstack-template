@@ -100,7 +100,8 @@ jobs:
             # ガード自己テスト（arch-guards.selftest.sh）が読む、scripts 以外のファイル。fixture はここにある実在の
             # シンボル（reconstituteActivity / signOut / advanceTask / getApiClient / tasks 等）を import し、
             # 置き場所に feature の実ディレクトリを使い、文書フックは .textlintrc.json を読む。参照整合の自己テストは
-            # 実在するリンク（docs/dev/testing.md）と見出し（apps/api-service/AGENTS.md の「Feature structure」）を使う。
+            # 実在するリンク（docs/dev/testing.md）・見出し（apps/api-service/AGENTS.md の「Feature structure」）・
+            # .gitignore の対象の生成物（apps/client/dist）を使う。
             # PR ではこれか tooling / deps が変わったときだけ自己テストを回すので、自己テストに実在ファイルへの依存を
             # 足したらここにも足す
             selftestInputs:
@@ -114,6 +115,7 @@ jobs:
               - '.textlintrc.json'
               - 'docs/dev/testing.md'
               - 'apps/api-service/AGENTS.md'
+              - '.gitignore'
             # lint:prose の設定・辞書・textlint とプリセットの版を変えたら、文書をチェックし直す
             # （依存の更新だけの PR では ci ジョブの arch:guards は走るが lint:prose は走らない）
             instructions:
