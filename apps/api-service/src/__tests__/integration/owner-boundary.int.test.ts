@@ -21,6 +21,8 @@ import { sql } from "drizzle-orm";
 // 正しい実装と結果が一致して緑になる（派生プロダクトで、全テナントの行を書き換える UPDATE がこの形で
 // レビュー・統合テスト・監査をすり抜けた）。WHERE の条件落ち・スコープの付け忘れ・演算子の結合順の誤りは、
 // どれも「他の行が変わる」形で表に出るので、ここで1つの網として捕まえる。
+// 手前の読み取りが所有者で絞っていて表に出ない付け忘れ（update の ownerId だけが落ちる等）は捕まえられない。
+// それはリポジトリ単体の適合テスト（repository-conformance.int.test.ts）が受け持つ。
 //
 // **更新系ルート（POST / PUT / PATCH / DELETE）を足したら PROBES に足す**。足さないと網羅性のテストで落ちる。
 // 叩かない理由があるルートは EXCLUDED_ROUTES に理由を添えて足す。
@@ -235,6 +237,10 @@ describe("更新系ルートは、操作の対象以外の行を変えない（�
     "%s（%s）",
     async (_route, _name, probe) => {
       const db = getDb();
+      // 前後のスナップショットを同じ時点の DB から読む。既定の READ COMMITTED だと、同じ DB に別の
+      // プロセス（e2e の dev サーバー等）がその間にコミットした行まで見え、無関係な行の差分で落ちる。
+      // トランザクションの最初の文でなければ効かないので、シードより前に置く
+      await db.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
       const seeded = await seed(db);
       const app = buildActorApp(db, seeded.actor.id);
       const { path, body } = probe.request(seeded);
