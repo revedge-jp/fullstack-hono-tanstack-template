@@ -4,7 +4,8 @@
 
 ### 1. 実装内容の確認
 
-AskUserQuestion ツールを使って「何を実装しますか？」とユーザーに聞いてください。
+実装内容は、引数・会話・紐づく issue（`gh issue view`）から取る。取れないときだけ「何を実装しますか？」と聞く
+（`general.md` の「自律運用」）。
 
 ### 2. ブランチ名の提案
 
@@ -15,7 +16,7 @@ AskUserQuestion ツールを使って「何を実装しますか？」とユー�
 - リファクタリング: `refactor/<kebab-case-description>`
 - その他の作業: `chore/<kebab-case-description>`
 
-ブランチ名は英語の kebab-case で、短く明確に。提案したブランチ名でよいか AskUserQuestion で確認してください。
+ブランチ名は英語の kebab-case で、短く明確に。確認は取らず、そのまま使う。
 
 ### 3. 作業環境の選択
 

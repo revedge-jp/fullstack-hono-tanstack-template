@@ -60,7 +60,7 @@ github-actions bot のコメントはチェック結果として扱い、指摘�
 2. 同種の指摘が今後も繰り返されそうなパターンである
 3. `AGENTS.md`（ルートと `apps/*/AGENTS.md`）/ `.claude/rules/` の既存ルール、`.claude/commands/codex-review.md` の既存チェック項目、`scripts/check/` の既存ガードのいずれにも対応する記述がない
 
-該当する場合は以下の形式で提案し、AskUserQuestion でユーザーに確認を取ること：
+該当する場合は以下の形式でまとめ、確認を待たず同じ PR に追加コミットすること（本文に追加した理由を残す）：
 
 ```
 ## 📝 ルール追加の提案
