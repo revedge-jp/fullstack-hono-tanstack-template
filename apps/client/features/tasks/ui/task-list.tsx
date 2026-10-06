@@ -13,8 +13,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Button,
 } from "@/shared/ui/shadcn";
-import { Button } from "@/shared/ui/shadcn";
 
 import { advanceTask } from "../actions/advance-task";
 import { deleteTask } from "../actions/delete-task";

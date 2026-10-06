@@ -3,8 +3,7 @@ import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { createIsomorphicFn } from "@tanstack/react-start";
 
-import { DefaultNotFoundComponent } from "@/shared/ui/patterns";
-import { FullScreenError } from "@/shared/ui/patterns";
+import { DefaultNotFoundComponent, FullScreenError } from "@/shared/ui/patterns";
 
 import { getCspNonce } from "./csp-nonce";
 import { routeTree } from "./routeTree.gen";

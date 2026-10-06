@@ -1,4 +1,4 @@
-import { NotFoundContent } from "@/shared/ui/patterns/not-found-content";
+import { NotFoundContent } from "./not-found-content";
 
 // **__root の notFoundComponent と router の defaultNotFoundComponent の両方に配線する。**
 // notFound には2経路あり、片方だけでは穴が残る:

@@ -9,8 +9,7 @@ import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import type { ReactNode } from "react";
 
 import { StaleVersionBanner } from "@/shared/ui/layout";
-import { DefaultNotFoundComponent } from "@/shared/ui/patterns";
-import { FullScreenError } from "@/shared/ui/patterns";
+import { DefaultNotFoundComponent, FullScreenError } from "@/shared/ui/patterns";
 
 import appCss from "../globals.css?url";
 

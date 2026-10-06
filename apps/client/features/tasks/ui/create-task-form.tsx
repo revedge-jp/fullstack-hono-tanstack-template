@@ -1,8 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { Button } from "@/shared/ui/shadcn";
-import { Input } from "@/shared/ui/shadcn";
+import { Button, Input } from "@/shared/ui/shadcn";
 
 import { createTask } from "../actions/create-task";
 

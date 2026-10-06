@@ -1118,12 +1118,21 @@ export const selftestDcClientCross = signOut;'
 export const selftestDcShared = advanceTask;'
   mkfix "$CD/ui/__selftest_dc_server_module.tsx" 'import { getApiClient } from "@/shared/lib/api-client";
 export const selftestDcServerModule = getApiClient;'
+  # shared/ui もブラウザで動くコード（ルールの from に含めてある）。外れると SSR 専用モジュールが UI 部品経由で素通りする
+  mkfix "apps/client/shared/ui/__selftest_dc_ui_server_module.tsx" 'import { getApiClient } from "@/shared/lib/api-client";
+export const selftestDcUiServerModule = getApiClient;'
   # 型だけの import はバンドルに入らないので許す（UI が SessionUser を使う形は自然に出てくる）
   mkfix "$CD/ui/__selftest_dc_server_type.tsx" 'import type { SessionUser } from "@/shared/lib/api-client";
 export type SelftestDcServerType = SessionUser;'
   DC_CLIENT_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/client 2>/dev/null || true)
   if printf '%s' "$DC_CLIENT_OUT" | grep -q "__selftest_dc_server_type"; then
     echo "❌ dep-cruiser: client-browser-no-server-modules が型だけの import を誤検出しました"
+    FAIL=1
+  fi
+  if printf '%s' "$DC_CLIENT_OUT" | grep "client-browser-no-server-modules" -A 2 | grep -q "__selftest_dc_ui_server_module"; then
+    echo "✅ dep-cruiser: client-browser-no-server-modules（shared/ui）"
+  else
+    echo "❌ dep-cruiser: shared/ui から api-client を import する違反を検出しませんでした（client-browser-no-server-modules の from を確認）"
     FAIL=1
   fi
   for rule in client-cross-features-tasks client-shared-to-features client-browser-no-server-modules; do
@@ -1135,7 +1144,8 @@ export type SelftestDcServerType = SessionUser;'
     fi
   done
   rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" \
-    "$CD/ui/__selftest_dc_server_module.tsx" "$CD/ui/__selftest_dc_server_type.tsx"
+    "$CD/ui/__selftest_dc_server_module.tsx" "$CD/ui/__selftest_dc_server_type.tsx" \
+    "apps/client/shared/ui/__selftest_dc_ui_server_module.tsx"
 
   # import { type X } の形は dependency-cruiser では型だけの import になり上のルールを通るが、verbatimModuleSyntax では
   # 副作用の import として残ってバンドルに入る。oxlint の no-import-type-side-effects で止めていること

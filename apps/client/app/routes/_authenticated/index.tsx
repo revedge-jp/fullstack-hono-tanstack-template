@@ -1,8 +1,7 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 
 import { SignOutButton } from "@/features/auth";
-import { CenteredPage } from "@/shared/ui/layout";
-import { ThemeToggle } from "@/shared/ui/layout";
+import { CenteredPage, ThemeToggle } from "@/shared/ui/layout";
 import { PageHeader } from "@/shared/ui/patterns";
 
 const authenticatedRoute = getRouteApi("/_authenticated");
