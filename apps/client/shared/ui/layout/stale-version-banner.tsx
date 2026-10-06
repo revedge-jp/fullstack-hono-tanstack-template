@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
-import { Button } from "@/components/ui/button";
 import { isStaleVersion, subscribeStaleVersion } from "@/shared/lib/app-version";
+import { Button } from "@/shared/ui/shadcn/button";
 
 // デプロイ後の古いタブ検知バナー。API レスポンスのバージョン変化を検知したら
 // (shared/lib/app-version.ts)、再読み込みを促す。自動リロードにしない理由: フォームの

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
-import { EmptyState } from "@/components/patterns/empty-state";
-import { buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/shared/ui/patterns/empty-state";
+import { buttonVariants } from "@/shared/ui/shadcn/button";
 
 // 「ページが見つかりませんでした」の本体。呼び出し元は default-not-found.tsx。
 // __root.tsx はその DefaultNotFoundComponent を notFoundComponent に配線するだけで、

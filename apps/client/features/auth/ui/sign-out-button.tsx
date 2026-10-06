@@ -2,8 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { reportHandledError } from "@/shared/lib/report-client-error";
+import { Button } from "@/shared/ui/shadcn";
 
 import { signOut } from "../actions/sign-out";
 

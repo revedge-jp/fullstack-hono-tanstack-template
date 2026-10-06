@@ -41,7 +41,7 @@ const clientCrossFeatureRules = CLIENT_FEATURE_DIRS.map((feature) => ({
   name: `client-cross-features-${feature}`,
   severity: "error",
   comment:
-    "client: features 間の直接参照を禁止（機能間の独立性を担保）。共通の UI 部品は apps/client/components、共通ロジックは apps/client/shared へ。",
+    "client: features 間の直接参照を禁止（機能間の独立性を担保）。共通の UI 部品は apps/client/shared/ui、共通ロジックは apps/client/shared/lib へ。",
   from: { path: `^apps/client/features/${feature}/` },
   to: { path: `^apps/client/features/(?!${feature}/)` },
 }));
@@ -109,10 +109,10 @@ module.exports = {
         "api-client（in-process の Hono RPC・AsyncLocalStorage）・hono-app（api-service 一式と DB）・server-logger は SSR 専用。" +
         "UI / actions / ルートの component から import すると、DB や Better Auth がブラウザのバンドルに入るか実行時に落ちる。" +
         "SSR の取得は features/*/queries の createServerFn の中で、ブラウザからは browser-api-client を使う。",
-      from: { path: "^apps/client/(components/|features/[^/]+/(ui|actions)/|app/routes/)" },
+      from: { path: "^apps/client/(shared/ui/|features/[^/]+/(ui|actions)/|app/routes/)" },
       // import type（SessionUser 等）はバンドルに入らないので許す。import { type X } の形は型だけでも副作用の import が
       // 残るが、ここでは区別できない（どちらも type-only）ので oxlint の no-import-type-side-effects で止めている
-      // （components/ui は shadcn の生成物で oxlint の対象外。手で書き換えない前提）
+      // （shared/ui/shadcn は shadcn の生成物で oxlint の対象外。手で書き換えない前提）
       to: {
         path: "^apps/client/shared/lib/(api-client|hono-app|server-logger)\\.ts$",
         dependencyTypesNot: ["type-only"],

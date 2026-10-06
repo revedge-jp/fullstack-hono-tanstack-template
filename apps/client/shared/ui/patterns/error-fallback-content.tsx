@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { buttonVariants } from "@/components/ui/button";
 import { reportReactError } from "@/shared/lib/report-client-error";
+import { buttonVariants } from "@/shared/ui/shadcn/button";
 
 import { EmptyState } from "./empty-state";
 

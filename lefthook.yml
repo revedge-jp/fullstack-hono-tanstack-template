@@ -6,7 +6,7 @@ pre-commit:
   commands:
     1_oxlint:
       glob: "*.{js,ts,cjs,mjs,jsx,tsx}"
-      # .oxlintrc.json の ignorePatterns（apps/client/components/ui/** 等）で
+      # .oxlintrc.json の ignorePatterns（apps/client/shared/ui/shadcn/** 等）で
       # staged_files が全て除外されると unmatched-pattern エラーで非0終了する
       # （下の oxfmt と違いこのフラグが無かった）。shadcn 生成コード単独のコミットが
       # pre-commit で必ず失敗するため必須。

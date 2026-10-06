@@ -478,7 +478,7 @@ expect_guard "client features process.env 直接参照禁止（ブラケット�
   'export const selftestEnv = process.env["SELFTEST"];' \
   "で process.env を直接参照できません"
 
-# features/ の外（app/・shared/・components/）も見ていることを確かめる。検査範囲を features に戻すと落ちる
+# features/ の外（app/・shared/）も見ていることを確かめる。検査範囲を features に戻すと落ちる
 expect_guard "client process.env 直接参照禁止（app/ 配下）" \
   guard_client_features_no_process_env \
   "apps/client/app/__selftest_env.ts" \
@@ -663,10 +663,10 @@ expect_guard "スタイル規約: バリアント付きの text-center" \
   'export const SelftestUi = () => <p className="text-left md:text-center">x</p>;' \
   "違反 [centered-text]"
 
-# components/ は inline-style の対象外なので、style で中央揃えにする形は centered-text が拾う
-expect_guard "スタイル規約: style の textAlign で中央揃え（components/）" \
+# shared/ui/ は inline-style の対象外なので、style で中央揃えにする形は centered-text が拾う
+expect_guard "スタイル規約: style の textAlign で中央揃え（shared/ui/）" \
   guard_client_styles \
-  "apps/client/components/__selftest/selftest-style.tsx" \
+  "apps/client/shared/ui/__selftest/selftest-style.tsx" \
   'export const SelftestUi = () => <p style={{ textAlign: "center" }}>x</p>;' \
   "違反 [centered-text]"
 
@@ -770,10 +770,10 @@ export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /><
 export const F = () => <div className="flex items-center justify-center text-left">x</div>;
 export const G = () => <Popover align="center">x</Popover>;
 export const H = () => <div className="gap-3 px-6 py-16 p-px size-7 md:gap-x-5">x</div>;'
-# style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
-expect_guard_ignores "スタイル規約: components/ の部品の中の style 属性は許す" \
+# style 属性は shared/ui/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
+expect_guard_ignores "スタイル規約: shared/ui/ の部品の中の style 属性は許す" \
   guard_client_styles \
-  "apps/client/components/__selftest/selftest-style-ok.tsx" \
+  "apps/client/shared/ui/__selftest/selftest-style-ok.tsx" \
   'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'
 
 # 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、文をつないでいないダッシュ（空欄の「—」・括弧の中・

@@ -17,7 +17,7 @@ bun run dev
 ## スタイル
 
 - Tailwind v4（`@tailwindcss/vite`）
-- UI コンポーネントは shadcn/ui ベース（`components/ui/`）
+- UI コンポーネントは shadcn/ui ベース（`shared/ui/shadcn/`）
 
 ## FSD（Feature-Sliced Design）構造
 
@@ -33,11 +33,11 @@ apps/client/
 │       ├── ui/             # UI コンポーネント
 │       └── index.ts        # パブリック API
 ├── shared/                 # 共有レイヤ（横断関心）
-│   └── lib/                # api-client / browser-api-client / auth-client 等
-├── components/             # 汎用 UI コンポーネント
-│   ├── ui/                 # shadcn/ui コンポーネント
-│   ├── patterns/           # 画面パターン（PageHeader / EmptyState 等）
-│   └── layout/             # ページ枠・常駐バナー
+│   ├── lib/                # api-client / browser-api-client / auth-client 等
+│   └── ui/                 # 汎用 UI コンポーネント
+│       ├── shadcn/         # shadcn/ui コンポーネント（生成物）
+│       ├── patterns/       # 画面パターン（PageHeader / EmptyState 等）
+│       └── layout/         # ページ枠・常駐バナー
 ├── test-helpers/           # actions / queries テスト用のモック（api-mock.ts）
 └── tests/e2e/              # Playwright
 ```
@@ -45,8 +45,7 @@ apps/client/
 ### レイヤー規則
 
 - **features**: 機能単位のスライス。`actions`、`queries`、`ui` に分割
-- **shared**: 横断関心（`shared/lib/` の API クライアント・認証クライアント・ロガー等）を配置
-- **components**: 汎用的な UI コンポーネント（shadcn/ui・画面パターン・レイアウト）
+- **shared**: 横断関心を配置。ロジックは `shared/lib/`（API クライアント・認証クライアント・ロガー等）、UI 部品は `shared/ui/`（shadcn/ui・画面パターン・レイアウト）
 
 ### 依存関係ルール
 
@@ -70,7 +69,7 @@ cd apps/client
 bunx shadcn@latest add button
 ```
 
-- コンポーネントは `components/ui/` に配置、`components.json` で設定管理
+- コンポーネントは `shared/ui/shadcn/` に配置、`components.json` で設定管理
 - 未使用エクスポートがありえるため knip 除外方針に準拠（`knip.json`）
 - 配色・余白・文言は SmartHR Design System に合わせる。コンポーネントは shadcn/ui のままで、smarthr-ui は入れない
   （[ADR-008](../../docs/architecture/adr-008-smarthr-design-system-guidelines.md)、規約は `.claude/rules/client.md` の「デザイン規約」）

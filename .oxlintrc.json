@@ -23,7 +23,7 @@
     "**/*.gen.ts",
     "**/*.gen.tsx",
     "**/ui-shadcn/**",
-    "apps/client/components/ui/**"
+    "apps/client/shared/ui/shadcn/**"
   ],
   "rules": {
     "no-unused-vars": "error",

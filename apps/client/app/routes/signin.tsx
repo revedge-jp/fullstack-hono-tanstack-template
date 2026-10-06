@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { CenteredPage } from "@/components/layout/centered-page";
-import { PageHeader } from "@/components/patterns/page-header";
 import { DevSignInButton, GoogleSignInButton, sessionQueryOptions } from "@/features/auth";
+import { CenteredPage } from "@/shared/ui/layout";
+import { PageHeader } from "@/shared/ui/patterns";
 
 export const Route = createFileRoute("/signin")({
   head: () => ({ meta: [{ title: "サインイン｜{{APP_NAME}}" }] }),

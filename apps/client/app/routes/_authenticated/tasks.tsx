@@ -2,9 +2,9 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { CenteredPage } from "@/components/layout/centered-page";
-import { PageHeader } from "@/components/patterns/page-header";
 import { CreateTaskForm, getTasksServerFn, TaskList, tasksQueryOptions } from "@/features/tasks";
+import { CenteredPage } from "@/shared/ui/layout";
+import { PageHeader } from "@/shared/ui/patterns";
 
 // ページ位置を URL の search param（?cursor=...）で表現する。
 // URL がページ状態の単一ソースになるため、SSR・リロード・共有・戻る操作すべてで位置が保たれる。

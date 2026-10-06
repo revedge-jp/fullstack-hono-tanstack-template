@@ -117,7 +117,7 @@ const resolveAgentsFile = (ref, dir) =>
 // スラッシュを含み、リポジトリ内の既知ディレクトリから始まるものだけを「パス」とみなす。
 // 裸のファイル名(`usecase.ts` 等)は構造説明で多用され実在確認に意味が無いので対象外。
 const KNOWN_PREFIX =
-  /^(\.\.?\/|apps\/|packages\/|scripts\/|docs\/|\.claude\/|\.github\/|src\/|features\/|shared\/|integrations\/|middlewares\/|test-helpers\/|app\/|components\/|tests\/)/;
+  /^(\.\.?\/|apps\/|packages\/|scripts\/|docs\/|\.claude\/|\.github\/|src\/|features\/|shared\/|integrations\/|middlewares\/|test-helpers\/|app\/|tests\/)/;
 const looksLikePath = (t) =>
   KNOWN_PREFIX.test(t) &&
   !/[\s*?{}<>()|"'$[\]]/.test(t) &&

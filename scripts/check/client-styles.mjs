@@ -14,19 +14,14 @@
 // 文字列・JSX テキストを見分けるのは原理的に近似にしかならず、見逃しと誤検出を行き来するため、
 // 除外する仕組み自体を持たない。
 //
-// components/ui（shadcn の生成物）は対象外: オーバーレイの半透明の黒や data-[...] 系の任意値を
+// shared/ui/shadcn（shadcn の生成物）は対象外: オーバーレイの半透明の黒や data-[...] 系の任意値を
 // 正当に使い、shadcn CLI の更新で上書きされるため。
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 
 import { collectClientSources } from "./client-sources.mjs";
 
-const ROOTS = [
-  "apps/client/app",
-  "apps/client/features",
-  "apps/client/components",
-  "apps/client/shared",
-];
+const ROOTS = ["apps/client/app", "apps/client/features", "apps/client/shared"];
 
 const PALETTE_NAMES =
   "red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white";
@@ -58,7 +53,7 @@ const RULES = [
       "g",
     ),
     message:
-      "任意値（w-[347px] / bg-[#7c3aed] 等）は使えません。スケール（p-4 / gap-2 / text-sm）かトークンを使い、どうしても必要なら components/ に部品として切り出してください",
+      "任意値（w-[347px] / bg-[#7c3aed] 等）は使えません。スケール（p-4 / gap-2 / text-sm）かトークンを使い、どうしても必要なら shared/ui/ に部品として切り出してください",
   },
   {
     id: "arbitrary-property",
@@ -116,22 +111,22 @@ const RULES = [
     id: "glassmorphism",
     pattern: new RegExp(`${CLASS_START}backdrop-(?:blur|saturate|brightness)\\b`, "g"),
     message:
-      "すりガラス（backdrop-blur 等）は AI slop の代表例のため禁止です。必要なオーバーレイは components/ui の部品を使ってください",
+      "すりガラス（backdrop-blur 等）は AI slop の代表例のため禁止です。必要なオーバーレイは shared/ui/shadcn の部品を使ってください",
   },
   {
     id: "raw-page-heading",
     // ページ見出しのサイズ・太さを PageHeader に閉じ込める。直書きの h1 はページごとに
     // 書き方がばらつく（派生プロダクトの実測で h1 の class が 5 通りに分かれていた）。
     pattern: /<h1\b/g,
-    allowedIn: ["apps/client/components/patterns/page-header.tsx"],
+    allowedIn: ["apps/client/shared/ui/patterns/page-header.tsx"],
     message:
-      "h1 を直接書かないでください。ページ見出しは @/components/patterns/page-header の PageHeader を使ってください",
+      "h1 を直接書かないでください。ページ見出しは @/shared/ui/patterns の PageHeader を使ってください",
   },
   {
     id: "centered-text",
     // 日本語の文章を中央揃えで折り返すと行頭が毎行ずれて読みにくい。塊は中央、文字は左
     // （.claude/rules/client.md「文章を中央揃えにしない」）。flex-col items-center で中身を中央に並べる形は
-    // アイコンの中央寄せ等と区別できないので検出しない（目視）。style の textAlign も拾う（components/ は
+    // アイコンの中央寄せ等と区別できないので検出しない（目視）。style の textAlign も拾う（shared/ui/ は
     // inline-style の対象外なので、ここで見ないと素通りする）。align="center" は Popover 等の配置の prop と
     // 区別できないので見ない。.css（@apply 等）は走査対象外。
     pattern: new RegExp(
@@ -147,13 +142,13 @@ const RULES = [
     id: "inline-style",
     // style 属性はクラスの規則（パレット・任意値・margin 等）をすべて迂回できる
     // （style={{ color: "#7c3aed", marginTop: 12 }}）。見た目はクラスで書き、動的な値が必要なら
-    // components/ に部品として切り出す。
+    // shared/ui/ に部品として切り出す。
     pattern: /\bstyle=\{/g,
-    // 部品の中（components/）は許す: 進捗バーの幅のように値そのものが実行時に決まるものは、
+    // 部品の中（shared/ui/）は許す: 進捗バーの幅のように値そのものが実行時に決まるものは、
     // 部品に閉じ込めて呼び出し側（app/ や features/）には出さない
-    allowedUnder: ["apps/client/components/"],
+    allowedUnder: ["apps/client/shared/ui/"],
     message:
-      "style 属性で見た目を書かないでください（クラスの規則をすべて迂回できる）。トークンとスケールのクラスを使い、値が実行時に決まるもの（進捗バーの幅等）は apps/client/components/ の部品に閉じ込めてください",
+      "style 属性で見た目を書かないでください（クラスの規則をすべて迂回できる）。トークンとスケールのクラスを使い、値が実行時に決まるもの（進捗バーの幅等）は apps/client/shared/ui/ の部品に閉じ込めてください",
   },
   {
     id: "svg-raw-color",

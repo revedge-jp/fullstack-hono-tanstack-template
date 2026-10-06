@@ -19,7 +19,7 @@
   "ignore": ["**/dist/**"],
   "ignoreFiles": ["steiger.config.mjs"],
   "ignoreIssues": {
-    "apps/client/components/ui/**": ["exports", "types", "files"],
+    "apps/client/shared/ui/shadcn/**": ["exports", "types", "files"],
 
     "packages/typescript-config/*.json": ["unresolved"],
     "apps/api-service/src/app.ts": ["types"]

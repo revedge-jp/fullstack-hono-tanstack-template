@@ -14,6 +14,6 @@
     "**/generated/**",
     "**/coverage/**",
     "**/routeTree.gen.ts",
-    "**/components/ui/**"
+    "**/shared/ui/shadcn/**"
   ]
 }

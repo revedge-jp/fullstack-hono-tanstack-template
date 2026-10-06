@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-import { CenteredPage } from "@/components/layout/centered-page";
-import { PageHeader } from "@/components/patterns/page-header";
+import { CenteredPage } from "@/shared/ui/layout";
+import { PageHeader } from "@/shared/ui/patterns";
 
 export const Route = createFileRoute("/_authenticated/about")({
   head: () => ({ meta: [{ title: "このアプリについて｜{{APP_NAME}}" }] }),

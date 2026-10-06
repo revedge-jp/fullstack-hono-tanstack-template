@@ -1,4 +1,4 @@
-import { ErrorFallbackContent } from "@/components/patterns/error-fallback-content";
+import { ErrorFallbackContent } from "@/shared/ui/patterns/error-fallback-content";
 
 // 全画面のエラーフォールバック。__root.tsx の errorComponent と
 // router.tsx の defaultErrorComponent が共有する。
