@@ -9,6 +9,9 @@ packages/database/src/schema/auth.ts
 # 認証・権限
 apps/api-service/src/features/auth/*
 apps/api-service/src/middlewares/*
+# 開発専用の認証（任意ユーザーのセッションを発行できる特権ヘルパー。本番に出ない設計の維持が前提）
+apps/api-service/src/integrations/external/dev-auth.ts
+apps/api-service/src/routes/dev-auth/*
 # 外部サービス連携の設定（認証の設定）と、環境変数の読み込み
 apps/api-service/src/integrations/external/auth.ts
 apps/api-service/src/config.ts

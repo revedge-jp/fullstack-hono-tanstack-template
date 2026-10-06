@@ -125,7 +125,9 @@ gh pr merge <番号> --auto --squash
 1 つでも欠けたら有効にしない（満たせない理由を PR 本文の `## 自律判断の記録` に書き、条件が揃うまで待つ）。
 **CI が見るのは 1・2・5 の有無だけで、中身は見ない**（中身はこの手順の責任）:
 
-1. `e2e` ラベルを付け（**auto-merge を有効にする前に付ける**。無いと `Review converged` が落ちる）、全 spec が緑
+1. `e2e` ラベルを付け（**auto-merge を有効にする前に付ける**。無いと `Review converged` が落ちる）、全 spec が緑。
+   e2e は必須チェックに入っていないので、`gh run list --workflow e2e.yml --branch <ブランチ> --limit 1` で
+   最新の run が `success` になったことを見てから auto-merge を有効にする
 2. 本文に `## 高リスク領域の確認` の節を書く。次の結果を 1 行ずつ入れる: `mutation:diff` の結果（api-service を触った場合）、
    マイグレーションを含むなら旧列の読み手を `git grep` で全件列挙した移行済み・据え置き・未着手
 3. `cd apps/api-service && bun run mutation:diff` が閾値を満たす（api-service を触った場合）

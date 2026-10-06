@@ -34,7 +34,9 @@ git log <最新タグ>..origin/main --oneline
 gh run list --branch main --limit 3 --json databaseId,name,status,conclusion,headSha
 ```
 
-直近の `CI Pipeline` と `Deploy`（staging）が `success` であることを確かめる。失敗・実行中のときは
+直近の `CI Pipeline` と `Deploy`（staging）が `success` であることを確かめる。**その run の `headSha` が
+`git rev-parse origin/main` と同じであることも確かめる**（違うと、CI が見ていない新しいコミットを含んだまま
+タグを打つことになる）。失敗・実行中のとき、または `headSha` が違うときは
 タグを打たずにユーザーへ報告する（失敗している状態を本番にも出してしまうため）。
 
 ### 4. バージョンの決定
