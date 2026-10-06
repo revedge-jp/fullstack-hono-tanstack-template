@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse フック: 秘密情報(.env / .dev.vars)をエージェントの読み書き・検索から守る。
+# PreToolUse フック: 秘密情報(.env / .dev.vars / *.pem)をエージェントの読み書き・検索から守る。
 #
 # 検証器(scripts/check/verifier-paths.txt)の編集はここでは止めない。以前はユーザー確認(ask)を出していたが、
 # 内容を見ずに許可される運用になって作業を止めるだけだったため外した(#175)。検証器の緩和は CI の
@@ -95,8 +95,8 @@ emit() { # $1 decision, $2 reason
 for rel in "$RAW_REL" "$REL"; do
   case "$(lower "$(basename "$rel")")" in
     .env.example) ;;
-    .env|.env.*|.dev.vars|.dev.vars.*)
-      emit deny "$rel は秘密情報を含みうるため読み書きしません。設定項目は .env.example と docs/dev/environment-variables.md を参照してください"
+    .env|.env.*|.dev.vars|.dev.vars.*|*.pem)
+      emit deny "$rel は秘密情報を含みうるため読み書きしません。設定項目は .env.example と docs/dev/environment-variables.md を参照してください（鍵ファイルは *.pem も対象）"
       exit 0 ;;
   esac
 done
