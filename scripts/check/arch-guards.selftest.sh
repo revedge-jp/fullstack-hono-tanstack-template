@@ -478,7 +478,7 @@ expect_guard "client features process.env 直接参照禁止（ブラケット�
   'export const selftestEnv = process.env["SELFTEST"];' \
   "で process.env を直接参照できません"
 
-# features/ の外（app/・shared/・components/）も見ていることを確かめる。検査範囲を features に戻すと落ちる
+# features/ の外（app/・shared/）も見ていることを確かめる。検査範囲を features に戻すと落ちる
 expect_guard "client process.env 直接参照禁止（app/ 配下）" \
   guard_client_features_no_process_env \
   "apps/client/app/__selftest_env.ts" \
@@ -663,10 +663,10 @@ expect_guard "スタイル規約: バリアント付きの text-center" \
   'export const SelftestUi = () => <p className="text-left md:text-center">x</p>;' \
   "違反 [centered-text]"
 
-# components/ は inline-style の対象外なので、style で中央揃えにする形は centered-text が拾う
-expect_guard "スタイル規約: style の textAlign で中央揃え（components/）" \
+# shared/ui/ は inline-style の対象外なので、style で中央揃えにする形は centered-text が拾う
+expect_guard "スタイル規約: style の textAlign で中央揃え（shared/ui/）" \
   guard_client_styles \
-  "apps/client/components/__selftest/selftest-style.tsx" \
+  "apps/client/shared/ui/__selftest/selftest-style.tsx" \
   'export const SelftestUi = () => <p style={{ textAlign: "center" }}>x</p>;' \
   "違反 [centered-text]"
 
@@ -770,10 +770,10 @@ export const E = () => <svg><path fill="currentColor" stroke="none" d="M0 0" /><
 export const F = () => <div className="flex items-center justify-center text-left">x</div>;
 export const G = () => <Popover align="center">x</Popover>;
 export const H = () => <div className="gap-3 px-6 py-16 p-px size-7 md:gap-x-5">x</div>;'
-# style 属性は components/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
-expect_guard_ignores "スタイル規約: components/ の部品の中の style 属性は許す" \
+# style 属性は shared/ui/ の部品の中だけは許す（値が実行時に決まるものを閉じ込める場所）
+expect_guard_ignores "スタイル規約: shared/ui/ の部品の中の style 属性は許す" \
   guard_client_styles \
-  "apps/client/components/__selftest/selftest-style-ok.tsx" \
+  "apps/client/shared/ui/__selftest/selftest-style-ok.tsx" \
   'export const Bar = ({ pct }: { pct: number }) => <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />;'
 
 # 逆向き（誤検出）の回帰テスト: 画面に出ないコメントと、文をつないでいないダッシュ（空欄の「—」・括弧の中・
@@ -1118,12 +1118,21 @@ export const selftestDcClientCross = signOut;'
 export const selftestDcShared = advanceTask;'
   mkfix "$CD/ui/__selftest_dc_server_module.tsx" 'import { getApiClient } from "@/shared/lib/api-client";
 export const selftestDcServerModule = getApiClient;'
+  # shared/ui もブラウザで動くコード（ルールの from に含めてある）。外れると SSR 専用モジュールが UI 部品経由で素通りする
+  mkfix "apps/client/shared/ui/__selftest_dc_ui_server_module.tsx" 'import { getApiClient } from "@/shared/lib/api-client";
+export const selftestDcUiServerModule = getApiClient;'
   # 型だけの import はバンドルに入らないので許す（UI が SessionUser を使う形は自然に出てくる）
   mkfix "$CD/ui/__selftest_dc_server_type.tsx" 'import type { SessionUser } from "@/shared/lib/api-client";
 export type SelftestDcServerType = SessionUser;'
   DC_CLIENT_OUT=$(bunx depcruise -c dependency-cruiser.config.cjs apps/client 2>/dev/null || true)
   if printf '%s' "$DC_CLIENT_OUT" | grep -q "__selftest_dc_server_type"; then
     echo "❌ dep-cruiser: client-browser-no-server-modules が型だけの import を誤検出しました"
+    FAIL=1
+  fi
+  if printf '%s' "$DC_CLIENT_OUT" | grep "client-browser-no-server-modules" -A 2 | grep -q "__selftest_dc_ui_server_module"; then
+    echo "✅ dep-cruiser: client-browser-no-server-modules（shared/ui）"
+  else
+    echo "❌ dep-cruiser: shared/ui から api-client を import する違反を検出しませんでした（client-browser-no-server-modules の from を確認）"
     FAIL=1
   fi
   for rule in client-cross-features-tasks client-shared-to-features client-browser-no-server-modules; do
@@ -1135,7 +1144,8 @@ export type SelftestDcServerType = SessionUser;'
     fi
   done
   rm -f "$CD/ui/__selftest_dc_client_cross.tsx" "apps/client/shared/lib/__selftest_dc_shared_to_features.ts" \
-    "$CD/ui/__selftest_dc_server_module.tsx" "$CD/ui/__selftest_dc_server_type.tsx"
+    "$CD/ui/__selftest_dc_server_module.tsx" "$CD/ui/__selftest_dc_server_type.tsx" \
+    "apps/client/shared/ui/__selftest_dc_ui_server_module.tsx"
 
   # import { type X } の形は dependency-cruiser では型だけの import になり上のルールを通るが、verbatimModuleSyntax では
   # 副作用の import として残ってバンドルに入る。oxlint の no-import-type-side-effects で止めていること

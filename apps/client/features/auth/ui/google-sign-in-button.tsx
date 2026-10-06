@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { reportHandledError } from "@/shared/lib/report-client-error";
+import { Button } from "@/shared/ui/shadcn";
 
 import { signInErrorMessage, signInWithGoogle } from "../actions/sign-in";
 

@@ -22,7 +22,7 @@
     "**/*.gen.ts",
     "**/*.gen.tsx",
     "**/ui-shadcn/**",
-    "apps/client/components/ui/**",
+    "apps/client/shared/ui/shadcn/**",
     "**/*.md",
     "**/*.yml",
     "**/*.yaml"

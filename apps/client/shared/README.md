@@ -1,5 +1,12 @@
-フロントの共有レイヤ。feature に依存しない横断関心を `lib/` に置く（`shared` から `features` は import しない）。
-UI 部品は `shared/` ではなく `apps/client/components/` に置く。
+フロントの共有レイヤ。feature に依存しない横断関心を `lib/`（ロジック）と `ui/`（UI 部品）に置く（`shared` から `features` は import しない）。
+
+## ui/
+
+外（`app/`・`features/`）からはフォルダごとの `index.ts` 経由で import する（例: `import { Button } from "@/shared/ui/shadcn"`）。
+
+- `shadcn/`: shadcn の生成物（`Button` / `Card` / `Input` 等）。手で書き換えない。lint・スタイルガード・knip の対象外
+- `patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
+- `layout/`: ページ枠（`CenteredPage`）・常駐バナー・テーマ切り替え
 
 ## lib/
 

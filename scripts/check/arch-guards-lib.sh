@@ -266,8 +266,8 @@ guard_no_legacy_integration_alias() {
 
 guard_server_fn_placement() {
   echo "[guard] createServerFn の配置（features/**/queries/** のみ許容）"
-  # features/ だけでなく app/・shared/・components/ も見る（そこに置かれると features の外なので素通りしていた）
-  SA_VIOL=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/features/*/queries/*' ! -name '*.test.ts' -print0 2>/dev/null |
+  # features/ だけでなく app/・shared/ も見る（そこに置かれると features の外なので素通りしていた）
+  SA_VIOL=$(find apps/client/app apps/client/features apps/client/shared -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/features/*/queries/*' ! -name '*.test.ts' -print0 2>/dev/null |
     xargs -0 grep -nE "\bcreateServerFn\(" || true)
   if [ -z "$SA_VIOL" ]; then
     echo "OK"
@@ -401,15 +401,15 @@ guard_client_queries_server_modules() {
 }
 
 guard_client_features_no_process_env() {
-  echo "[guard] client（app/ features/ shared/ components/）での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
+  echo "[guard] client（app/ features/ shared/）での process.env 直接参照禁止（値は api-service の config から loader / serverFn 経由で受け取る）"
   # process.env.X だけでなく process.env["X"]・process["env"]・分割代入（const { env } = process も）・
   # node:process / cloudflare:workers から env を取り出す import・Bun.env も拾う（import.meta.env.DEV は許可）
   # app/server.ts は Worker の env（bindings）を引数で受け取るので process.env を使わない。features 以外も同じく見る
-  CLIENT_ENV_VIOL=$(find apps/client/app apps/client/features apps/client/shared apps/client/components -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
+  CLIENT_ENV_VIOL=$(find apps/client/app apps/client/features apps/client/shared -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null | \
     xargs -0 grep -nE "process\.env|process\[|=[[:space:]]*process[[:space:]]*;?[[:space:]]*\$|[{,][[:space:]]*env([[:space:]]+as[[:space:]]+[A-Za-z_\$]+)?[[:space:]]*[,}][^;]*from [\"'](node:process|process|cloudflare:workers)[\"']|Bun\.env" -- || true)
   # 無いディレクトリを find に渡すと非 0 になり、pipefail で理由を出さずに落ちるので、ある分だけを渡す
   local client_dirs=()
-  for dir in apps/client/app apps/client/features apps/client/shared apps/client/components; do
+  for dir in apps/client/app apps/client/features apps/client/shared; do
     [ -d "$dir" ] && client_dirs+=("$dir")
   done
   CLIENT_ENV_IMPORTS=""
@@ -421,7 +421,7 @@ guard_client_features_no_process_env() {
   if [ -z "$CLIENT_ENV_VIOL" ]; then
     echo "OK"
   else
-    echo "違反: client（app/ features/ shared/ components/）で process.env を直接参照できません（値は api-service の config.ts に足し、loader / serverFn 経由で受け取ってください）"
+    echo "違反: client（app/ features/ shared/）で process.env を直接参照できません（値は api-service の config.ts に足し、loader / serverFn 経由で受け取ってください）"
     echo "$CLIENT_ENV_VIOL" | while IFS= read -r line; do
       echo "  • $line"
     done
@@ -592,7 +592,7 @@ guard_no_id_token_write() {
 guard_client_styles() {
   echo "[guard] client のスタイル規約（既定パレット・任意値・dark: の手書き・AI slop）"
   # semantic トークンの迂回と AI slop の定型パターンは typecheck・lint・test を通過するため、
-  # ここで検出する。規則と除外（components/ui）の理由は client-styles.mjs 冒頭に書いてある。
+  # ここで検出する。規則と除外（shared/ui/shadcn）の理由は client-styles.mjs 冒頭に書いてある。
   node scripts/check/client-styles.mjs
 }
 

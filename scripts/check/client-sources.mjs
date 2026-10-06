@@ -1,11 +1,11 @@
 // client のソースを走査するガード（client-styles.mjs / ui-copy.mjs）が共有するファイル収集。
 //
-// components/ui（shadcn の生成物）は shadcn CLI の更新で上書きされるので対象外。テストと生成ルート表も
+// shared/ui/shadcn（shadcn の生成物）は shadcn CLI の更新で上書きされるので対象外。テストと生成ルート表も
 // 画面の実装ではないので対象外。
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const EXCLUDED_DIRS = ["apps/client/components/ui"];
+const EXCLUDED_DIRS = ["apps/client/shared/ui/shadcn"];
 const EXCLUDED_FILES = [/\.test\.tsx?$/, /\.spec\.tsx?$/, /routeTree\.gen\.ts$/];
 
 const isDir = (path) => existsSync(path) && statSync(path).isDirectory();

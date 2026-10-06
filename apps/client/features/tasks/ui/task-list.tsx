@@ -2,7 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ListTodo } from "lucide-react";
 import { useState } from "react";
 
-import { EmptyState } from "@/components/patterns/empty-state";
+import type { ActionResult } from "@/shared/lib/action-error";
+import { EmptyState } from "@/shared/ui/patterns";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,9 +13,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import type { ActionResult } from "@/shared/lib/action-error";
+  Button,
+} from "@/shared/ui/shadcn";
 
 import { advanceTask } from "../actions/advance-task";
 import { deleteTask } from "../actions/delete-task";

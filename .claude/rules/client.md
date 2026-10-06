@@ -29,7 +29,7 @@ reject せず、コードを日本語文言に置き換え、`messages` のキ�
 ## 機械的に強制される規約（arch:guards）
 
 - **`window.location.href` への代入禁止**。TanStack Router の `router.navigate()` / `useNavigate()` を使う。
-- client（`app/`・`features/`・`shared/`・`components/`）で `process.env` 直参照禁止。client には独自の設定機構が無いので、必要な値は api-service の
+- client（`app/`・`features/`・`shared/`）で `process.env` 直参照禁止。client には独自の設定機構が無いので、必要な値は api-service の
   `config.ts` に足して loader / serverFn 経由で受け取る（`.claude/rules/env-vars.md` の「client / Docker のみの場合」）。
 - スタイル規約（既定パレット・任意値・`dark:` の手書き・AI slop の定型パターン）。詳細は下の「デザイン規約」。
 
@@ -128,11 +128,11 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 ### スケールから選ぶ
 
 - 【ガード】任意値（`w-[347px]` / `bg-[#7c3aed]` / `bg-(--brand)`）と任意プロパティ（`[color:#7c3aed]`）は使えない。Tailwind のスケール
-  （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `components/` にコンポーネントとして閉じ込める
+  （`p-4` / `gap-2` / `text-sm`）から選ぶ。どうしても必要な値は `shared/ui/` にコンポーネントとして閉じ込める
   （`data-[state=open]:` のような任意バリアントは対象外）
 - 【ガード】`style` 属性で見た目を書かない（クラスの規則をすべて迂回できる）。値が実行時に決まるもの
-  （進捗バーの幅等）だけは `components/` のコンポーネントの中で使ってよい。SVG の `fill` / `stroke` に色を直接書かず、
-  `currentColor` にして色はクラスで付ける。走査対象は `app/` / `features/` / `components/`（`ui/` を除く）/ `shared/`
+  （進捗バーの幅等）だけは `shared/ui/` のコンポーネントの中で使ってよい。SVG の `fill` / `stroke` に色を直接書かず、
+  `currentColor` にして色はクラスで付ける。走査対象は `app/` / `features/` / `shared/`（`shared/ui/shadcn/` を除く）
 - 文字サイズと太さの組み合わせを画面ごとに発明しない。使う組み合わせは次の 4 つだけ:
 
   | 用途 | クラス |
@@ -178,16 +178,19 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 
 新しい UI を書く前に、既存のコンポーネントで組めないかを確認する。
 
-- `components/ui/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
+- `shared/ui/shadcn/`: shadcn のコンポーネント（`Button` / `Card` / `Input` / `Skeleton`）。shadcn CLI の生成物なので
   手で書き換えない（例外: `button.tsx` の主要ボタンの hover。値だけでは AA を割るので書き換え、`button.test.tsx` で固定している。
   再生成したら書き換え直す。ADR-008）。足りないコンポーネントは shadcn CLI で追加する（`components.json` の `style: base-vega` /
   Base UI 前提。Radix 前提の例をそのまま貼らない）。2026-09 以降の registry は、shadcn 製の npm パッケージ
   `cn`（`clsx` + `tailwind-merge` の置き換え）を import し、CLI が依存にも足す。既存のコンポーネントは `@/shared/lib/utils` の
   `cn` を使っているので、足された依存は外し、import を `@/shared/lib/utils` に直してそろえる（`cn` パッケージへ移すなら、
-  `components/ui` のすべてと `utils` をまとめて移す）。**手書きのコンポーネントをここに置かない**（`components/ui` は
+  `shared/ui/shadcn` のすべてと `utils` をまとめて移す）。**手書きのコンポーネントをここに置かない**（`shared/ui/shadcn` は
   lint・スタイルガード・knip の対象外なので、置くと規約違反が検出されない）
-- `components/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
-- `components/layout/`: ページ枠（`CenteredPage`）・常駐バナー・テーマ切り替え（`ThemeToggle`）
+- `shared/ui/` の外（`app/`・`features/`）からは、フォルダごとの `index.ts` 経由で import する
+  （`@/shared/ui/shadcn` / `@/shared/ui/patterns` / `@/shared/ui/layout`。FSD の公開 API で、`bun run arch:fsd` が検出する）。
+  `shadcn add` で足したコンポーネントは `shared/ui/shadcn/index.ts` に 1 行足す。`shared/` 内部の import は直接のパスでよい
+- `shared/ui/patterns/`: 画面パターン（`PageHeader` / `EmptyState` / エラー表示 / NotFound）
+- `shared/ui/layout/`: ページ枠（`CenteredPage`）・常駐バナー・テーマ切り替え（`ThemeToggle`）
 - コンポーネントに渡す `className` は**配置（余白・幅・並び）だけ**に使い、色や文字を上書きしない。見た目の違いは
   `variant` / `size` で表す（例: 削除は `<Button variant="destructive">`、控えめな操作は `variant="ghost"`）
 
@@ -203,7 +206,7 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 - 元に戻せない削除: 確認ダイアログを挟む（SmartHR DS の「削除ダイアログ」）。タイトルは「{対象}の削除」、本文は
   「以下の{対象}を削除しますか？　この操作は元に戻せません。」、削除対象の名前を示し、ボタンは右に
   `<Button variant="destructive">` の「削除」、左に「キャンセル」。削除後に元に戻せる操作なら確認は要らない。
-  実例は `features/tasks/ui/task-list.tsx`（`components/ui/alert-dialog.tsx` を使う）
+  実例は `features/tasks/ui/task-list.tsx`（`shared/ui/shadcn/alert-dialog.tsx` を使う）
 
 ### 文章を中央揃えにしない — 塊は中央、文字は左
 
@@ -213,7 +216,7 @@ SmartHR DS にはダークモードが無いので、`.dark` の値はこのリ�
 
 - 【ガード】`text-center`（と style の `textAlign` での中央揃え）は使えない（`scripts/check/client-styles.mjs`
   の `centered-text`）。`flex-col items-center` で中身を中央に並べる形はアイコンの中央寄せ等と区別できないので【目視】
-- `components/ui`（shadcn の生成物）はガードの対象外で、Dialog のヘッダー等は `text-center` を持つことがある。
+- `shared/ui/shadcn`（shadcn の生成物）はガードの対象外で、Dialog のヘッダー等は `text-center` を持つことがある。
   生成物は書き換えず、呼び出し側の `className` で `text-left` に上書きする
 - 書き方: 外側で中央に寄せ（`flex justify-center` / `CenteredPage` / `mx-auto max-w-*`）、内側は `items-start`。
   内側を内容幅に縮める形（`EmptyState`）にすると、短い 1 行でも塊ごと中央に見える
@@ -233,7 +236,7 @@ LLM は学習データの多数派に収束するため、指示が無いと「�
 | パターン | 検出 |
 |---|---|
 | グラデーション背景・グラデーション文字（`bg-linear-*` / `bg-clip-text`） | 【ガード】 |
-| すりガラス（`backdrop-blur-*`） | 【ガード】（オーバーレイは `components/ui` のコンポーネントに任せる） |
+| すりガラス（`backdrop-blur-*`） | 【ガード】（オーバーレイは `shared/ui/shadcn` のコンポーネントに任せる） |
 | 絵文字をアイコン代わりに使う | 【ガード】（アイコンは `lucide-react`。`components.json` の `iconLibrary` と揃えてある） |
 | 紫・青の差し色を既定パレットから持ち込む | 【ガード】（既定パレット禁止で検出） |
 | Card の中に Card を入れる | 【目視】 |

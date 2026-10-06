@@ -28,12 +28,7 @@ import ts from "typescript";
 
 import { collectClientSources } from "./client-sources.mjs";
 
-const ROOTS = [
-  "apps/client/app",
-  "apps/client/features",
-  "apps/client/components",
-  "apps/client/shared",
-];
+const ROOTS = ["apps/client/app", "apps/client/features", "apps/client/shared"];
 const JAPANESE = /[\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Han}]/u;
 // 文をつないでいるダッシュだけを拾う: 前が文字・閉じ括弧・句読点、後ろが文字・開き括弧。
 // 「未設定（—）」や「──── または ────」は前後がこれに当たらないので対象外。前後とも数字の範囲表記
@@ -53,7 +48,7 @@ const PAGE_TITLE_MESSAGE =
   "ページの title は「画面名｜アプリ名」の形にしてください（全角の縦棒で区切り、前後に空白を入れない）";
 // サ変動詞の「する」を残したもの・丁寧形・句点。「取り消す」「次へ進める」のような終止形は通す。
 const BUTTON_LABEL_NG = /(?:する|します|しましょう|。)$/u;
-// Button と、Button を描くダイアログの操作（components/ui/alert-dialog.tsx）
+// Button と、Button を描くダイアログの操作（shared/ui/shadcn/alert-dialog.tsx）
 const BUTTON_TAGS = new Set(["Button", "AlertDialogAction", "AlertDialogCancel"]);
 const BUTTON_LABEL_RULE_ID = "button-label";
 const BUTTON_LABEL_MESSAGE =
