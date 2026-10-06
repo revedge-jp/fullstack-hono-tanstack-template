@@ -295,7 +295,7 @@ import { SomeEmailClient } from "some-email-sdk";  // NG
 ### 依存ルール
 
 - `shared` から `features` への import は禁止
-- `features` 間の直接 import は禁止（避ける、ではない）。複数の feature で使うものは `shared/` に置く（UI 部品は `shared/ui/`）
+- `features` 間の直接 import は禁止（避ける、ではない）。複数の feature で使うものは `shared/` に置く（UI コンポーネントは `shared/ui/`）
 
 ### API呼び出し
 
