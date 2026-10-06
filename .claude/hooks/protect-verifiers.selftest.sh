@@ -33,6 +33,8 @@ expect "パスに引用符があっても JSON が壊れない" Read "$ROOT/a\\\
 expect ".env の Read は deny" Read "$ROOT/.env" deny "$ROOT"
 expect ".env.local の Edit は deny" Edit "$ROOT/.env.local" deny "$ROOT"
 expect ".dev.vars の Read は deny" Read "$ROOT/apps/client/.dev.vars" deny "$ROOT"
+expect "*.pem の Read は deny" Read "$ROOT/keys/server.pem" deny "$ROOT"
+expect "*.pem の Edit は deny" Edit "$ROOT/server.PEM" deny "$ROOT"
 expect ".env.example は素通り" Read "$ROOT/.env.example" "" "$ROOT"
 expect "Grep で .env を名指しすると deny" Grep "$ROOT/.env" deny "$ROOT" path
 expect "Grep の通常パスは素通り" Grep "$ROOT/apps" "" "$ROOT" path

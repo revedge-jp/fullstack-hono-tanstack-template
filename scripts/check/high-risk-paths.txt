@@ -1,0 +1,17 @@
+# 高リスク領域のパス一覧（bash の case パターン、1 行に 1 パターン）。認証・テナント境界・外部連携・マイグレーションに
+# 効く変更は、ユーザーの確認を待たずに auto-merge する代わりに、PR に `e2e` ラベルと本文の `## 高リスク領域の確認` を求める。
+# 読むのは .github/workflows/review-converged.yml の「高リスク領域の確認」（判定は scripts/check/is-verifier-path.sh、
+# base 側の一覧を使う）。ここにパスを足すのは、その領域の PR に追加の証跡を求める側へ倒す変更。
+# ライブラリ直下の features/*/ ではなく、プロダクトに合わせて決済・外部連携の領域をここへ足す（テンプレートは auth だけ持つ）
+# マイグレーションとスキーマ
+packages/database/drizzle/*
+packages/database/src/schema/auth.ts
+# 認証・権限
+apps/api-service/src/features/auth/*
+apps/api-service/src/middlewares/*
+# 開発専用の認証（任意ユーザーのセッションを発行できる特権ヘルパー。本番に出ない設計の維持が前提）
+apps/api-service/src/integrations/external/dev-auth.ts
+apps/api-service/src/routes/dev-auth/*
+# 外部サービス連携の設定（認証の設定）と、環境変数の読み込み
+apps/api-service/src/integrations/external/auth.ts
+apps/api-service/src/config.ts
