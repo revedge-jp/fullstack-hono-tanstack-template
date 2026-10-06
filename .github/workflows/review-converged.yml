@@ -58,7 +58,13 @@ jobs:
           # ものであるときだけ外す。
           # 注意: エージェントが bot トークンで PR を作る運用（claude-code-action 等）を導入するなら、
           # その bot はこのゲートが本来止めたい対象なので、除外を renovate[bot] だけに絞ること。
-          if [[ "$AUTHOR" == *'[bot]' ]] && ! git log --format='%an' HEAD^1..HEAD^2 | grep -qv '\[bot\]$'; then
+          # merge commit（「Update branch」）は除いて数え、コミットが 0 件のときは対象外にしない（0 件だと grep が成立して素通りする）。
+          # 作者名は自己申告なので、これは依存更新 bot の PR を通すための緩和で、悪意への防御ではない
+          bot_commits_only() {
+            [ -n "$(git log --no-merges --format='%an' HEAD^1..HEAD^2)" ] &&
+              ! git log --no-merges --format='%an' HEAD^1..HEAD^2 | grep -qv '\[bot\]$'
+          }
+          if [[ "$AUTHOR" == *'[bot]' ]] && bot_commits_only; then
             echo "bot のコミットだけの PR は対象外"; exit 0
           fi
           # 判定には base 側（HEAD^1）の判定スクリプトと一覧を使う。PR 側のものを使うと、同じ PR で
@@ -79,11 +85,15 @@ jobs:
           fi
           # --no-renames で移動元と移動先の両方を出す。移動先の名前だけだと、knip.json → knip.disabled.json の
           # ような名前を変えただけの実質削除が一覧に当たらない
-          changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
-          [ -z "$changed" ] && { echo "変更なし"; exit 0; }
+          # -z と core.quotepath=off で、日本語・空白を含む名前も 1 つのパスのまま渡す（$(git diff --name-only) の展開では、
+          # 引用・エスケープされたり分かれたりして一覧に当たらない）。いったんファイルに書くのは、プロセス置換だと
+          # git の失敗が捨てられて「変更なし」に見え、素通りするため
+          git -c core.quotepath=off diff --no-renames -z --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed.z"
+          changed=()
+          while IFS= read -r -d '' file; do changed+=("$file"); done < "$RUNNER_TEMP/changed.z"
+          [ "${#changed[@]}" -eq 0 ] && { echo "変更なし"; exit 0; }
           failed=0
-          # shellcheck disable=SC2086
-          if hits=$(bash "$checker/is-verifier-path.sh" $changed); then
+          if hits=$(bash "$checker/is-verifier-path.sh" "${changed[@]}"); then
             echo "検証器に当たる変更:"
             while IFS= read -r hit; do echo "  • $hit"; done <<< "$hits"
             if printf '%s' "$PR_BODY" | grep -q '^## 検証器の変更理由'; then
@@ -97,8 +107,7 @@ jobs:
           fi
           # 高リスク領域（認証・テナント境界・マイグレーション等）は、ユーザーの確認を待たずに auto-merge する代わりに、
           # `e2e` ラベル（全 spec をその PR で回す）と本文の確認節を求める。有無だけを検査し、中身は ship.md の責任
-          # shellcheck disable=SC2086
-          if risk=$(VERIFIER_PATHS_FILE="$checker/high-risk-paths.txt" bash "$checker/is-verifier-path.sh" $changed); then
+          if risk=$(VERIFIER_PATHS_FILE="$checker/high-risk-paths.txt" bash "$checker/is-verifier-path.sh" "${changed[@]}"); then
             echo "高リスク領域に当たる変更:"
             while IFS= read -r hit; do echo "  • $hit"; done <<< "$risk"
             if ! printf '%s' "$LABELS_JSON" | jq -e 'index("e2e")' >/dev/null; then
