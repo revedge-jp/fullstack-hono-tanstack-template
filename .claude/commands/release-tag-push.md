@@ -35,7 +35,7 @@ gh run list --branch main --limit 3 --json databaseId,name,status,conclusion,hea
 ```
 
 直近の `CI Pipeline` と `Deploy`（staging）が `success` であることを確かめる。失敗・実行中のときは
-タグを打たずにユーザーへ報告する（壊れた状態を本番にも出してしまうため）。
+タグを打たずにユーザーへ報告する（失敗している状態を本番にも出してしまうため）。
 
 ### 4. バージョンの決定
 
