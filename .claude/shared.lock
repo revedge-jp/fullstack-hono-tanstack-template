@@ -1,0 +1,7 @@
+# 共有の .claude ファイルの取り込み元（scripts/sync-shared-claude.sh が読む）。直すときは revedge-jp/claude-plugins で直す
+repo=revedge-jp/claude-plugins
+ref=0029b29885416e0f3f05bef24b7eb0e685acf552
+file=.claude/hooks/on-schema-change.sh
+file=.claude/hooks/on-review-command.sh
+file=.claude/agents/implementer.md
+file=.claude/commands/review-pr.md

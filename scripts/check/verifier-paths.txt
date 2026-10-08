@@ -49,3 +49,9 @@ REVIEW.md
 # レビュアー②が読む手順と、③（Codex）の実行スクリプト
 .claude/commands/codex-review.md
 scripts/dev/codex-review.sh
+# 共有の .claude ファイルの取り込み（手で直すと CI が落ちる仕組みそのもの）
+.claude/shared.lock
+.claude/shared.manifest
+scripts/sync-shared-claude.sh
+scripts/sync-shared-claude.selftest.sh
+scripts/lib/shared-claude-lock.sh

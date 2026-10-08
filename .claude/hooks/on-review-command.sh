@@ -2,7 +2,7 @@
 # /code-review・/security-review は $CLAUDE_PROJECT_DIR の現在ブランチを対象にする。
 # worktree で実装した内容はそこに存在しないため、対象を明示しないと【別のブランチが
 # 黙ってレビューされる】。エラーにはならず無関係な指摘が返るだけなので、結果を読むまで
-# 気づけない（実際に繰り返し起きた事故）。
+# 気づけない。
 #
 # 引数に PR 番号があれば安全（レビュー側が GitHub から差分を取る）。無い場合だけ、
 # worktree が存在するかを見て警告を出す。
@@ -40,7 +40,7 @@ if [ -z "$OTHER_WORKTREES" ]; then
   exit 0
 fi
 
-BRANCH_LIST=$(printf '%s' "$OTHER_WORKTREES" | paste -sd ', ' -)
+BRANCH_LIST=$(printf '%s' "$OTHER_WORKTREES" | paste -sd ',' - | sed 's/,/, /g')
 
 jq -n --arg current "$CURRENT_BRANCH" --arg others "$BRANCH_LIST" '{
   hookSpecificOutput: {
@@ -51,11 +51,10 @@ jq -n --arg current "$CURRENT_BRANCH" --arg others "$BRANCH_LIST" '{
       + " ブランチ（メインの作業ディレクトリ）が対象になる。"
       + "**直前にやっていた作業がこのブランチのものか、起動前に確かめること。**"
       + "worktree でも作業している場合、そちらの実装はここには存在せず、"
-      + "エラーも出ないまま無関係なブランチがレビューされる（実際に発生した事故）。"
+      + "エラーも出ないまま無関係なブランチがレビューされる。"
       + "別ブランチの例: " + $others + " 等。"
       + "対象がずれているなら `/code-review <level> <PR番号>` で明示する"
-      + "（PR が無ければ Draft で先に作る）。詳細は .claude/rules/general.md の"
-      + "「worktree で作業した実装のレビュー・検証」。"
+      + "（PR が無ければ Draft で先に作る）。詳細は .claude/rules/general.md。"
     )
   }
 }'
