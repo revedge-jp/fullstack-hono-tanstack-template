@@ -1,0 +1,6 @@
+# scripts/sync-shared-claude.sh が生成する。手で直さない
+# source=revedge-jp/claude-plugins@04df5e8c2e2d41f1be8d13beb875ae9b7a9cb370
+76d7636239e07b095124dca111714aba77dae5e9 .claude/agents/implementer.md
+73e4bc03d440b72d061b4f0525f36255db04122b .claude/commands/review-pr.md
+b3b8fd81b52e59e6a931c995f076dc6cbdeb48cd .claude/hooks/on-review-command.sh
+ff73d684e9eb76066bb4cf98acce5ba66302a628 .claude/hooks/on-schema-change.sh

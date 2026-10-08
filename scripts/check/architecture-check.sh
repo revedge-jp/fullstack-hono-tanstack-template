@@ -4,7 +4,7 @@ set -euo pipefail
 # Options:
 #  - CI=true or CI_MODE=1 : 簡素(機械可読寄り)出力
 #  - NO_COLOR: 色無し
-#  - SKIP_FSD=1 / SKIP_DEPS=1 / SKIP_DC=1 / SKIP_GUARDS=1 / SKIP_KNIP=1 / SKIP_DUP=1 / SKIP_INSTRUCTIONS=1 / SKIP_FILENAME=1 / SKIP_PROCESS_ENV=1 / SKIP_SELFTEST=1 : 各チェックをスキップ
+#  - SKIP_FSD=1 / SKIP_DEPS=1 / SKIP_DC=1 / SKIP_GUARDS=1 / SKIP_KNIP=1 / SKIP_DUP=1 / SKIP_INSTRUCTIONS=1 / SKIP_SHARED_CLAUDE=1 / SKIP_SHARED_CLAUDE_SELFTEST=1 / SKIP_SYNC_SHARED_CLAUDE_SELFTEST=1 / SKIP_FILENAME=1 / SKIP_PROCESS_ENV=1 / SKIP_SELFTEST=1 : 各チェックをスキップ
 
 if [ "${CI:-}" = "true" ] || [ "${CI_MODE:-0}" = "1" ]; then PRETTY=0; else PRETTY=1; fi
 if [ -n "${NO_COLOR:-}" ] || [ "$PRETTY" = "0" ] || [ ! -t 1 ]; then
@@ -120,6 +120,26 @@ else
   warn "指示ファイルチェックは SKIP_INSTRUCTIONS=1 によりスキップ"
 fi
 
+# 8b) 共有の .claude ファイル(.claude/shared.lock)が取り込んだ版のままか(ネットワーク不使用)
+if [ "${SKIP_SHARED_CLAUDE:-0}" != "1" ]; then
+  run_step_bg "SharedClaude" bun run check:shared-claude
+else
+  warn "共有の .claude ファイルチェックは SKIP_SHARED_CLAUDE=1 によりスキップ"
+fi
+
+# 共有の .claude ファイルの自己テスト2本は mktemp の中だけで動くので並列でよい
+if [ "${SKIP_SHARED_CLAUDE_SELFTEST:-0}" != "1" ]; then
+  run_step_bg "SharedClaudeSelftest" bun run check:shared-claude:selftest
+else
+  warn "共有の .claude ファイルチェックの自己テストは SKIP_SHARED_CLAUDE_SELFTEST=1 によりスキップ"
+fi
+
+if [ "${SKIP_SYNC_SHARED_CLAUDE_SELFTEST:-0}" != "1" ]; then
+  run_step_bg "SyncSharedClaudeSelftest" bun run sync-shared-claude:selftest
+else
+  warn "共有の .claude ファイル同期の自己テストは SKIP_SYNC_SHARED_CLAUDE_SELFTEST=1 によりスキップ"
+fi
+
 # 9) ファイル名の kebab-case と api-service の process.env 直参照。check-all(pre-push)にもあるが、
 #    pre-push を通らない変更(Web 上の編集・--no-verify)を CI で止めるためにここでも回す
 if [ "${SKIP_FILENAME:-0}" != "1" ]; then
@@ -190,7 +210,7 @@ show_fail_detail() {
     Deps)
       tail -n 50 "$out_file" | sed -e 's/^/  • /'
       ;;
-    Selftest)
+    Selftest|SharedClaude|SharedClaudeSelftest|SyncSharedClaudeSelftest)
       { grep -F "❌" "$out_file" || true; } | sed -e 's/^/  • /'
       ;;
     *)
@@ -209,6 +229,9 @@ Dup:重複(jscpd)
 MigrationOrder:migration journal 順序
 MigrationSafety:マイグレーションの expand / contract
 Instructions:指示ファイルの参照整合
+SharedClaude:共有の .claude ファイル
+SharedClaudeSelftest:共有の .claude ファイルチェックの自己テスト
+SyncSharedClaudeSelftest:共有の .claude ファイル同期の自己テスト
 ScriptTests:scripts のテスト
 Filename:ファイル名(kebab-case)
 ProcessEnv:api-service の process.env 直参照

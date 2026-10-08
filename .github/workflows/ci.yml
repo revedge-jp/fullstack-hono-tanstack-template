@@ -167,6 +167,11 @@ jobs:
           persist-credentials: false
       - name: 指示ファイルの参照整合
         run: node scripts/check/instruction-files.mjs
+      # 共有の .claude ファイルが取り込んだ版のままか（scripts/check/check-shared-claude.sh）。lock・manifest や
+      # .claude/** だけを変える PR は ci ジョブが開かず architecture-check が走らないので、ここで見る。
+      # git と bash だけで動くので bun install は不要
+      - name: 共有の .claude ファイル
+        run: bash scripts/check/check-shared-claude.sh
       - uses: ./.github/actions/setup-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
