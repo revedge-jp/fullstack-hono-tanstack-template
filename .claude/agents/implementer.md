@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: 設計済みのプラン（`ai-plan/` のファイル）を受け取り、その順番どおりに実装する。設計の判断はしない。/start-dev・/next-issue の設計のあと、メインのセッションから呼ぶ。
+description: 設計済みのプラン（`ai-plan/` のファイル）を受け取り、その順番どおりに実装する。設計の判断はしない。/start-dev などで設計したあと、メインのセッションから呼ぶ。
 model: sonnet
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
