@@ -197,9 +197,11 @@ export function releaseAfterResponse(
 // TanStack Start の SSR ハンドラ(@tanstack/start-server-core createStartHandler.js の
 // executeRouter)は、Accept に "*/*" も "text/html" も含まないページ要求
 // (例: Accept: application/json で /graphql を探るスキャナ)に
-// {"error":"Only HTML requests are supported here"} を **500** で返す。5xx はエラー監視を
-// 鳴らすので、SSR へ渡す前に 404 で返すための判定。Accept の判定は上流の写し(未指定は
-// "*/*" 扱い、各要素の先頭一致)なので、上流を更新したら突き合わせること。
+// {"error":"Only HTML requests are supported here"} を 406 で返す(1.0 より前は 500)。
+// 406 になってもここで先に返すのは、スキャナの要求ごとに initHonoApp(postgres.js クライアントの
+// 生成)を走らせないため。ステータスは存在しないページと同じ 404 にしている。
+// Accept の判定は上流の写し(未指定は "*/*" 扱い。上流の正規表現 /(^|,)\s*(\*\/\*|text\/html)/ は
+// カンマで区切った各要素の先頭一致と同じ)なので、上流を更新したら突き合わせること。
 // /api/* は Hono、/_serverFn/* は serverFn 経路(Accept は application/json 等)なので対象外。
 // 前提: server route(routes/*.tsx の `server.handlers`)を /api/ の外に置いていない。上流では
 // その handlers は Accept 判定より前に実行されるため、置くならここで除外に加えること。
@@ -281,6 +283,90 @@ export default {
       );
     } catch (e) {
       waitUntil(cleanup());
+      return respondToSsrError(e, { requestId, isProd, aborted: request.signal.aborted });
+    }
+  },
+};
+
+// 1.0（1.169）から createStartHandler のハンドラは元の例外を再送出する（以前は h3 の toResponse で 500 の
+// JSON にしていた）。上流が勧める handleStartError(error) は使わない: ステータスを持たない例外を生の
+// console.error で出す（DrizzleQueryError のバインド値が $metadata.error に載る）うえ、ここは Start の
+// リクエストスコープの外なので helper の状態も引き継げない。createServerEntry で包む形も、fetch に
+// request と requestOpts しか渡さず env / ctx が落ちるので使えない。振り分けは上流の
+// getErrorStatus（status → statusCode → cause.status → cause.statusCode）に合わせて自前で行う。
+type SsrErrorKind =
+  | { kind: "response"; response: Response }
+  | { kind: "aborted" }
+  | { kind: "client-error"; status: number }
+  | { kind: "server-error" };
+
+function readStatusProperty(value: unknown, key: "status" | "statusCode"): number | undefined {
+  if (typeof value !== "object" || value === null || !(key in value)) {
+    return undefined;
+  }
+  const property: unknown = Reflect.get(value, key);
+  const status = typeof property === "string" ? Number.parseInt(property, 10) : property;
+  return typeof status === "number" && Number.isInteger(status) ? status : undefined;
+}
+
+export function readErrorStatus(e: unknown): number | undefined {
+  const cause = typeof e === "object" && e !== null ? Reflect.get(e, "cause") : undefined;
+  return (
+    readStatusProperty(e, "status") ??
+    readStatusProperty(e, "statusCode") ??
+    readStatusProperty(cause, "status") ??
+    readStatusProperty(cause, "statusCode")
+  );
+}
+
+export function classifySsrError(e: unknown, aborted: boolean): SsrErrorKind {
+  if (e instanceof Response) {
+    return { kind: "response", response: e };
+  }
+  // 1.169 はクライアントの切断で request.signal.reason を投げる。異常ではないので 5xx として数えない
+  if (aborted) {
+    return { kind: "aborted" };
+  }
+  const status = readErrorStatus(e);
+  if (status !== undefined && status >= 400 && status <= 499) {
+    return { kind: "client-error", status };
+  }
+  return { kind: "server-error" };
+}
+
+export function respondToSsrError(
+  e: unknown,
+  { requestId, isProd, aborted }: { requestId: string; isProd: boolean; aborted: boolean },
+): Response {
+  const classified = classifySsrError(e, aborted);
+  switch (classified.kind) {
+    case "response": {
+      const { response } = classified;
+      if (response.status >= 500) {
+        serverLogger.error({ requestId, status: response.status }, "ssr thrown error response");
+      }
+      return withSecurityHeaders(response, isProd, requestId);
+    }
+    case "aborted": {
+      serverLogger.info({ requestId }, "ssr request aborted by client");
+      // 送り先は切断済みで届かない。nginx の慣習に合わせて 499 にしておく
+      return new Response(null, { status: 499 });
+    }
+    case "client-error": {
+      const { status } = classified;
+      serverLogger.warn({ requestId, status, reason: stringifyErrorSafe(e) }, "ssr client error");
+      return withSecurityHeaders(
+        new Response(
+          isProd ? `Error (requestId: ${requestId})` : `Error: ${stringifyErrorSafe(e)}`,
+          {
+            status,
+          },
+        ),
+        isProd,
+        requestId,
+      );
+    }
+    case "server-error": {
       // API 側の pino ログと突き合わせられるよう、requestId 付きの構造化ログで出力する
       serverLogger.error(
         { requestId, err: stringifyErrorSafe(e), causeCode: readCauseCode(e), stack: safeStack(e) },
@@ -291,5 +377,5 @@ export default {
         : `Error: ${safeStack(e) ?? stringifyErrorSafe(e)}`;
       return withSecurityHeaders(new Response(body, { status: 500 }), isProd, requestId);
     }
-  },
-};
+  }
+}
