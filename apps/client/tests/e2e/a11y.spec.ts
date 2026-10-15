@@ -52,7 +52,15 @@ test.describe("アクセシビリティ (axe-core, WCAG 2.2 AA)", () => {
       await item.getByRole("button", { name: "削除" }).click();
       await expect(page.getByRole("alertdialog", { name: "タスクの削除" })).toBeVisible();
       // 表示アニメーションの途中は不透明度が低く、背景と混ざった色でコントラストを測ってしまう
-      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+      // 終わらないアニメーション（スピナー等）は待たず、途中で取り消されても落とさない
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+            .map((a) => a.finished.catch(() => undefined)),
+        ),
+      );
       expect(await scanPage(page)).toEqual([]);
     } finally {
       await user?.cleanup();

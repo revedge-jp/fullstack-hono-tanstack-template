@@ -418,6 +418,16 @@ describe("SSR ハンドラが再送出した例外の振り分け", () => {
     expect(readErrorStatus("plain string")).toBeUndefined();
   });
 
+  test("HTTP のステータスとして成り立たない値は読み飛ばし、後ろの statusCode を使う", () => {
+    expect(readErrorStatus(Object.assign(new Error("x"), { status: 0, statusCode: 404 }))).toBe(
+      404,
+    );
+    expect(
+      readErrorStatus(Object.assign(new Error("x"), { status: "403abc", statusCode: 401 })),
+    ).toBe(401);
+    expect(readErrorStatus(Object.assign(new Error("x"), { status: "403" }))).toBe(403);
+  });
+
   test("クライアントの切断(request.signal が中断済み)は 5xx として扱わない", () => {
     const reason = new DOMException("The operation was aborted.", "AbortError");
     expect(classifySsrError(reason, true)).toEqual({ kind: "aborted" });

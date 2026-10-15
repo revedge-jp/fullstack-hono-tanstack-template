@@ -283,7 +283,13 @@ export default {
       );
     } catch (e) {
       waitUntil(cleanup());
-      return respondToSsrError(e, { requestId, isProd, aborted: request.signal.aborted });
+      // 切断で投げられるのは signal.reason そのもの。切断と同時に起きた本物の障害を 499 に隠さないよう同一性で見る
+      const aborted = request.signal.aborted && e === request.signal.reason;
+      // 古いタブ検知の基準（Server-Timing）はエラー応答にも付ける。表示される 4xx でも基準が取れるように
+      return withAppVersionTiming(
+        respondToSsrError(e, { requestId, isProd, aborted }),
+        appVersionFromEnv(env),
+      );
     }
   },
 };
@@ -305,8 +311,11 @@ function readStatusProperty(value: unknown, key: "status" | "statusCode"): numbe
     return undefined;
   }
   const property: unknown = Reflect.get(value, key);
-  const status = typeof property === "string" ? Number.parseInt(property, 10) : property;
-  return typeof status === "number" && Number.isInteger(status) ? status : undefined;
+  const status = typeof property === "string" && property.trim() ? Number(property) : property;
+  // HTTP のステータスとして成り立つ値だけ読む。ドライバ等の status / code に入る 0 や -1 に後ろの statusCode を隠されない
+  return typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+    ? status
+    : undefined;
 }
 
 export function readErrorStatus(e: unknown): number | undefined {
