@@ -5,8 +5,11 @@ import { createInProcessApiClient, getApiClient } from "@/shared/lib/api-client"
 import server, {
   appVersionFromEnv,
   isNonHtmlPageRequest,
+  classifySsrError,
   isProductionEnv,
+  readErrorStatus,
   releaseAfterResponse,
+  respondToSsrError,
   renderWithInProcessApi,
   withForwardedSetCookies,
   withAppVersionTiming,
@@ -132,8 +135,8 @@ describe("設定の不備（initHonoApp の throw）", () => {
   });
 });
 
-// TanStack Start はこの Accept のページ要求に 500 を返し、エラー監視を鳴らす。SSR へ渡す前に
-// 404 で返す。404 の経路は Hono アプリ初期化前に return するので DB なしで叩ける。
+// TanStack Start はこの Accept のページ要求に 406 を返す(1.0 より前は 500)。Hono アプリ(postgres.js
+// クライアント)を作らずに済むよう、SSR へ渡す前に 404 で返す。404 の経路は Hono アプリ初期化前に return するので DB なしで叩ける。
 // 通す側(SSR / Hono へ進む)は DB が要るので、判定関数を直接検証する。
 describe("HTML を受け付けないページリクエスト(スキャナの Accept: application/json)", () => {
   test.each(["/graphql", "/v2/_catalog"])(
@@ -159,7 +162,7 @@ describe("HTML を受け付けないページリクエスト(スキャナの Acc
     expect(isNonHtmlPageRequest(path, "application/json")).toBe(false);
   });
 
-  test("image/* だけの Accept は対象(上流は text/html も */* も含まないと 500)", () => {
+  test("image/* だけの Accept は対象(上流は text/html も */* も含まないと 406)", () => {
     expect(isNonHtmlPageRequest("/favicon.ico", "image/avif,image/webp")).toBe(true);
   });
 });
@@ -377,5 +380,75 @@ describe("isProductionEnv（SSR のエラー本文・CSP・HSTS の切り替え�
   test("development / test と明示したときだけ開発扱い", () => {
     expect(isProductionEnv({ NODE_ENV: "development" })).toBe(false);
     expect(isProductionEnv({ NODE_ENV: "test" })).toBe(false);
+  });
+});
+
+// TanStack Start 1.0 から createStartHandler のハンドラは元の例外を再送出する。4xx 相当の例外や
+// クライアントの切断まで 500 と error ログ(ssr unhandled error)にしないための振り分け。
+describe("SSR ハンドラが再送出した例外の振り分け", () => {
+  const options = { requestId: "req-ssr", isProd: true, aborted: false };
+
+  test("投げられた Response はそのステータスのまま、セキュリティヘッダーを付けて返す", async () => {
+    const res = respondToSsrError(new Response("gone", { status: 410 }), options);
+    expect(res.status).toBe(410);
+    expect(await res.text()).toBe("gone");
+    expect(res.headers.get("x-request-id")).toBe("req-ssr");
+    expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
+  });
+
+  test.each([
+    [{ status: 404 }, 404],
+    [{ statusCode: "403" }, 403],
+    [{ cause: { status: 401 } }, 401],
+    [{ cause: { statusCode: 429 } }, 429],
+  ])("4xx のステータスを持つ例外 %j はそのステータスで返す", (props, status) => {
+    const error = Object.assign(new Error("http error"), props);
+    expect(classifySsrError(error, false)).toEqual({ kind: "client-error", status });
+    const res = respondToSsrError(error, options);
+    expect(res.status).toBe(status);
+    expect(res.headers.get("x-request-id")).toBe("req-ssr");
+  });
+
+  test("ステータスの読む順は上流の getErrorStatus と同じ(status が statusCode と cause より先)", () => {
+    expect(readErrorStatus(Object.assign(new Error("x"), { status: 400, statusCode: 500 }))).toBe(
+      400,
+    );
+    expect(readErrorStatus(Object.assign(new Error("x"), { cause: { status: 418 } }))).toBe(418);
+    expect(readErrorStatus(new Error("x"))).toBeUndefined();
+    expect(readErrorStatus("plain string")).toBeUndefined();
+  });
+
+  test("HTTP のステータスとして成り立たない値は読み飛ばし、後ろの statusCode を使う", () => {
+    expect(readErrorStatus(Object.assign(new Error("x"), { status: 0, statusCode: 404 }))).toBe(
+      404,
+    );
+    expect(
+      readErrorStatus(Object.assign(new Error("x"), { status: "403abc", statusCode: 401 })),
+    ).toBe(401);
+    expect(readErrorStatus(Object.assign(new Error("x"), { status: "403" }))).toBe(403);
+  });
+
+  test("クライアントの切断(request.signal が中断済み)は 5xx として扱わない", () => {
+    const reason = new DOMException("The operation was aborted.", "AbortError");
+    expect(classifySsrError(reason, true)).toEqual({ kind: "aborted" });
+    expect(respondToSsrError(reason, { ...options, aborted: true }).status).toBe(499);
+  });
+
+  test.each([
+    [new Error("boom")],
+    [Object.assign(new Error("unavailable"), { status: 503 })],
+    [undefined],
+  ])("ステータスの無い例外・5xx の例外 %p は 500 を返す", async (error) => {
+    expect(classifySsrError(error, false)).toEqual({ kind: "server-error" });
+    const res = respondToSsrError(error, options);
+    expect(res.status).toBe(500);
+    expect(await res.text()).toBe("Internal Server Error (requestId: req-ssr)");
+  });
+
+  test("本番の 4xx の本文に例外のメッセージを出さない(DB 由来の値を含みうる)", async () => {
+    const error = Object.assign(new Error("params: secret@example.com"), { status: 400 });
+    const body = await respondToSsrError(error, options).text();
+    expect(body).not.toContain("secret@example.com");
+    expect(body).toContain("req-ssr");
   });
 });
