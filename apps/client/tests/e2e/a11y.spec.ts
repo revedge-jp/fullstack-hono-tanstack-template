@@ -51,6 +51,8 @@ test.describe("アクセシビリティ (axe-core, WCAG 2.2 AA)", () => {
       // 削除の確認ダイアログを開いた状態（フォーカスの閉じ込め・ダイアログの名前・コントラスト）
       await item.getByRole("button", { name: "削除" }).click();
       await expect(page.getByRole("alertdialog", { name: "タスクの削除" })).toBeVisible();
+      // 表示アニメーションの途中は不透明度が低く、背景と混ざった色でコントラストを測ってしまう
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
       expect(await scanPage(page)).toEqual([]);
     } finally {
       await user?.cleanup();
