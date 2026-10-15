@@ -19,6 +19,15 @@ pre-commit:
       glob: "*.{js,ts,cjs,mjs,jsx,tsx,json,jsonc,css}"
       run: bunx oxfmt --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
+    # シークレットの誤コミットを push 前に止める（GitHub Secret Protection の代替。CI の secret-scan が最終防衛線）。
+    # 未導入なら警告だけ出して通す（`brew install gitleaks`）。CI 側で必ず検出される。
+    3_gitleaks:
+      run: |
+        if command -v gitleaks >/dev/null 2>&1; then
+          gitleaks git --staged --redact --no-banner
+        else
+          echo "⚠️  gitleaks が未導入のためシークレット検査をスキップします: brew install gitleaks"
+        fi
 
 # Conventional Commits の検証（規約は commitlint.config.mjs）
 commit-msg:
