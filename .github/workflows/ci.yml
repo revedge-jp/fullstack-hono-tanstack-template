@@ -529,12 +529,35 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # シークレットの誤コミット検知。GitHub の Secret Protection(private で月 $19/コミッター)の代わりに
+  # gitleaks を使う。push 前の止め役は lefthook の pre-commit、これは回避された場合の最終防衛線。
+  # gitleaks-action は組織利用でライセンスが要るため、リリースバイナリを sha256 検証して直接使う。
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: Scan commits
+        run: ./gitleaks git --redact --no-banner --verbose
+
   # docs/.md のみの変更でもステータスを報告するためのジョブ
   # GitHub Rulesetで "CI Pipeline" が必須チェックになっているため
   ci-status:
     name: CI Pipeline
     runs-on: ubuntu-slim
-    needs: [changes, ci, api-service-integration-tests, e2e-tests, instructions]
+    needs: [changes, ci, api-service-integration-tests, e2e-tests, instructions, secret-scan]
     if: always()
     timeout-minutes: 5
     steps:
@@ -550,6 +573,13 @@ jobs:
           echo "Detect changes result: $changes_result"
           if [[ "$changes_result" != "success" ]]; then
             echo "::error::Detect Changes did not succeed (result: $changes_result)"
+            fail=1
+          fi
+          # secret-scan も常に走るジョブ。skipped は「検査していない」ので failure と同じく赤にする
+          secret_scan_result="${{ needs.secret-scan.result }}"
+          echo "Secret scan result: $secret_scan_result"
+          if [[ "$secret_scan_result" != "success" ]]; then
+            echo "::error::Secret Scan did not succeed (result: $secret_scan_result)"
             fail=1
           fi
           for entry in \
