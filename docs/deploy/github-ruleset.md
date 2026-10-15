@@ -16,7 +16,7 @@ gh auth login          # 未認証の場合
 ```
 
 > [!NOTE]
-> **プランによる制約**: Ruleset と auto-merge は public リポジトリまたは GitHub Pro 以上のプランでのみ利用できます。private + Free プランの場合、スクリプトは該当項目をスキップして案内を出します（API はエラーを返さずに無視するものもあるため、スクリプトは適用後の実値を確認して報告します）。Secret scanning は private リポジトリでは GitHub Advanced Security が必要です。
+> **プランによる制約**: Ruleset と auto-merge は public リポジトリまたは GitHub Pro 以上のプランでのみ利用できます。private + Free プランの場合、スクリプトは該当項目をスキップして案内を出します（API はエラーを返さずに無視するものもあるため、スクリプトは適用後の実値を確認して報告します）。Secret scanning は private では有料（GitHub Secret Protection）のため有効化せず、gitleaks で代替します。
 
 ## このテンプレートが適用する設定
 
@@ -69,8 +69,8 @@ gh auth login          # 未認証の場合
 
 | 設定 | 状態 | 効果 |
 |------|------|------|
-| Secret scanning | ✅ 有効 | シークレット（APIキー等）の誤コミットを検知 |
-| Secret scanning push protection | ✅ 有効 | シークレットを含むプッシュをブロック |
+| Secret scanning | public のみ有効 | private は有料のため gitleaks（pre-commit + CI `secret-scan`）で代替 |
+| Secret scanning push protection | public のみ有効 | 同上 |
 | Dependabot security updates | ✅ 有効 | 脆弱性のある依存関係の自動更新PR作成 |
 | Vulnerability alerts | ✅ 有効 | 脆弱性アラートを通知 |
 

@@ -166,8 +166,7 @@ fi
 
 # -----------------------------------------------------------------------------
 # 3. セキュリティ設定
-#    secret scanning は private リポジトリでは GitHub Advanced Security が必要なため、
-#    失敗しても警告に留める（public リポジトリでは無料で有効化できる）
+#    secret scanning は public のみ有効化する（private は有料のため gitleaks で代替）
 # -----------------------------------------------------------------------------
 echo ""
 echo "=== 3/4 セキュリティ設定 ==="
@@ -180,7 +179,12 @@ gh api "repos/${REPO}/automated-security-fixes" --method PUT > /dev/null 2>&1 \
   && echo "✅ Dependabot security updates を有効化しました" \
   || echo "⚠️  Dependabot security updates の有効化に失敗しました（権限を確認してください）"
 
-if gh api "repos/${REPO}" --method PATCH --input - > /dev/null 2>&1 << 'EOF'
+# private では有効化しない: Secret Protection は private で月 $19/コミッターの課金が発生する。
+# 代わりに gitleaks（lefthook の pre-commit と CI の secret-scan）で検知する。
+IS_PRIVATE=$(gh api "repos/${REPO}" --jq '.private' 2>/dev/null || echo "unknown")
+if [ "$IS_PRIVATE" != "false" ]; then
+  echo "ℹ️  private リポジトリ（または可視性を取得できない）ため Secret scanning は有効化しません（課金対象）。gitleaks（pre-commit + CI）で検知します"
+elif gh api "repos/${REPO}" --method PATCH --input - > /dev/null 2>&1 << 'EOF'
 {
   "security_and_analysis": {
     "secret_scanning": { "status": "enabled" },
@@ -189,10 +193,9 @@ if gh api "repos/${REPO}" --method PATCH --input - > /dev/null 2>&1 << 'EOF'
 }
 EOF
 then
-  echo "✅ Secret scanning + push protection を有効化しました"
+  echo "✅ Secret scanning + push protection を有効化しました（public は無料）"
 else
   echo "⚠️  Secret scanning の有効化に失敗しました"
-  echo "    private リポジトリでは GitHub Advanced Security の契約が必要です。"
   echo "    Web UI: https://github.com/${REPO}/settings/security_analysis"
 fi
 
