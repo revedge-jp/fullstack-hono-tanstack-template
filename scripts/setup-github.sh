@@ -181,8 +181,9 @@ gh api "repos/${REPO}/automated-security-fixes" --method PUT > /dev/null 2>&1 \
 
 # private では有効化しない: Secret Protection は private で月 $19/コミッターの課金が発生する。
 # 代わりに gitleaks（lefthook の pre-commit と CI の secret-scan）で検知する。
-if [ "$(gh api "repos/${REPO}" --jq '.private')" = "true" ]; then
-  echo "ℹ️  private リポジトリのため Secret scanning は有効化しません（課金対象）。gitleaks（pre-commit + CI）で検知します"
+IS_PRIVATE=$(gh api "repos/${REPO}" --jq '.private' 2>/dev/null || echo "unknown")
+if [ "$IS_PRIVATE" != "false" ]; then
+  echo "ℹ️  private リポジトリ（または可視性を取得できない）ため Secret scanning は有効化しません（課金対象）。gitleaks（pre-commit + CI）で検知します"
 elif gh api "repos/${REPO}" --method PATCH --input - > /dev/null 2>&1 << 'EOF'
 {
   "security_and_analysis": {

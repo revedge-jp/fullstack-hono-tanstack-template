@@ -529,8 +529,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # docs/.md のみの変更でもステータスを報告するためのジョブ
-  # GitHub Rulesetで "CI Pipeline" が必須チェックになっているため
   # シークレットの誤コミット検知。GitHub の Secret Protection(private で月 $19/コミッター)の代わりに
   # gitleaks を使う。push 前の止め役は lefthook の pre-commit、これは回避された場合の最終防衛線。
   # gitleaks-action は組織利用でライセンスが要るため、リリースバイナリを sha256 検証して直接使う。
@@ -554,6 +552,8 @@ jobs:
       - name: Scan commits
         run: ./gitleaks git --redact --no-banner --verbose
 
+  # docs/.md のみの変更でもステータスを報告するためのジョブ
+  # GitHub Rulesetで "CI Pipeline" が必須チェックになっているため
   ci-status:
     name: CI Pipeline
     runs-on: ubuntu-slim
@@ -575,12 +575,18 @@ jobs:
             echo "::error::Detect Changes did not succeed (result: $changes_result)"
             fail=1
           fi
+          # secret-scan も常に走るジョブ。skipped は「検査していない」ので failure と同じく赤にする
+          secret_scan_result="${{ needs.secret-scan.result }}"
+          echo "Secret scan result: $secret_scan_result"
+          if [[ "$secret_scan_result" != "success" ]]; then
+            echo "::error::Secret Scan did not succeed (result: $secret_scan_result)"
+            fail=1
+          fi
           for entry in \
             "Instruction files:${{ needs.instructions.result }}" \
             "CI checks:${{ needs.ci.result }}" \
             "Integration tests:${{ needs.api-service-integration-tests.result }}" \
-            "E2E tests:${{ needs.e2e-tests.result }}" \
-            "Secret scan:${{ needs.secret-scan.result }}"; do
+            "E2E tests:${{ needs.e2e-tests.result }}"; do
             name="${entry%%:*}"
             result="${entry##*:}"
             echo "$name result: $result"

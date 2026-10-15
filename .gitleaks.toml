@@ -3,20 +3,20 @@
 [extend]
 useDefault = true
 
-[allowlist]
-description = "テスト用ダミー値・CI のダミー環境変数・ドキュメント上の例は検知対象から外す"
+# 許可するのは generic-api-key（高エントロピー文字列の汎用検知）だけ。AWS・GitHub・Stripe 等の固有ルールは
+# テスト・workflows・docs でも効くので、実トークンの直書きはそこでも検知される。
+# 許可の範囲を広げる変更は検証器の変更として扱う（scripts/check/verifier-paths.txt）。
+[[allowlists]]
+description = "テスト用ダミー値・CI のダミー環境変数・ドキュメント上の例（generic-api-key のみ）"
+targetRules = ["generic-api-key"]
 paths = [
   # テストコードと補助（認証のダミー secret や固定トークンが入る）
   '''(^|/)(__tests__|test-helpers|test-auth)/''',
-  '''\.(test|int\.test|contract\.test|spec)\.[cm]?[jt]sx?$''',
+  '''\.(test|spec)\.[cm]?[jt]sx?$''',
   # CI のダミー環境変数（BETTER_AUTH_SECRET 等のテスト用の値）
   '''^\.github/workflows/''',
   # プレースホルダを置くファイルとドキュメント
   '''(^|/)\.env\.example$''',
   '''^README\.md$''',
   '''^docs/''',
-]
-regexes = [
-  # キー名の定数（値ではなく metadata のキー名）
-  '''TAX_RATE_METADATA_KEY''',
 ]
