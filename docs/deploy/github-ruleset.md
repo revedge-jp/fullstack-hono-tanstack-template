@@ -48,7 +48,7 @@ gh auth login          # 未認証の場合
   PR が最新 main と組み合わさって失敗するケースは、マージ後の main の CI の失敗で検出する（通知は GitHub の
   Actions 通知。staging デプロイは main の CI 成功後にしか実行されない）。public 化 / プラン変更後に
   スクリプトを再実行すれば queue が有効になる
-- PR は Draft で作り、`/code-review` が CONFIRMED ゼロで収束してから `gh pr ready` と
+- PR は Draft で作り、`/review-full` が CONFIRMED ゼロで収束してから `gh pr ready` と
   `gh pr merge --auto --squash` を打つ（`.claude/commands/ship.md`）。`Review converged`
   （`.github/workflows/review-converged.yml`、本文編集と Draft 解除でも再評価される）が本文の
   「レビュー収束:」行をチェックし、必須チェックなので記録が無い PR は auto-merge が発火しない。行の末尾の
@@ -163,7 +163,7 @@ https://github.com/{owner}/{repo}/settings/security_analysis
 ### PRがマージできない
 
 1. **CIが失敗している**: Actions タブでエラーを確認
-2. **main と衝突している**: rebase して push し直す（merge queue が最新の main に積んで CI を回すので、衝突が無ければ最新化は不要）
+2. **main と衝突している**: main をマージで取り込んで push し直す（rebase すると収束の記録の SHA が外れる。merge queue が最新の main に積んで CI を回すので、衝突が無ければ最新化は不要）
 3. **レビューが不足**: 必要なレビュー数を確認（現在は0名）
 
 ### Rulesetが適用されない

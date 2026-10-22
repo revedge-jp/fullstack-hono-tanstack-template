@@ -119,11 +119,11 @@ gh pr merge <番号> --auto --squash
 発火しない。ブランチの最新化は不要（merge queue があれば queue が「main に積んだ状態」で CI を
 1 回通してからマージし、無ければマージ後の main の CI が失敗を検出する。`docs/deploy/github-ruleset.md`）。
 有効化後は `gh pr view <番号> --json mergeable -q .mergeable` が `MERGEABLE` になることを確認する
-（`UNKNOWN` は未計算なので数秒待って再取得。`CONFLICTING` なら rebase して push し直す。
+（`UNKNOWN` は未計算なので数秒待って再取得。`CONFLICTING` なら main をマージで取り込んで（`git fetch origin && git merge origin/main`）push し直す。rebase はしない（収束を宣言した SHA が head の祖先から外れ、`Review converged` が落ちる）。衝突を解いたら、解いた部分を再レビューしてから収束の行の SHA を書き直す。
 衝突で止まった PR は CI が実行されず通知も出ないため、確認せずに放置すると誰も気づかない）。
 その後に main が進んで衝突した場合は、`.github/workflows/conflicting-prs.yml` が main への push と
 日次で検出し、`needs-rebase` ラベルと作者へのメンションで知らせる（解消すればラベルは外れる）。
-`needs-rebase` の付いた PR は、rebase して push し直すまで CI もマージも止まっている。
+`needs-rebase` の付いた PR は、main を取り込んで push し直すまで CI もマージも止まっている（ラベルの名前は rebase だが、取り込みはマージで行う）。
 
 **高リスク領域の機械条件**: `scripts/check/high-risk-paths.txt` に載るパス（マイグレーション・auth・外部連携の設定など）か
 検証器に触る PR は、ユーザーの確認を待たず、次の**全部**を満たしたときだけ auto-merge を有効にする。
