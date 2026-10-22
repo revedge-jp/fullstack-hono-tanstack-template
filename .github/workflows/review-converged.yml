@@ -140,14 +140,18 @@ jobs:
           # 判定スクリプトは base 側のものを使う（判定スクリプトだけを「常に通す」に書き換えた PR を防ぐ。このワークフロー自体は PR 側の
           # 定義で動くので、ここを書き換える PR は防げない。検証器の変更理由で止める）。base に無いとき（導入する PR）だけ PR 側
           head_checker="$RUNNER_TEMP/review-converged-head.sh"
-          git show HEAD^1:.claude/scripts/review-converged-head.sh >"$head_checker" 2>/dev/null ||
+          if git cat-file -e HEAD^1:.claude/scripts/review-converged-head.sh 2>/dev/null; then
+            git show HEAD^1:.claude/scripts/review-converged-head.sh >"$head_checker"
+          else
+            echo "::notice::base に .claude/scripts/review-converged-head.sh が無いため、PR 側の判定を使います（それを導入する PR のときだけ）"
             cp .claude/scripts/review-converged-head.sh "$head_checker"
+          fi
           declared=$(printf '%s' "$PR_BODY" | bash "$head_checker" --declared-from-body) && parse_rc=0 || parse_rc=$?
           if [ "$parse_rc" -eq 3 ]; then
             if [ "$IS_DRAFT" = "true" ]; then
               echo "::notice::Draft のため未収束でよい。収束したら本文に「レビュー収束: 最終周 CONFIRMED 0 @ <最後にレビューしたコミットの SHA>」を書き、gh pr ready で解除する"
             fi
-            echo "::error::PR 本文に「レビュー収束: 最終周 CONFIRMED 0 @ <最後にレビューしたコミットの SHA>」の行がありません。/review-full を収束まで回してから、ship.md の手順で本文に記録してください"
+            echo "::error::PR 本文の最後の「レビュー収束:」の行が「レビュー収束: 最終周 CONFIRMED 0 @ <最後にレビューしたコミットの SHA>」になっていません（行が無いか、CONFIRMED が 0 でない）。/review-full を収束まで回してから、ship.md の手順で本文に記録してください"
             exit 1
           elif [ "$parse_rc" -eq 4 ]; then
             # 例に今の head の SHA を出さない（そのまま貼ると、レビューしていないコミットまで通る）
