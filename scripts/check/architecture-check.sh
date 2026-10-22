@@ -239,6 +239,7 @@ Instructions:指示ファイルの参照整合
 SharedClaude:共有の .claude ファイル
 SharedClaudeSelftest:共有の .claude ファイルチェックの自己テスト
 SyncSharedClaudeSelftest:共有の .claude ファイル同期の自己テスト
+ReviewConvergedHeadSelftest:収束の判定の自己テスト
 ScriptTests:scripts のテスト
 Filename:ファイル名(kebab-case)
 ProcessEnv:api-service の process.env 直参照
