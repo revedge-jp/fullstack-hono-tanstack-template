@@ -177,6 +177,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - name: 指示ファイルと docs の文体（AI が書く文章に出やすい語）
         run: bun run lint:prose
+      # 共有の収束の判定（.claude/scripts/review-converged-head.sh）の自己テスト。.claude/** だけを変える PR（共有の取り込み）では
+      # architecture-check が走らないので、ここでも回す
+      - name: 収束の判定の自己テスト
+        run: bun run review-converged-head:selftest
 
   ci:
     name: CI Checks
