@@ -3,7 +3,7 @@
 // 収束の宣言より後に入った変更を止め、base を自動で取り込んだだけのマージは止めないことを固定する。
 import { afterAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,10 +15,13 @@ afterAll(() => {
 });
 
 // フック（pre-push など）の中で回ると GIT_DIR などが引き継がれ、一時リポジトリでなく呼び出し元を操作してしまう。
-// GIT_ で始まる変数を外し、一時リポジトリのコミットで呼び出し元のフック（lefthook など）が走らないようにする
-const env = Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
-);
+// GIT_ で始まる変数を外し、一時リポジトリのコミットで呼び出し元のフック（lefthook など）が走らないようにする。
+// 開発者のグローバル・システムの git 設定（merge.ff=only など）でも結果が変わらないよう、それも読ませない
+const env = {
+  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_"))),
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+};
 
 function git(...args) {
   const result = spawnSync("git", ["-c", "core.hooksPath=/dev/null", ...args], {
@@ -49,7 +52,15 @@ function commitFile(path, content, message) {
 }
 
 function judge(...args) {
-  const result = spawnSync("bash", [SCRIPT, ...args], { cwd: root, encoding: "utf8", env });
+  return judgeWith(env, ...args);
+}
+
+function judgeWith(judgeEnv, ...args) {
+  const result = spawnSync("bash", [SCRIPT, ...args], {
+    cwd: root,
+    encoding: "utf8",
+    env: judgeEnv,
+  });
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
@@ -105,7 +116,8 @@ describe("止める", () => {
   });
 
   test("取り込みのあとのコミット（base のコミットは除いても、PR のコミットは残る）", () => {
-    git("switch", "-qc", "merge-then-commit", "clean-merge");
+    git("switch", "-qc", "merge-then-commit", "feature");
+    git("merge", "-q", "--no-edit", "main");
     commitFile("feature.txt", "v3", "fix: 取り込みのあとに足した修正");
     const result = judge(declared, "HEAD", base);
     expect(result.status).toBe(1);
@@ -170,6 +182,40 @@ describe("判定できないときは 2（違反の 1 と分ける）", () => {
   test("引数が足りない", () => {
     expect(judge(declared, "HEAD").status).toBe(2);
   });
+
+  // merge-tree が判定できない（終了コード 2 以上）状況を、merge-tree だけ失敗させる偽の git で作る
+  const fakeBin = join(root, "..", `${root.split("/").pop()}-fake-bin`);
+  const realGit = spawnSync("bash", ["-c", "command -v git"], {
+    encoding: "utf8",
+    env,
+  }).stdout.trim();
+  mkdirSync(fakeBin, { recursive: true });
+  writeFileSync(
+    join(fakeBin, "git"),
+    `#!/usr/bin/env bash\n[ "$1" = merge-tree ] && exit 128\nexec "${realGit}" "$@"\n`,
+  );
+  chmodSync(join(fakeBin, "git"), 0o755);
+  afterAll(() => {
+    rmSync(fakeBin, { recursive: true, force: true });
+  });
+  const brokenMergeTreeEnv = { ...env, PATH: `${fakeBin}:${env.PATH}` };
+
+  test("マージを再現できないだけなら 2", () => {
+    git("switch", "-qc", "undetermined", "feature");
+    git("merge", "-q", "--no-edit", "main");
+    const result = judgeWith(brokenMergeTreeEnv, declared, "HEAD", base);
+    expect(result.status).toBe(2);
+    expect(result.output).toContain(`${shortHead()}: マージを再現できません`);
+  });
+
+  test("判定できないマージがあっても、ほかの違反を報告して 1", () => {
+    git("switch", "-qc", "undetermined-and-violation", "feature");
+    git("merge", "-q", "--no-edit", "main");
+    commitFile("feature.txt", "v4", "fix: 取り込みのあとに足した修正");
+    const result = judgeWith(brokenMergeTreeEnv, declared, "HEAD", base);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain(`${shortHead()}: 宣言より後のコミット`);
+  });
 });
 
 describe("本文から収束を宣言した SHA を取り出す", () => {
@@ -216,5 +262,14 @@ describe("本文から収束を宣言した SHA を取り出す", () => {
 
   test("CONFIRMED が 0 でない行は数えない", () => {
     expect(declaredFromBody(`レビュー収束: 最終周 CONFIRMED 2 @ ${sha}`).status).toBe(3);
+  });
+
+  test("最後の行が CONFIRMED 0 でなければ、上の古い CONFIRMED 0 の行で通さない", () => {
+    const body = `レビュー収束: 最終周 CONFIRMED 0 @ ${sha}\nレビュー収束: 最終周 CONFIRMED 3 @ deadbee`;
+    expect(declaredFromBody(body).status).toBe(3);
+  });
+
+  test("CONFIRMED 05 のように 0 で始まる数は 0 と読まない", () => {
+    expect(declaredFromBody(`レビュー収束: 最終周 CONFIRMED 05 @ ${sha}`).status).toBe(3);
   });
 });

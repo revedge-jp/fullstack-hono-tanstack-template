@@ -4,15 +4,16 @@
 #   使い方: .claude/scripts/review-converged-head.sh <収束を宣言した SHA> <PR の head> <base の先端>
 #   exit 0 = 宣言より後は、base を取り込んだ自動マージだけ / 1 = レビューを通っていない変更がある（理由を stdout に出す）/ 2 = 判定できない
 #   使い方: .claude/scripts/review-converged-head.sh --declared-from-body < PR 本文
-#   本文の最後の「レビュー収束: … CONFIRMED 0」の行から、末尾の「 @ <SHA>」を取り出して小文字で出す（行は本文の末尾に書く決まりなので、
-#   書式の例や書き直す前の古い行が上に残っていても最後の行を正とする）。exit 0 = 取り出せた / 3 = 行が無い / 4 = 行に SHA が無い
+#   本文の最後の「レビュー収束:」の行が「CONFIRMED 0」なら、末尾の「 @ <SHA>」を取り出して小文字で出す（行は本文の末尾に書く決まりなので、
+#   書式の例や書き直す前の古い行が上に残っていても最後の行を正とする。最後の行が CONFIRMED 0 でなければ、上の古い行では通さない）。
+#   exit 0 = 取り出せた / 3 = 収束の行が無い（最後の行が CONFIRMED 0 でないときも）/ 4 = 行に SHA が無い
 # 宣言より後に許すのは、base の取り込みを git が自動で解いたマージだけ。手で衝突を解いたマージと、自動の結果に手を加えたマージは
 # 内容が変わりうるので許さない（どちらもマージの tree が `git merge-tree` の結果と一致しない）。
 set -uo pipefail
 
 if [ "${1:-}" = "--declared-from-body" ]; then
-  line=$(tr -d '\r' | { grep -E '^レビュー収束: .*CONFIRMED 0' || true; } | tail -n 1)
-  [ -n "$line" ] || exit 3
+  line=$(tr -d '\r' | { grep -E '^レビュー収束: ' || true; } | tail -n 1)
+  grep -qE 'CONFIRMED 0([^0-9]|$)' <<<"$line" || exit 3
   sha=$(sed -nE 's/.* @ ([0-9a-fA-F]{7,40})[[:space:]]*$/\1/p' <<<"$line")
   [ -n "$sha" ] || exit 4
   tr 'A-F' 'a-f' <<<"$sha"

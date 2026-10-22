@@ -135,7 +135,11 @@ else
 fi
 
 # 共有の収束の判定（review-converged-head.sh）の自己テストも、使い捨ての git リポジトリの中だけで動く
-run_step_bg "ReviewConvergedHeadSelftest" bun run review-converged-head:selftest
+if [ "${SKIP_REVIEW_CONVERGED_HEAD_SELFTEST:-0}" != "1" ]; then
+  run_step_bg "ReviewConvergedHeadSelftest" bun run review-converged-head:selftest
+else
+  warn "収束の判定の自己テストは SKIP_REVIEW_CONVERGED_HEAD_SELFTEST=1 によりスキップ"
+fi
 
 if [ "${SKIP_SYNC_SHARED_CLAUDE_SELFTEST:-0}" != "1" ]; then
   run_step_bg "SyncSharedClaudeSelftest" bun run sync-shared-claude:selftest

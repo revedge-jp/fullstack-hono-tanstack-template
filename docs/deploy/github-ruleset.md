@@ -51,7 +51,8 @@ gh auth login          # 未認証の場合
 - PR は Draft で作り、`/code-review` が CONFIRMED ゼロで収束してから `gh pr ready` と
   `gh pr merge --auto --squash` を打つ（`.claude/commands/ship.md`）。`Review converged`
   （`.github/workflows/review-converged.yml`、本文編集と Draft 解除でも再評価される）が本文の
-  「レビュー収束:」行をチェックし、必須チェックなので記録が無い PR は auto-merge が発火しない
+  「レビュー収束:」行をチェックし、必須チェックなので記録が無い PR は auto-merge が発火しない。行の末尾の
+  `@ <SHA>` より後に main の自動の取り込み以外のコミットが入ると落ちる（収束を書いたあとの push がレビューされずに入らない）
 - キューに入った後に push すると弾かれる（入れ直し）。Renovate の automerge はキュー対応済み
 - マージ後の deploy は `workflow_run`（CI Pipeline 完了）で動くので変更不要
 

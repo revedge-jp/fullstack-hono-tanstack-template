@@ -137,7 +137,8 @@ jobs:
           if [ "$EVENT" = "merge_group" ]; then echo "merge_group: PR 側の check で判定済み"; exit 0; fi
           case "$AUTHOR" in *'[bot]') echo "bot の PR は対象外"; exit 0 ;; esac
           # 本文の解析と、宣言より後に base の自動の取り込みしか無いかの判定は .claude/scripts/review-converged-head.sh（claude-plugins から取り込む共有版）。
-          # 判定スクリプトは base 側のものを使う（PR 側で「常に一致」に書き換えて外せないように）。base に無いとき（導入する PR）だけ PR 側
+          # 判定スクリプトは base 側のものを使う（判定スクリプトだけを「常に通す」に書き換えた PR を防ぐ。このワークフロー自体は PR 側の
+          # 定義で動くので、ここを書き換える PR は防げない。検証器の変更理由で止める）。base に無いとき（導入する PR）だけ PR 側
           head_checker="$RUNNER_TEMP/review-converged-head.sh"
           git show HEAD^1:.claude/scripts/review-converged-head.sh >"$head_checker" 2>/dev/null ||
             cp .claude/scripts/review-converged-head.sh "$head_checker"
