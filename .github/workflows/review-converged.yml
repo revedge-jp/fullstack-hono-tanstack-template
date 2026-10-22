@@ -1,8 +1,10 @@
 name: Review converged
 
 # レビューが収束した PR だけをマージ対象にする。auto-merge / merge queue を使うと「CI 緑」だけで
-# 入ってしまうため、ship.md の手順どおり /code-review を CONFIRMED ゼロまで回した証跡
-# (本文の「レビュー収束:」行)を要求する。行は人が書くので偽装は可能だが、「書かずに通る」経路を塞ぐ。
+# 入ってしまうため、ship.md の手順どおり /review-full を収束まで回した証跡
+# (本文の「レビュー収束: … @ <SHA>」行)を要求する。SHA は収束を宣言したコミットで、それより後は base の自動の取り込みしか
+# 許さない（.claude/scripts/review-converged-head.sh）。行は人が書くので偽装は可能だが、「書かずに通る」経路と、
+# 書いたあとの push がレビューされずに入る経路を塞ぐ。
 #
 # ci.yml と分けている理由: 収束行は最後の push の後に本文編集(edited)と Draft 解除
 # (ready_for_review)で付くため、そのイベントで再評価が必要。ci.yml をそのイベントで回すと
@@ -134,11 +136,40 @@ jobs:
         run: |
           if [ "$EVENT" = "merge_group" ]; then echo "merge_group: PR 側の check で判定済み"; exit 0; fi
           case "$AUTHOR" in *'[bot]') echo "bot の PR は対象外"; exit 0 ;; esac
-          if printf '%s' "$PR_BODY" | grep -qE '^レビュー収束: .*CONFIRMED 0'; then
-            echo "レビュー収束の記録あり"; exit 0
+          # 本文の解析と、宣言より後に base の自動の取り込みしか無いかの判定は .claude/scripts/review-converged-head.sh（claude-plugins から取り込む共有版）。
+          # 判定スクリプトは base 側のものを使う（判定スクリプトだけを「常に通す」に書き換えた PR を防ぐ。このワークフロー自体は PR 側の
+          # 定義で動くので、ここを書き換える PR は防げない。検証器の変更理由で止める）。base に無いとき（導入する PR）だけ PR 側
+          head_checker="$RUNNER_TEMP/review-converged-head.sh"
+          if git cat-file -e HEAD^1:.claude/scripts/review-converged-head.sh 2>/dev/null; then
+            git show HEAD^1:.claude/scripts/review-converged-head.sh >"$head_checker"
+          else
+            echo "::notice::base に .claude/scripts/review-converged-head.sh が無いため、PR 側の判定を使います（それを導入する PR のときだけ）"
+            cp .claude/scripts/review-converged-head.sh "$head_checker"
           fi
-          if [ "$IS_DRAFT" = "true" ]; then
-            echo "::notice::Draft のため未収束でよい。収束したら本文に「レビュー収束: 最終周 CONFIRMED 0」を書き、gh pr ready で解除する"
+          declared=$(printf '%s' "$PR_BODY" | bash "$head_checker" --declared-from-body) && parse_rc=0 || parse_rc=$?
+          if [ "$parse_rc" -eq 3 ]; then
+            if [ "$IS_DRAFT" = "true" ]; then
+              echo "::notice::Draft のため未収束でよい。収束したら本文に「レビュー収束: 最終周 CONFIRMED 0 @ <最後にレビューしたコミットの SHA>」を書き、gh pr ready で解除する"
+            fi
+            echo "::error::PR 本文の最後の「レビュー収束:」の行が「レビュー収束: 最終周 CONFIRMED 0 @ <最後にレビューしたコミットの SHA>」になっていません（行が無いか、CONFIRMED が 0 でない）。/review-full を収束まで回してから、ship.md の手順で本文に記録してください"
+            exit 1
+          elif [ "$parse_rc" -eq 4 ]; then
+            # 例に今の head の SHA を出さない（そのまま貼ると、レビューしていないコミットまで通る）
+            echo "::error::本文の最後の「レビュー収束:」の行の末尾に「 @ <最後にレビューしたコミットの SHA（7〜40 桁の 16 進）>」がありません。ship.md 手順 5"
+            exit 1
+          elif [ "$parse_rc" -ne 0 ]; then
+            echo "::error::本文から収束を宣言した SHA を取り出せませんでした（終了コード $parse_rc）"
+            exit 1
           fi
-          echo "::error::PR 本文に「レビュー収束: 最終周 CONFIRMED 0」の行がありません。/code-review を CONFIRMED ゼロまで回してから、ship.md の手順で本文に記録してください"
+          if reason=$(bash "$head_checker" "$declared" HEAD^2 HEAD^1); then
+            echo "レビュー収束の記録あり（$declared 以降は base の自動の取り込みだけ）"; exit 0
+          else
+            head_rc=$?
+          fi
+          while IFS= read -r detail; do echo "  • $detail"; done <<<"$reason"
+          if [ "$head_rc" -eq 1 ]; then
+            echo "::error::収束を宣言した $declared より後に、レビューを通っていない変更があります（上記）。その変更を /review-full で見てから、行の SHA をレビューしたコミットに書き直してください（ship.md 手順 5）"
+          else
+            echo "::error::収束を宣言した $declared より後の変更を判定できませんでした（終了コード $head_rc）"
+          fi
           exit 1

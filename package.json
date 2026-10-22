@@ -56,6 +56,7 @@
     "check:shared-claude": "bash scripts/check/check-shared-claude.sh",
     "check:shared-claude:selftest": "bash scripts/check/check-shared-claude.selftest.sh",
     "sync-shared-claude:selftest": "bash scripts/sync-shared-claude.selftest.sh",
+    "review-converged-head:selftest": "bun test ./.claude/scripts/review-converged-head.selftest.mjs",
     "check-all": "bash scripts/check/check-all.sh",
     "metrics": "node scripts/dev/dev-metrics.mjs",
     "dup:check": "jscpd .",

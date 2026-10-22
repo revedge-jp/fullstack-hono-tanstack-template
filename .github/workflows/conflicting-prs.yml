@@ -51,7 +51,7 @@ jobs:
 
           if [ "$DRY_RUN" != "true" ]; then
             gh label create "$LABEL" --color B60205 \
-              --description "main と衝突している。rebase して push し直すまで CI が走らない" 2>/dev/null || true
+              --description "main と衝突している。main をマージで取り込んで push し直すまで CI が走らない" 2>/dev/null || true
           fi
 
           # mergeable は問い合わせを契機に計算されるため、最初は UNKNOWN が返りうる。数回待って取り直す。
@@ -97,7 +97,7 @@ jobs:
                 case "$author" in
                   app/*) ;;
                   *)
-                    if ! gh pr comment "$number" --body "@$author main と衝突しています。この状態では CI が走らず、auto-merge / merge queue にも入りません。\`git fetch origin && git rebase origin/main\` で解消して push し直してください（手順は \`.claude/commands/ship.md\`）。解消すると \`$LABEL\` ラベルは自動で外れます。"; then
+                    if ! gh pr comment "$number" --body "@$author main と衝突しています。この状態では CI が走らず、auto-merge / merge queue にも入りません。\`git fetch origin && git merge origin/main\` で解消して push し直してください（rebase すると収束の記録の SHA が外れて Review converged が落ちます。手順は \`.claude/commands/ship.md\`）。解消すると \`$LABEL\` ラベルは自動で外れます。"; then
                       # 会話がロックされた PR にはコメントできず毎回失敗する。ラベルを付けずに失敗扱いにすると
                       # 目印が付かないままジョブが永久に赤くなるので、ロック中ならラベルだけ付けて先へ進む。
                       if [ "$(gh api "repos/$GH_REPO/issues/$number" --jq .locked 2>/dev/null)" = "true" ]; then

@@ -134,6 +134,13 @@ else
   warn "共有の .claude ファイルチェックの自己テストは SKIP_SHARED_CLAUDE_SELFTEST=1 によりスキップ"
 fi
 
+# 共有の収束の判定（review-converged-head.sh）の自己テストも、使い捨ての git リポジトリの中だけで動く
+if [ "${SKIP_REVIEW_CONVERGED_HEAD_SELFTEST:-0}" != "1" ]; then
+  run_step_bg "ReviewConvergedHeadSelftest" bun run review-converged-head:selftest
+else
+  warn "収束の判定の自己テストは SKIP_REVIEW_CONVERGED_HEAD_SELFTEST=1 によりスキップ"
+fi
+
 if [ "${SKIP_SYNC_SHARED_CLAUDE_SELFTEST:-0}" != "1" ]; then
   run_step_bg "SyncSharedClaudeSelftest" bun run sync-shared-claude:selftest
 else
@@ -232,6 +239,7 @@ Instructions:指示ファイルの参照整合
 SharedClaude:共有の .claude ファイル
 SharedClaudeSelftest:共有の .claude ファイルチェックの自己テスト
 SyncSharedClaudeSelftest:共有の .claude ファイル同期の自己テスト
+ReviewConvergedHeadSelftest:収束の判定の自己テスト
 ScriptTests:scripts のテスト
 Filename:ファイル名(kebab-case)
 ProcessEnv:api-service の process.env 直参照

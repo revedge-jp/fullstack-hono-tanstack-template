@@ -45,6 +45,8 @@ steiger.config.mjs
 # レビュー収束ゲート（Review converged）の採否基準と手順
 REVIEW.md
 .claude/commands/ship.md
+# レビュー収束ゲートの判定のうち、共有版から取り込むもの（収束を宣言したコミットより後の変更の判定）
+.claude/scripts/review-converged-head.*
 .claude/commands/review-full.md
 # レビュアー②が読む手順と、③（Codex）の実行スクリプト
 .claude/commands/codex-review.md
